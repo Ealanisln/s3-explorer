@@ -39,6 +39,13 @@ import {
   initSmallForms, initModalDismiss, initLockButton, configureLock,
 } from './objects/forms.js';
 import { initReindex, onBucketOpened as reindexOnBucketOpened } from './index/reindex.js';
+import { initThemeToggle, applyTheme, loadTheme } from './util/theme.js';
+
+// Theme init runs FIRST so the toggle icon shows the right preference
+// glyph from the very first paint. The effective theme is already set on
+// <html> by /theme-init.js (loaded synchronously in <head>); this call
+// is the runtime counterpart that wires the toggle + system-pref listener.
+applyTheme(loadTheme());
 
 // ─── Dependency wiring ─────────────────────────────────────────────────────
 //
@@ -81,6 +88,7 @@ initSmallForms();
 initModalDismiss();
 initLockButton();
 initReindex();
+initThemeToggle();
 
 // ─── Boot ───────────────────────────────────────────────────────────────────
 
