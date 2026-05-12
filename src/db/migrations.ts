@@ -1,5 +1,6 @@
 import { db } from './connection';
 import * as migration001 from './migrations/001_init';
+import * as migration002 from './migrations/002_index';
 
 interface Migration {
   version: number;
@@ -10,6 +11,7 @@ interface Migration {
 // transaction. The schema_version table records what has been applied.
 const MIGRATIONS: Migration[] = [
   migration001,
+  migration002,
 ];
 
 export function applyMigrations(): void {
