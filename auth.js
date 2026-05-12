@@ -362,6 +362,19 @@ function requireTotpEnrolled(req, res, next) {
   next();
 }
 
+// Block /api/* until the user has rotated the admin-issued initial password.
+// The SPA already nags via a modal, but a client that ignores the modal would
+// otherwise retain full API access with credentials the admin still knows.
+function requirePasswordCurrent(req, res, next) {
+  if (req.user && req.user.mustChangePassword) {
+    return res.status(403).json({
+      message: 'Debes cambiar la contraseña inicial antes de usar la API.',
+      code: 'PASSWORD_CHANGE_REQUIRED',
+    });
+  }
+  next();
+}
+
 // ----- Routes -----
 function register(app) {
   // ----- Session info -----
@@ -671,4 +684,4 @@ function register(app) {
   });
 }
 
-module.exports = { register, requireAuth, requireTotpEnrolled, audit };
+module.exports = { register, requireAuth, requireTotpEnrolled, requirePasswordCurrent, audit };
