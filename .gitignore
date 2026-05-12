@@ -25,6 +25,19 @@ data/
 # Build artifacts
 dist/
 build/
+public/dist/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# SQLite runtime artifacts (the DB itself lives under DATA_DIR, never in repo)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# /cso security audit reports stay local
+.gstack/
 
 # Editor / OS
 .DS_Store

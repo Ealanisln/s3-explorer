@@ -1,7 +1,25 @@
+# syntax=docker/dockerfile:1.7
+#
+# Three stages:
+#   deps      — production node_modules only (what ships in the final image)
+#   builder   — all deps + tsc -b to produce dist/ and public/dist/
+#   runtime   — node:alpine + deps + sources + compiled output
+#
+# The final image NEVER includes typescript or @types/* — only what runtime needs.
+
 FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev --no-audit --no-fund
+
+FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS builder
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci --no-audit --no-fund
+COPY tsconfig.json tsconfig.server.json tsconfig.web.json ./
+COPY src ./src
+COPY public/src ./public/src
+RUN npm run build
 
 FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293
 WORKDIR /app
@@ -15,6 +33,8 @@ RUN addgroup -S app && adduser -S app -G app
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json server.js auth.js ./
 COPY public ./public
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/public/dist ./public/dist
 
 # Tmp upload + persistent users data dirs writable by app user
 RUN mkdir -p /tmp/s3-explorer-uploads /data && chown -R app:app /tmp/s3-explorer-uploads /data /app
