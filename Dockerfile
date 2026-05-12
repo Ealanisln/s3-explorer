@@ -43,7 +43,7 @@ ENV PORT=4569
 RUN addgroup -S app && adduser -S app -G app
 
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json server.js ./
+COPY package.json ./
 COPY public ./public
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public/dist ./public/dist
@@ -58,4 +58,4 @@ VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- --header="Host: localhost" "http://127.0.0.1:${PORT}/healthz" > /dev/null 2>&1 || exit 1
 
-CMD ["node", "server.js"]
+CMD ["node", "dist/server.js"]
