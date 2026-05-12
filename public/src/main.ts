@@ -40,6 +40,7 @@ import {
 } from './objects/forms.js';
 import { initReindex, onBucketOpened as reindexOnBucketOpened } from './index/reindex.js';
 import { initThemeToggle, applyTheme, loadTheme } from './util/theme.js';
+import { initDrawer } from './util/drawer.js';
 
 // Theme init runs FIRST so the toggle icon shows the right preference
 // glyph from the very first paint. The effective theme is already set on
@@ -89,6 +90,7 @@ initModalDismiss();
 initLockButton();
 initReindex();
 initThemeToggle();
+initDrawer();
 
 // ─── Boot ───────────────────────────────────────────────────────────────────
 
