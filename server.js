@@ -6,7 +6,7 @@ const os = require('os');
 const fs = require('fs');
 const crypto = require('crypto');
 const mime = require('mime-types');
-const auth = require('./auth');
+const auth = require('./dist/auth');
 const {
   ListBucketsCommand,
   CreateBucketCommand,
