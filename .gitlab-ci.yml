@@ -62,11 +62,9 @@ lint:
   image: node:20-alpine
   script:
     - apk add --no-cache wget
-    # Syntax check on the JS files still in the repo. Once public/app.js
-    # migrates to public/src/*.ts (MR 9-10), this list goes to zero and the
-    # whole loop can be deleted.
-    - for f in public/app.js; do [ -f "$f" ] && (node --check "$f" || exit 1); done
-    # TypeScript type-check across both projects (server + web).
+    # TypeScript type-check across both projects (server + web). The legacy
+    # `node --check` over server.js/auth.js/public/app.js was retired with
+    # MR 10; everything ships as .ts now.
     # --ignore-scripts skips better-sqlite3's postinstall (node-gyp rebuild
     # needs python3/g++ which Alpine doesn't ship). CI jobs only do `audit` +
     # `typecheck`; neither touches the native binding — just .d.ts types and
