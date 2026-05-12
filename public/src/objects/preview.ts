@@ -3,7 +3,7 @@
 
 import { State } from '../state.js';
 import { api, authHeaders } from '../api/client.js';
-import { toast } from '../util/toast.js';
+import { toast, errorIdOpts } from '../util/toast.js';
 import { $, openModal, escapeHtml } from '../util/dom.js';
 import { formatSize, formatDate } from '../util/format.js';
 import { downloadObject, shareObject } from './actions.js';
@@ -142,7 +142,7 @@ export function initPreview(): void {
                 await onObjectsChanged();
                 ($('btn-show-versions') as HTMLButtonElement).click();
               } catch (e) {
-                toast((e as Error).message, 'error');
+                toast((e as Error).message, 'error', errorIdOpts(e));
               }
             } else if (act === 'delete') {
               if (!confirm(`Eliminar esta versión (${v.VersionId.slice(0, 8)}...)?`)) return;
@@ -154,7 +154,7 @@ export function initPreview(): void {
                 toast('Versión eliminada', 'success');
                 ($('btn-show-versions') as HTMLButtonElement).click();
               } catch (e) {
-                toast((e as Error).message, 'error');
+                toast((e as Error).message, 'error', errorIdOpts(e));
               }
             }
           };

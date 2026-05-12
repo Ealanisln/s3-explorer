@@ -3,7 +3,7 @@
 
 import { State } from '../state.js';
 import { api, authHeaders } from '../api/client.js';
-import { toast } from '../util/toast.js';
+import { toast, errorIdOpts } from '../util/toast.js';
 import { $, openModal } from '../util/dom.js';
 
 export async function fetchAsBlob(url: string, filename: string): Promise<void> {
@@ -20,7 +20,7 @@ export async function fetchAsBlob(url: string, filename: string): Promise<void> 
     a.remove();
     URL.revokeObjectURL(a.href);
   } catch (e) {
-    toast((e as Error).message, 'error');
+    toast((e as Error).message, 'error', errorIdOpts(e));
   }
 }
 
@@ -53,7 +53,7 @@ export async function shareObject(key: string, versionId?: string): Promise<void
     const human = actual >= 3600 ? `${Math.round(actual / 3600)} h` : `${Math.round(actual / 60)} min`;
     toast(`Enlace copiado (válido ${human})${capped ? ' — el servidor limitó la duración' : ''}`, 'success', 5000);
   } catch (e) {
-    toast((e as Error).message, 'error');
+    toast((e as Error).message, 'error', errorIdOpts(e));
   }
 }
 
@@ -71,7 +71,7 @@ export async function deleteObject(
     toast('Eliminado', 'success');
     await onAfter();
   } catch (e) {
-    toast((e as Error).message, 'error');
+    toast((e as Error).message, 'error', errorIdOpts(e));
   }
 }
 
@@ -88,7 +88,7 @@ export async function restoreDeleteMarker(
     toast('Archivo restaurado', 'success');
     await onAfter();
   } catch (e) {
-    toast((e as Error).message, 'error');
+    toast((e as Error).message, 'error', errorIdOpts(e));
   }
 }
 

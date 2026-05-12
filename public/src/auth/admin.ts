@@ -5,7 +5,7 @@
 // the visibility of the trigger button accordingly.
 
 import { $, openModal, escapeHtml } from '../util/dom.js';
-import { toast } from '../util/toast.js';
+import { toast, errorIdOpts } from '../util/toast.js';
 import { formatDate } from '../util/format.js';
 import { getCurrentUser } from './bootstrap.js';
 
@@ -81,7 +81,7 @@ async function handleUserAction(act: string, username: string): Promise<void> {
     toast('OK', 'success');
     loadUsersAdmin();
   } catch (ex) {
-    toast((ex as Error).message, 'error');
+    toast((ex as Error).message, 'error', errorIdOpts(ex));
   }
 }
 

@@ -3,7 +3,7 @@
 
 import { State } from '../state.js';
 import { api } from '../api/client.js';
-import { toast } from '../util/toast.js';
+import { toast, errorIdOpts } from '../util/toast.js';
 import { $, openModal, closeModal } from '../util/dom.js';
 import { loadObjects } from './grid.js';
 import { renderBuckets } from '../buckets/list.js';
@@ -25,7 +25,7 @@ export function initSmallForms(): void {
       State.buckets = buckets;
       renderBuckets();
     } catch (e2) {
-      toast((e2 as Error).message, 'error');
+      toast((e2 as Error).message, 'error', errorIdOpts(e2));
     }
   };
 
@@ -44,7 +44,7 @@ export function initSmallForms(): void {
       closeModal('modal-folder');
       await loadObjects();
     } catch (e2) {
-      toast((e2 as Error).message, 'error');
+      toast((e2 as Error).message, 'error', errorIdOpts(e2));
     }
   };
 
@@ -64,7 +64,7 @@ export function initSmallForms(): void {
       closeModal('modal-rename');
       await loadObjects();
     } catch (e2) {
-      toast((e2 as Error).message, 'error');
+      toast((e2 as Error).message, 'error', errorIdOpts(e2));
     }
   };
 

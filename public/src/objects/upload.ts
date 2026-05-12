@@ -3,7 +3,7 @@
 
 import { State } from '../state.js';
 import { api } from '../api/client.js';
-import { toast } from '../util/toast.js';
+import { toast, errorIdOpts } from '../util/toast.js';
 import { $, openModal, closeModal, escapeHtml } from '../util/dom.js';
 import { formatSize } from '../util/format.js';
 
@@ -60,7 +60,7 @@ async function doUpload(items: UploadItem[]): Promise<void> {
     toast('Subida completa', 'success');
     await onUploadComplete();
   } catch (e) {
-    toast((e as Error).message, 'error');
+    toast((e as Error).message, 'error', errorIdOpts(e));
   }
 }
 

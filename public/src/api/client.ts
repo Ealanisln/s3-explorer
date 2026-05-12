@@ -3,7 +3,9 @@
 // x-s3-conn-id UUID so the bucket-index feature can scope rows by connection.
 //
 // Centralizes the auth-error handling: NO_SESSION/USER_INVALID → reload,
-// PASSWORD_CHANGE_REQUIRED → reopen the account modal.
+// PASSWORD_CHANGE_REQUIRED → reopen the account modal. AWS-style errors carry
+// an `errorId` that we attach to the thrown Error so call sites can surface it
+// in their toast for log-correlation.
 
 import { activeConn } from '../state.js';
 import { toast } from '../util/toast.js';
@@ -30,6 +32,26 @@ export interface ApiOptions {
   signal?: AbortSignal;
 }
 
+// Error subclass carrying the server-side correlation id so call sites can
+// pass it to toast() for display. `instanceof ApiError` lets handlers branch
+// when they want to do something fancier than a toast.
+export class ApiError extends Error {
+  readonly errorId?: string;
+  readonly code?: string;
+  constructor(message: string, opts: { errorId?: string; code?: string } = {}) {
+    super(message);
+    this.name = 'ApiError';
+    this.errorId = opts.errorId;
+    this.code = opts.code;
+  }
+}
+
+interface ErrorPayload {
+  code?: string;
+  message?: string;
+  errorId?: string;
+}
+
 export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Promise<T> {
   const headers: Record<string, string> = { ...authHeaders(), ...(opts.headers || {}) };
   let body: BodyInit | undefined;
@@ -49,26 +71,26 @@ export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Pro
     signal: opts.signal,
   });
   if (res.status === 401) {
-    const err = await res.json().catch(() => ({} as { code?: string; message?: string }));
+    const err = await res.json().catch(() => ({} as ErrorPayload));
     if (err.code === 'NO_SESSION' || err.code === 'USER_INVALID') {
       toast('Sesión expirada — reiniciando.', 'error', 4000);
       setTimeout(() => location.reload(), 1500);
     }
-    throw new Error(err.message || 'No autenticado');
+    throw new ApiError(err.message || 'No autenticado', { errorId: err.errorId, code: err.code });
   }
   if (res.status === 403) {
-    const err = await res.json().catch(() => ({} as { code?: string; message?: string }));
+    const err = await res.json().catch(() => ({} as ErrorPayload));
     if (err.code === 'PASSWORD_CHANGE_REQUIRED') {
       // Server is enforcing the password rotation the SPA nags about on init.
       // Reopen the modal so the user can't just dismiss it once and keep going.
       openModal('modal-account');
       toast('Debes cambiar tu contraseña inicial antes de continuar.', 'info', 6000);
     }
-    throw new Error(err.message || 'Operación rechazada');
+    throw new ApiError(err.message || 'Operación rechazada', { errorId: err.errorId, code: err.code });
   }
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: res.statusText } as { message: string }));
-    throw new Error(err.message || 'Error');
+    const err = await res.json().catch(() => ({ message: res.statusText } as ErrorPayload));
+    throw new ApiError(err.message || 'Error', { errorId: err.errorId, code: err.code });
   }
   return res.json() as Promise<T>;
 }

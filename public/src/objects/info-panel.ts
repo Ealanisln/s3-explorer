@@ -2,7 +2,7 @@
 
 import { State } from '../state.js';
 import { api } from '../api/client.js';
-import { toast } from '../util/toast.js';
+import { toast, errorIdOpts } from '../util/toast.js';
 import { $, escapeHtml } from '../util/dom.js';
 import { formatSize, formatDate, fileIcon } from '../util/format.js';
 import { openPreview } from './preview.js';
@@ -107,7 +107,7 @@ export function initInfoPanel(): void {
       closeInfoPanel();
       await onObjectsChanged();
     } catch (e) {
-      toast((e as Error).message, 'error');
+      toast((e as Error).message, 'error', errorIdOpts(e));
     }
   };
 }

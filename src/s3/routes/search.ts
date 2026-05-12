@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { type S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
-import { wrap } from '../../http/errors';
+import { wrap, newErrorId } from '../../http/errors';
 import { q } from '../../http/query';
 import { sanitizeError } from '../errors';
 
@@ -17,8 +17,19 @@ export function searchRouter(buildClient: ClientFactory): Router {
     try {
       s3 = buildClient(req);
     } catch (e) {
-      // SEC2-02: don't leak SDK error text — same sanitizer as every other endpoint
-      const { status, body } = sanitizeError(e as Parameters<typeof sanitizeError>[0]);
+      // SEC2-02: don't leak SDK error text — same sanitizer as every other endpoint.
+      // Generate an errorId so the user can copy it from the toast and admin
+      // can grep server logs.
+      const errorId = newErrorId();
+      const err = e as { name?: string; message?: string };
+      console.error('[search-stream-error]', {
+        errorId,
+        user: req.user?.username,
+        bucket: req.params.bucket,
+        name: err.name,
+        message: err.message,
+      });
+      const { status, body } = sanitizeError(e as Parameters<typeof sanitizeError>[0], errorId);
       res.status(status).json(body);
       return;
     }
@@ -73,14 +84,16 @@ export function searchRouter(buildClient: ClientFactory): Router {
         token = out.NextContinuationToken;
       }
     } catch (e) {
+      const errorId = newErrorId();
       const err = e as { name?: string; message?: string };
       console.error('[search-stream-error]', {
+        errorId,
         user: req.user?.username,
         bucket: req.params.bucket,
         name: err.name,
         message: err.message,
       });
-      const { body } = sanitizeError(e as Parameters<typeof sanitizeError>[0]);
+      const { body } = sanitizeError(e as Parameters<typeof sanitizeError>[0], errorId);
       send({ t: 'error', ...body });
     }
     res.end();
