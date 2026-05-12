@@ -1,4 +1,16 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ============================================================
+   Theming
+   ------------------------------------------------------------
+   Default = dark. Light mode triggered by `<html data-theme="light">`
+   (set by public/src/util/theme.ts based on localStorage preference,
+   with a fallback to `prefers-color-scheme: light`).
+
+   The semantic colors (--primary, --accent, --green, --red, --yellow)
+   stay identical across themes — they're brand/state colors. Only the
+   surface/text/border layer flips.
+   ============================================================ */
 :root {
   --bg: #0f1115;
   --bg-2: #161a22;
@@ -14,6 +26,25 @@
   --red: #f04949;
   --yellow: #e3b341;
   --shadow: 0 8px 30px rgba(0,0,0,.4);
+}
+
+:root[data-theme="light"] {
+  --bg: #f7f8fa;
+  --bg-2: #ffffff;
+  --bg-3: #eef0f4;
+  --border: #d8dde6;
+  --text: #1c2333;
+  --text-dim: #5a6478;
+  /* Brand/state colors stay the same — but darken the bright variants
+     slightly so they read on a light background without glow. */
+  --accent: #b8261f;
+  --accent-2: #d44b48;
+  --primary: #1f6fe0;
+  --primary-2: #3a85f0;
+  --green: #1f7a35;
+  --red: #d83a3a;
+  --yellow: #c08e22;
+  --shadow: 0 6px 24px rgba(15,17,21,.08);
 }
 
 html, body {

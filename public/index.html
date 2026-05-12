@@ -4,6 +4,14 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>S3 Explorer</title>
+<!--
+  FOUC-prevention. Sets `<html data-theme>` BEFORE the stylesheet paints
+  so the user doesn't see a flash of the wrong theme on cold load. Kept
+  in a separate file (not inline) so the strict `script-src 'self'` CSP
+  applies cleanly without a hash. Same logic lives in
+  public/src/util/theme.ts for the runtime (toggle, system-pref listener).
+-->
+<script src="/theme-init.js"></script>
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -103,7 +111,8 @@
 
     <div class="sidebar-foot">
       <span id="conn-status" class="status">Sin conexión</span>
-      <button class="btn-icon" id="btn-lock" title="Bloquear bóveda" style="margin-left:auto">🔒</button>
+      <button class="btn-icon" id="btn-theme" title="Tema: automático (sigue al sistema)" style="margin-left:auto">🌓</button>
+      <button class="btn-icon" id="btn-lock" title="Bloquear bóveda">🔒</button>
     </div>
     <div class="sidebar-user" id="sidebar-user" style="display:none">
       <span class="user-name" id="user-name"></span>
