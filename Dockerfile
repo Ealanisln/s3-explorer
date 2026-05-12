@@ -15,6 +15,9 @@
 FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
+# No pinned apk versions: the .gyp build group is removed in the same RUN and
+# never reaches the final image, so pinning would just break on every Alpine bump.
+# hadolint ignore=DL3018
 RUN apk add --no-cache --virtual .gyp python3 make g++ \
  && npm ci --omit=dev --no-audit --no-fund \
  && apk del .gyp
