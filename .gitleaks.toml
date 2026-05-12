@@ -1,0 +1,34 @@
+title = "S3 Explorer — gitleaks config"
+
+# Use the default rule pack.
+[extend]
+useDefault = true
+
+# Global allowlist — what to IGNORE in findings.
+[allowlist]
+description = "Ignored paths and known-safe matches"
+
+paths = [
+  '''\.env$''',                       # .env is in .gitignore; if it somehow appears, it's local-only and ignored by gitleaks
+  '''\.env\.example$''',              # placeholder values in example file
+  '''node_modules/''',
+  '''package-lock\.json$''',
+  '''public/.*\.css$''',
+  '''dev-data/''',
+  '''README\.md$''',
+  '''CHANGELOG\.md$''',
+]
+
+regexes = [
+  '''sha256:[a-f0-9]{64}''',          # Docker image digests
+  '''\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}''',  # bcrypt example hashes in docs
+  '''CHANGE-ME''',                    # placeholder
+  '''openssl rand''',                 # command example, not a secret
+  '''<your-.*>''',                    # template angle-bracketed placeholders
+]
+
+stopwords = [
+  "example",
+  "placeholder",
+  "your-secret-here",
+]

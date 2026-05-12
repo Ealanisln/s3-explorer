@@ -1,0 +1,61 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":pinAllExceptPeerDependencies"
+  ],
+  "schedule": ["before 6am on monday"],
+  "timezone": "America/Mexico_City",
+  "labels": ["dependencies"],
+  "prHourlyLimit": 4,
+  "prConcurrentLimit": 6,
+  "rangeStrategy": "bump",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
+
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"],
+    "schedule": ["at any time"]
+  },
+
+  "packageRules": [
+    {
+      "description": "Auto-merge patch/pin updates after CI passes",
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "automerge": true,
+      "automergeType": "branch"
+    },
+    {
+      "description": "Group AWS SDK packages",
+      "matchPackagePrefixes": ["@aws-sdk/"],
+      "groupName": "aws-sdk"
+    },
+    {
+      "description": "Pin Docker base images by digest",
+      "matchDatasources": ["docker"],
+      "pinDigests": true
+    },
+    {
+      "description": "Major Node.js bumps require manual review",
+      "matchPackageNames": ["node"],
+      "matchUpdateTypes": ["major"],
+      "labels": ["dependencies", "needs-review"],
+      "automerge": false
+    }
+  ],
+
+  "dockerfile": {
+    "enabled": true
+  },
+  "docker-compose": {
+    "enabled": true
+  },
+  "github-actions": {
+    "enabled": true,
+    "pinDigests": true
+  }
+}

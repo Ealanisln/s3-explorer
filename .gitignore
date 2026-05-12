@@ -1,0 +1,44 @@
+# Secrets — NEVER commit
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+caddy-root.crt
+
+# Test/curl session artifacts — NEVER commit
+cookies.txt
+*.cookies
+*.curl-jar
+.session.txt
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local data
+dev-data/
+data/
+
+# Build artifacts
+dist/
+build/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Test coverage
+coverage/
+.nyc_output/

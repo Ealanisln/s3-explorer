@@ -1,0 +1,134 @@
+# =============================================================================
+# S3 Explorer — GitLab CI
+# =============================================================================
+# Runs on every push and merge request. Designed to work on GitLab.com free
+# tier shared runners (no Ultimate features required).
+#
+# Stages:
+#   quality   — secret-scan, dependency-audit, lint
+#   build     — docker build + image vulnerability scan
+#   gate      — final pass/fail summary (use as required-status in MR rules)
+# =============================================================================
+
+stages:
+  - quality
+  - build
+  - gate
+
+default:
+  interruptible: true
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+
+# -----------------------------------------------------------------------------
+# Secret scanning — gitleaks against the full history
+# -----------------------------------------------------------------------------
+secrets:
+  stage: quality
+  image:
+    name: zricethezav/gitleaks:latest
+    entrypoint: [""]
+  script:
+    - gitleaks detect --source . --config .gitleaks.toml --redact -v --no-banner
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# -----------------------------------------------------------------------------
+# npm audit — high-severity dependency vulnerabilities
+# -----------------------------------------------------------------------------
+audit:
+  stage: quality
+  image: node:20-alpine
+  script:
+    - npm ci --no-audit --no-fund
+    - npm audit --audit-level=high
+  cache:
+    key: $CI_COMMIT_REF_SLUG
+    paths:
+      - node_modules/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# -----------------------------------------------------------------------------
+# Lint — node syntax + Dockerfile (hadolint) + Caddyfile
+# -----------------------------------------------------------------------------
+lint:
+  stage: quality
+  image: node:20-alpine
+  script:
+    - apk add --no-cache wget
+    - for f in server.js auth.js public/app.js; do node --check "$f" || exit 1; done
+    - wget -qO /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+    - chmod +x /usr/local/bin/hadolint
+    - hadolint --failure-threshold warning Dockerfile
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# -----------------------------------------------------------------------------
+# Caddyfile validation — must run separately because needs caddy image
+# -----------------------------------------------------------------------------
+caddyfile:
+  stage: quality
+  image: caddy:2-alpine
+  variables:
+    DOMAIN: example.com    # placeholder for {$DOMAIN} interpolation
+  script:
+    - caddy validate --config Caddyfile
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# -----------------------------------------------------------------------------
+# Image build + Trivy CVE scan
+# -----------------------------------------------------------------------------
+image-scan:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  script:
+    - docker build -t s3-explorer:ci .
+    - apk add --no-cache wget tar
+    - wget -qO trivy.tar.gz https://github.com/aquasecurity/trivy/releases/download/v0.58.1/trivy_0.58.1_Linux-64bit.tar.gz
+    - tar -xzf trivy.tar.gz
+    - ./trivy image
+        --severity HIGH,CRITICAL
+        --ignore-unfixed
+        --exit-code 1
+        --format table
+        s3-explorer:ci
+  needs:
+    - audit
+    - lint
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  timeout: 15 minutes
+
+# -----------------------------------------------------------------------------
+# Final gate — use this job as a required check in Merge Request rules
+# -----------------------------------------------------------------------------
+ci-gate:
+  stage: gate
+  image: alpine:3.20
+  script:
+    - echo "✓ secrets passed"
+    - echo "✓ audit passed"
+    - echo "✓ lint passed"
+    - echo "✓ caddyfile passed"
+    - echo "✓ image-scan passed"
+    - echo "All CI checks green."
+  needs:
+    - secrets
+    - audit
+    - lint
+    - caddyfile
+    - image-scan
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"

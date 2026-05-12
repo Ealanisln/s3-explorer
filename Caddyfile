@@ -1,0 +1,71 @@
+# =============================================================================
+# S3 Explorer — Caddy reverse proxy with automatic TLS
+# =============================================================================
+# DOMAIN env var controls TLS mode:
+#   - Public FQDN (e.g. s3.empresa.com) → Caddy auto-provisions Let's Encrypt.
+#     Requires: DNS A/AAAA record pointing here + ports 80/443 reachable.
+#   - Internal-only host (e.g. s3.intranet.local) → comment out the global
+#     email block below and uncomment "tls internal" inside the site block.
+#     Caddy generates a local CA; users must install Caddy's root cert once
+#     to avoid browser warnings (see README).
+# =============================================================================
+
+{
+	# Optional: ACME email for Let's Encrypt cert-expiry notifications.
+	# Add manually if you want notifications, e.g.:
+	#   email ti@empresa.com
+	#
+	# Uncomment for staging Let's Encrypt while testing (avoids rate limits):
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+{$DOMAIN} {
+	encode gzip zstd
+
+	# CD-SEC-001: overwrite XFF with Caddy's verified client_ip
+	# Prevents XFF spoofing → rate-limit bypass + audit-log poisoning
+	request_header X-Forwarded-For {client_ip}
+	request_header X-Real-IP {client_ip}
+
+	# Uncomment for intranet / self-signed (Caddy local CA):
+	# tls internal
+
+	# Large uploads (matches MAX_UPLOAD_BYTES in s3-explorer)
+	request_body {
+		max_size 5GB
+	}
+
+	# Streaming endpoints (search NDJSON, large downloads) need flush.
+	# CD-SEC-014: timeouts > 0 to defend against Slowloris while still allowing
+	# large uploads (500 MB at 1 Mbps = ~70 min headroom).
+	reverse_proxy s3-explorer:4569 {
+		flush_interval -1
+		transport http {
+			read_timeout 30m
+			write_timeout 30m
+			dial_timeout 10s
+		}
+	}
+
+	# Belt-and-suspenders security headers (the app also sets these,
+	# but Caddy's are applied even if the app is misconfigured).
+	# `preload` directive: tells the user agent this site is eligible for the HSTS
+	# preload list. To actually get added, submit at https://hstspreload.org/
+	# AFTER you confirm you'll never serve HTTP again on this hostname.
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		-Server
+		-X-Powered-By
+	}
+
+	log {
+		output stdout
+		format console
+		level INFO
+	}
+}

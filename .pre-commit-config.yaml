@@ -1,0 +1,29 @@
+# pre-commit framework config — https://pre-commit.com
+#
+# Install once:
+#   pip install pre-commit
+#   pre-commit install
+#
+# After install, every `git commit` runs these hooks automatically.
+# To run manually: pre-commit run --all-files
+
+repos:
+  # Secret scanning — fails the commit if anything that looks like a secret appears
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  # Misc hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=2048']
+      - id: detect-private-key
+      - id: check-yaml
+      - id: check-json
+        exclude: '\.vscode/.*\.json$'

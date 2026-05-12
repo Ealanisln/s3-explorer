@@ -1,0 +1,22 @@
+# Force LF line endings for all text files — keeps Windows and Linux devs in sync.
+# Without this, every commit shows whitespace-only diffs as files bounce between CRLF↔LF.
+* text=auto eol=lf
+
+# Shell and Dockerfile MUST be LF (Linux containers don't tolerate CRLF in shebangs/CMD)
+*.sh    text eol=lf
+Dockerfile text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+
+# Binary files — never touch
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.pdf   binary
+*.zip   binary
+*.tar.gz binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
