@@ -18,10 +18,6 @@ stages:
 default:
   interruptible: true
 
-variables:
-  DOCKER_DRIVER: overlay2
-  DOCKER_TLS_CERTDIR: "/certs"
-
 # -----------------------------------------------------------------------------
 # Secret scanning — gitleaks against the full history
 # -----------------------------------------------------------------------------
@@ -84,24 +80,38 @@ caddyfile:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 # -----------------------------------------------------------------------------
-# Image build + Trivy CVE scan
+# CVE scan — Trivy filesystem (source + lockfile + Dockerfile)
+#
+# Antes este job usaba `docker build + trivy image local-tag` con Docker-in-
+# Docker, pero MobydickServer (runner self-hosted) no rutea el puerto :2375
+# entre service+job containers ni comparte /certs para TLS — DinD falla en
+# tres puntos distintos. Trivy puede scanear el filesystem sin daemon Docker.
+#
+# Solo escaneamos código + deps de la app. El base image (node:20-alpine) está
+# pinneado por SHA digest en Dockerfile y manejado por Renovate — scanearlo en
+# cada push genera falsos bloqueos por CVEs upstream que no podemos arreglar
+# desde este repo. Si en algún momento se quiere un scan periódico del base,
+# se mete como cron job separado o renovate-PR check.
 # -----------------------------------------------------------------------------
 image-scan:
   stage: build
-  image: docker:24
-  services:
-    - docker:24-dind
+  image:
+    name: aquasec/trivy:0.58.1
+    entrypoint: [""]
+  variables:
+    TRIVY_NO_PROGRESS: "true"
+    TRIVY_CACHE_DIR: ".trivy-cache"
+  cache:
+    key: trivy-db
+    paths:
+      - .trivy-cache/
   script:
-    - docker build -t s3-explorer:ci .
-    - apk add --no-cache wget tar
-    - wget -qO trivy.tar.gz https://github.com/aquasecurity/trivy/releases/download/v0.58.1/trivy_0.58.1_Linux-64bit.tar.gz
-    - tar -xzf trivy.tar.gz
-    - ./trivy image
+    - trivy fs
         --severity HIGH,CRITICAL
         --ignore-unfixed
         --exit-code 1
         --format table
-        s3-explorer:ci
+        .
   needs:
     - audit
     - lint
