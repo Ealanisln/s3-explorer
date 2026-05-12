@@ -41,6 +41,24 @@ const ALLOWED_HOSTS = (process.env.ALLOWED_HOSTS ||
 const ALLOWED_ORIGINS_RAW = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
 const TRUST_PROXY = (process.env.TRUST_PROXY || '') === '1';
 
+// SSRF defense for the S3 endpoint header.
+// The app must support arbitrary custom endpoints (MinIO, Vultr, R2, etc.) — including
+// internal Docker hostnames like minio-{uuid}:9000 — so we don't denylist all internal IPs.
+// What we DO block by default: well-known cloud metadata endpoints, which would allow an
+// authenticated user to exfiltrate IAM credentials if the host has IMDSv1 enabled.
+// Override:
+//   BLOCK_METADATA_ENDPOINTS=0          → disable the metadata blocklist entirely
+//   S3_DENY_HOSTS=host1,host2,...       → additional exact-match hostnames to deny
+const METADATA_HOSTS = [
+  '169.254.169.254',          // AWS, GCP, Azure (IPv4 link-local)
+  'fd00:ec2::254',            // AWS IMDS IPv6
+  'metadata.google.internal', // GCP
+  'metadata.azure.com',       // Azure
+];
+const BLOCK_METADATA = (process.env.BLOCK_METADATA_ENDPOINTS || '1') === '1';
+const S3_DENY_HOSTS = (process.env.S3_DENY_HOSTS || '')
+  .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+
 if (TRUST_PROXY) app.set('trust proxy', 1);
 
 // SEC2-11: detect TRUST_PROXY misconfig. If we're bound to 0.0.0.0 we're almost
@@ -155,6 +173,17 @@ function normalizeEndpoint(ep) {
   return 'https://' + trimmed.replace(/\/+$/, '');
 }
 
+// Returns null if endpoint is allowed; returns a short reason string if it should be blocked.
+function endpointBlockReason(endpoint) {
+  if (!endpoint) return null;
+  let host;
+  try { host = new URL(endpoint).hostname.toLowerCase(); }
+  catch { return null; } // unparseable → let the SDK reject it
+  if (BLOCK_METADATA && METADATA_HOSTS.includes(host)) return 'cloud metadata endpoint';
+  if (S3_DENY_HOSTS.includes(host)) return 'denied by S3_DENY_HOSTS';
+  return null;
+}
+
 function buildClient(req) {
   const endpoint = normalizeEndpoint(req.header('x-s3-endpoint'));
   const region = req.header('x-s3-region') || 'us-east-1';
@@ -169,6 +198,19 @@ function buildClient(req) {
     throw err;
   }
 
+  const blocked = endpointBlockReason(endpoint);
+  if (blocked) {
+    auth.audit('s3_endpoint_blocked', {
+      username: req.user?.username,
+      endpoint,
+      reason: blocked,
+    });
+    const err = new Error('Endpoint not allowed');
+    err.status = 403;
+    err.name = 'EndpointBlocked';
+    throw err;
+  }
+
   return new S3Client({
     region,
     endpoint,
@@ -180,6 +222,7 @@ function buildClient(req) {
 // CD-SEC-005: don't leak full AWS SDK messages (ARNs, bucket names, internal paths) to clients.
 // Map known error names to generic user-facing messages; full detail stays in server logs only.
 const SAFE_AWS_ERRORS = {
+  EndpointBlocked: 'Ese endpoint está bloqueado por política del servidor.',
   AccessDenied: 'Acceso denegado. Verifica los permisos del IAM para este bucket/objeto.',
   NoSuchBucket: 'El bucket no existe.',
   NoSuchKey: 'El archivo no existe.',
