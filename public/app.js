@@ -1350,20 +1350,111 @@ document.getElementById('btn-show-versions').onclick = async () => {
 };
 
 // ---------- Upload ----------
-document.getElementById('btn-upload').onclick = () => document.getElementById('file-input').click();
-document.getElementById('file-input').onchange = (e) => uploadFiles(e.target.files);
+// Reset the file input's value BEFORE opening the picker so re-selecting the same
+// filename (e.g. user edited the file and wants to re-upload) actually fires `change`.
+// Otherwise the browser considers value unchanged and skips the event.
+document.getElementById('btn-upload').onclick = () => {
+  const input = document.getElementById('file-input');
+  input.value = '';
+  input.click();
+};
+document.getElementById('file-input').onchange = async (e) => {
+  await uploadFiles(e.target.files);
+  e.target.value = ''; // also reset after upload as belt-and-suspenders
+};
 
 async function uploadFiles(files) {
   if (!files || !files.length) return;
+
+  // Pre-flight: detect collisions before uploading. UX differs by versioning state:
+  //   - Versioning ON  → existing files become previous versions; informational toast
+  //   - Versioning OFF → existing files are overwritten permanently; ask user
+  const items = [...files].map(f => ({ file: f, key: State.prefix + f.name }));
+
+  let conflicts = [];
+  try {
+    const data = await api(`/api/objects/${encodeURIComponent(State.activeBucket)}/exists`, {
+      method: 'POST',
+      body: { keys: items.map(i => i.key) },
+    });
+    const existingSet = new Set((data.results || []).filter(r => r.exists).map(r => r.key));
+    conflicts = items.filter(i => existingSet.has(i.key));
+  } catch (e) {
+    // If the pre-check fails (network blip, bucket perms, etc.) fall through and upload normally.
+    // The server still handles the actual write; this check is just for UX warning.
+    console.warn('[upload] exists-check failed, proceeding without conflict warning:', e.message);
+  }
+
+  if (conflicts.length === 0) {
+    return doUpload(items);
+  }
+
+  if (State.versioning === 'Enabled') {
+    toast(`${conflicts.length} archivo(s) crearán nuevas versiones`, 'info', 4000);
+    return doUpload(items);
+  }
+
+  // Versioning OFF and there are conflicts → ask the user explicitly
+  return promptOverwrite(items, conflicts);
+}
+
+async function doUpload(items) {
+  if (!items.length) return;
   const fd = new FormData();
   fd.append('prefix', State.prefix);
-  for (const f of files) fd.append('files', f);
+  for (const it of items) fd.append('files', it.file);
   try {
-    toast(`Subiendo ${files.length} archivo(s)...`, 'info');
+    toast(`Subiendo ${items.length} archivo(s)...`, 'info');
     await api(`/api/object/${encodeURIComponent(State.activeBucket)}/upload`, { method: 'POST', body: fd });
     toast('Subida completa', 'success');
     loadObjects();
   } catch (e) { toast(e.message, 'error'); }
+}
+
+function promptOverwrite(allItems, conflicts) {
+  const conflictKeys = new Set(conflicts.map(c => c.key));
+  const newOnes = allItems.filter(i => !conflictKeys.has(i.key));
+
+  document.getElementById('overwrite-conflict-count').textContent = conflicts.length;
+  document.getElementById('overwrite-dest').textContent = State.activeBucket + '/' + (State.prefix || '');
+  const list = document.getElementById('overwrite-list');
+  list.innerHTML = conflicts.map(c => `
+    <div class="overwrite-item">
+      <span class="overwrite-icon">📄</span>
+      <span class="overwrite-name">${escapeHtml(c.file.name)}</span>
+      <span class="overwrite-size">${formatSize(c.file.size)}</span>
+    </div>
+  `).join('');
+
+  const newInfo = document.getElementById('overwrite-new-info');
+  newInfo.textContent = newOnes.length > 0
+    ? `${newOnes.length} archivo(s) nuevo(s) (sin conflicto) se subirá(n) normalmente con "Subir solo los nuevos".`
+    : 'Todos los archivos seleccionados tienen conflicto.';
+
+  const btnSkip = document.getElementById('btn-overwrite-skip');
+  btnSkip.disabled = newOnes.length === 0;
+
+  openModal('modal-overwrite');
+
+  // Single-use handlers — reset on each prompt
+  const cleanup = () => {
+    document.getElementById('btn-overwrite-cancel').onclick = null;
+    document.getElementById('btn-overwrite-skip').onclick = null;
+    document.getElementById('btn-overwrite-all').onclick = null;
+    closeModal('modal-overwrite');
+  };
+  document.getElementById('btn-overwrite-cancel').onclick = () => {
+    toast('Subida cancelada', 'info');
+    cleanup();
+  };
+  document.getElementById('btn-overwrite-skip').onclick = () => {
+    cleanup();
+    doUpload(newOnes);
+  };
+  document.getElementById('btn-overwrite-all').onclick = () => {
+    cleanup();
+    doUpload(allItems);
+  };
 }
 
 // Drag & drop

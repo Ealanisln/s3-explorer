@@ -737,6 +737,38 @@ tr.deleted .badge-deleted {
   margin-bottom: 12px;
 }
 
+/* OVERWRITE CONFIRMATION MODAL */
+.overwrite-list {
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px;
+}
+.overwrite-item {
+  display: grid;
+  grid-template-columns: 24px 1fr 80px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.overwrite-item:last-child { border-bottom: 0; }
+.overwrite-item:hover { background: var(--bg-3); }
+.overwrite-icon { font-size: 14px; opacity: 0.7; }
+.overwrite-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--yellow);
+  font-family: 'Consolas', monospace;
+}
+.overwrite-size {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: right;
+}
+
 /* SCROLLBAR */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }

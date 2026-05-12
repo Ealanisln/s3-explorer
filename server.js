@@ -601,6 +601,34 @@ app.get('/api/object/:bucket/presign', wrap(async (req, res) => {
   res.json({ url, expires, capped: expires !== requested });
 }));
 
+// Batch existence check — used by the upload UI to detect conflicts before uploading.
+// Returns [{ key, exists, deleteMarker }] for each requested key.
+app.post('/api/objects/:bucket/exists', wrap(async (req, res) => {
+  const s3 = buildClient(req);
+  const { keys } = req.body || {};
+  if (!Array.isArray(keys) || !keys.length) {
+    return res.status(400).json({ message: 'keys array required' });
+  }
+  // Cap to prevent abuse / runaway HeadObject calls
+  const limited = keys.slice(0, 100);
+  const results = await Promise.all(limited.map(async (key) => {
+    if (typeof key !== 'string' || !key) return { key, exists: false };
+    try {
+      await s3.send(new HeadObjectCommand({ Bucket: req.params.bucket, Key: key }));
+      return { key, exists: true };
+    } catch (e) {
+      const status = e.$metadata?.httpStatusCode;
+      if (status === 404 || e.name === 'NotFound') {
+        return { key, exists: false };
+      }
+      // Some other error (perm denied, etc.) — assume not-exists to avoid blocking upload
+      console.error('[exists-check]', { user: req.user?.username, key, name: e.name });
+      return { key, exists: false, error: e.name };
+    }
+  }));
+  res.json({ results });
+}));
+
 app.post('/api/object/:bucket/upload', upload.array('files'), wrap(async (req, res) => {
   const s3 = buildClient(req);
   const prefix = req.body.prefix || '';

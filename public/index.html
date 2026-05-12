@@ -252,6 +252,28 @@
   </div>
 </div>
 
+<!-- Modal: Overwrite confirmation (versioning OFF) -->
+<div class="modal-backdrop" id="modal-overwrite" style="display:none">
+  <div class="modal">
+    <header><h3>⚠ Conflicto de archivos</h3></header>
+    <div style="padding:18px">
+      <p class="hint" style="margin-top:0">
+        <strong id="overwrite-conflict-count">N</strong> archivo(s) ya existen en
+        <code id="overwrite-dest"></code> y el versionado de este bucket está
+        <strong style="color:var(--red)">desactivado</strong>.
+        Sobrescribir es <strong>irreversible</strong>.
+      </p>
+      <div class="overwrite-list" id="overwrite-list"></div>
+      <p class="hint" id="overwrite-new-info" style="margin:12px 0 4px"></p>
+      <footer style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; margin-top:16px">
+        <button type="button" class="btn" id="btn-overwrite-cancel">Cancelar todo</button>
+        <button type="button" class="btn" id="btn-overwrite-skip">Subir solo los nuevos</button>
+        <button type="button" class="btn btn-danger" id="btn-overwrite-all">Sobrescribir todos</button>
+      </footer>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Preview -->
 <div class="modal-backdrop" id="modal-preview" style="display:none">
   <div class="modal modal-lg">
