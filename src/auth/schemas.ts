@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import type { Request, Response, NextFunction } from 'express';
+
+// `validateBody` moved to ../http/validate.ts (shared with s3/routes/*).
+// Re-export here so existing imports keep compiling.
+export { validateBody } from '../http/validate';
 
 export const loginSchema = z.object({
   username: z.string().min(1).max(64),
@@ -24,25 +27,3 @@ export const createUserSchema = z.object({
 export const resetPasswordSchema = z.object({
   newPassword: z.string().min(8).max(1024),
 });
-
-// Generic body-validation middleware. On parse failure, returns 400 with the
-// first error message — the AWS-error sanitizer doesn't apply to /auth/* so we
-// own the response shape here.
-//
-// Mutates req.body to the parsed/typed object so handlers can read it without
-// casting. TS request-augmentation in src/types.ts means req.body stays `any`
-// at the type system level; for stricter typing the handlers cast at use-site.
-export function validateBody<T>(schema: z.ZodType<T>) {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    const parsed = schema.safeParse(req.body);
-    if (!parsed.success) {
-      const first = parsed.error.issues[0];
-      const path = first?.path?.join('.') || '(body)';
-      const msg = first?.message || 'Bad request';
-      res.status(400).json({ message: `${path}: ${msg}`, code: 'BAD_REQUEST' });
-      return;
-    }
-    req.body = parsed.data;
-    next();
-  };
-}
