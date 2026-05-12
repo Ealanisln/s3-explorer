@@ -7,21 +7,11 @@ const fs = require('fs');
 const crypto = require('crypto');
 const mime = require('mime-types');
 const auth = require('./dist/auth');
+// Commands used only by the remaining inline routes (search, search-stream,
+// download, presign, upload). Bucket + object CRUD live in src/s3/routes/.
 const {
-  ListBucketsCommand,
-  CreateBucketCommand,
-  DeleteBucketCommand,
-  HeadBucketCommand,
-  GetBucketVersioningCommand,
-  PutBucketVersioningCommand,
   ListObjectsV2Command,
-  ListObjectVersionsCommand,
-  HeadObjectCommand,
   GetObjectCommand,
-  PutObjectCommand,
-  DeleteObjectCommand,
-  DeleteObjectsCommand,
-  CopyObjectCommand,
 } = require('@aws-sdk/client-s3');
 const { Upload } = require('@aws-sdk/lib-storage');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
@@ -170,168 +160,12 @@ app.use(express.static(path.join(__dirname, 'public'), {
 // ----- All /api routes require auth + TOTP enrolled + password rotated -----
 app.use('/api', auth.requireAuth, auth.requireTotpEnrolled, auth.requirePasswordCurrent);
 
-// buildClient / sanitizeError / wrap and the SAFE_AWS_ERRORS map all live in
-// src/{s3,http}/*.ts now (PR 2 of the TS migration). See the require()s near
-// the top of this file.
-
-app.post('/api/test', wrap(async (req, res) => {
-  const s3 = buildClient(req);
-  const bucket = req.body && req.body.bucket;
-  if (bucket) {
-    await s3.send(new HeadBucketCommand({ Bucket: bucket }));
-    res.json({ ok: true, mode: 'head-bucket', bucket });
-    return;
-  }
-  const out = await s3.send(new ListBucketsCommand({}));
-  res.json({ ok: true, mode: 'list-buckets', owner: out.Owner, bucketCount: (out.Buckets || []).length });
-}));
-
-app.get('/api/buckets', wrap(async (req, res) => {
-  const s3 = buildClient(req);
-  const out = await s3.send(new ListBucketsCommand({}));
-  res.json({ buckets: out.Buckets || [], owner: out.Owner });
-}));
-
-app.post('/api/buckets', wrap(async (req, res) => {
-  const s3 = buildClient(req);
-  const { name } = req.body;
-  await s3.send(new CreateBucketCommand({ Bucket: name }));
-  res.json({ ok: true });
-}));
-
-app.delete('/api/buckets/:bucket', wrap(async (req, res) => {
-  const s3 = buildClient(req);
-  await s3.send(new DeleteBucketCommand({ Bucket: req.params.bucket }));
-  res.json({ ok: true });
-}));
-
-app.get('/api/buckets/:bucket/versioning', wrap(async (req, res) => {
-  const s3 = buildClient(req);
-  const out = await s3.send(new GetBucketVersioningCommand({ Bucket: req.params.bucket }));
-  res.json({ status: out.Status || 'Disabled' });
-}));
-
-app.put('/api/buckets/:bucket/versioning', wrap(async (req, res) => {
-  const s3 = buildClient(req);
-  const { enabled } = req.body;
-  // Policy: versioning can only be enabled, never suspended via this app.
-  // This prevents accidental data loss; suspension must be done with full AWS CLI access.
-  if (enabled !== true) {
-    res.status(403).json({
-      message: 'Por política, no se puede desactivar el versionado desde esta app. Si necesitas suspenderlo, hazlo con awscli/consola del proveedor.',
-    });
-    return;
-  }
-  await s3.send(new PutBucketVersioningCommand({
-    Bucket: req.params.bucket,
-    VersioningConfiguration: { Status: 'Enabled' },
-  }));
-  auth.audit('versioning_enabled', { username: req.user.username, bucket: req.params.bucket });
-  res.json({ ok: true });
-}));
-
-app.get('/api/objects/:bucket', wrap(async (req, res) => {
-  const s3 = buildClient(req);
-  const prefix = req.query.prefix || '';
-  const showDeleted = req.query.showDeleted === '1';
-  const PAGE_CAP = parseInt(req.query.pageCap || '50', 10); // up to 50 pages × 1000 = 50k entries
-  const MAX_ENTRIES = parseInt(req.query.max || '50000', 10);
-
-  if (showDeleted) {
-    const prefixesSet = new Set();
-    const byKey = new Map();
-    let keyMarker = undefined;
-    let versionMarker = undefined;
-    let pages = 0;
-    let truncated = false;
-
-    while (true) {
-      const out = await s3.send(new ListObjectVersionsCommand({
-        Bucket: req.params.bucket,
-        Prefix: prefix,
-        Delimiter: '/',
-        KeyMarker: keyMarker,
-        VersionIdMarker: versionMarker,
-        MaxKeys: 1000,
-      }));
-      for (const cp of (out.CommonPrefixes || [])) prefixesSet.add(cp.Prefix);
-      for (const v of (out.Versions || [])) {
-        if (v.Key === prefix) continue;
-        const cur = byKey.get(v.Key);
-        if (!cur || new Date(v.LastModified) > new Date(cur.LastModified)) {
-          byKey.set(v.Key, { ...v, IsDeleteMarker: false });
-        }
-      }
-      for (const m of (out.DeleteMarkers || [])) {
-        if (m.Key === prefix) continue;
-        const cur = byKey.get(m.Key);
-        if (!cur || new Date(m.LastModified) > new Date(cur.LastModified)) {
-          byKey.set(m.Key, { ...m, IsDeleteMarker: true });
-        }
-      }
-      pages++;
-      if (!out.IsTruncated) break;
-      if (pages >= PAGE_CAP || (prefixesSet.size + byKey.size) >= MAX_ENTRIES) { truncated = true; break; }
-      keyMarker = out.NextKeyMarker;
-      versionMarker = out.NextVersionIdMarker;
-    }
-
-    res.json({
-      prefixes: [...prefixesSet],
-      objects: [...byKey.values()].map(o => ({
-        Key: o.Key, Size: o.Size || 0, LastModified: o.LastModified,
-        ETag: o.ETag, VersionId: o.VersionId, IsDeleteMarker: o.IsDeleteMarker,
-      })),
-      nextToken: null,
-      isTruncated: truncated,
-      pages,
-    });
-    return;
-  }
-
-  const prefixesSet = new Set();
-  const objects = [];
-  let token = undefined;
-  let pages = 0;
-  let truncated = false;
-
-  while (true) {
-    const out = await s3.send(new ListObjectsV2Command({
-      Bucket: req.params.bucket,
-      Prefix: prefix,
-      Delimiter: '/',
-      ContinuationToken: token,
-      MaxKeys: 1000,
-    }));
-    for (const cp of (out.CommonPrefixes || [])) prefixesSet.add(cp.Prefix);
-    for (const o of (out.Contents || [])) {
-      if (o.Key === prefix) continue;
-      objects.push({
-        Key: o.Key, Size: o.Size, LastModified: o.LastModified,
-        ETag: o.ETag, StorageClass: o.StorageClass, IsDeleteMarker: false,
-      });
-    }
-    pages++;
-    if (!out.IsTruncated) break;
-    if (pages >= PAGE_CAP || (prefixesSet.size + objects.length) >= MAX_ENTRIES) { truncated = true; break; }
-    token = out.NextContinuationToken;
-  }
-
-  res.json({
-    prefixes: [...prefixesSet],
-    objects,
-    nextToken: null,
-    isTruncated: truncated,
-    pages,
-  });
-}));
-
-app.post('/api/object/:bucket/restore', wrap(async (req, res) => {
-  const s3 = buildClient(req);
-  const { key, versionId } = req.body;
-  await s3.send(new DeleteObjectCommand({ Bucket: req.params.bucket, Key: key, VersionId: versionId }));
-  res.json({ ok: true });
-}));
+// buckets + objects routes moved to src/s3/routes/{buckets,objects}.ts.
+// Mounted below as Express Routers that receive `buildClient` (with the
+// audit-on-block callback bound) so per-route SDK calls keep working without
+// each handler having to know about the audit subsystem.
+app.use('/api', require('./dist/s3/routes/buckets').bucketsRouter(buildClient));
+app.use('/api', require('./dist/s3/routes/objects').objectsRouter(buildClient));
 
 app.get('/api/search-stream/:bucket', async (req, res) => {
   let s3;
@@ -447,45 +281,6 @@ app.get('/api/search/:bucket', wrap(async (req, res) => {
   res.json({ results, scanned, truncated });
 }));
 
-app.get('/api/object/:bucket/head', wrap(async (req, res) => {
-  const s3 = buildClient(req);
-  const key = req.query.key;
-  const versionId = req.query.versionId || undefined;
-  const out = await s3.send(new HeadObjectCommand({ Bucket: req.params.bucket, Key: key, VersionId: versionId }));
-  res.json({
-    ContentType: out.ContentType,
-    ContentLength: out.ContentLength,
-    LastModified: out.LastModified,
-    ETag: out.ETag,
-    VersionId: out.VersionId,
-    Metadata: out.Metadata,
-  });
-}));
-
-app.get('/api/object/:bucket/versions', wrap(async (req, res) => {
-  const s3 = buildClient(req);
-  const prefix = req.query.key;
-  const out = await s3.send(new ListObjectVersionsCommand({
-    Bucket: req.params.bucket,
-    Prefix: prefix,
-  }));
-  const versions = (out.Versions || []).filter(v => v.Key === prefix).map(v => ({
-    VersionId: v.VersionId,
-    IsLatest: v.IsLatest,
-    LastModified: v.LastModified,
-    Size: v.Size,
-    ETag: v.ETag,
-    Type: 'version',
-  }));
-  const markers = (out.DeleteMarkers || []).filter(v => v.Key === prefix).map(v => ({
-    VersionId: v.VersionId,
-    IsLatest: v.IsLatest,
-    LastModified: v.LastModified,
-    Type: 'delete-marker',
-  }));
-  res.json({ versions: [...versions, ...markers].sort((a, b) => new Date(b.LastModified) - new Date(a.LastModified)) });
-}));
-
 const DANGEROUS_INLINE_TYPES = /^(text\/html|application\/xhtml|image\/svg|application\/xml|text\/xml|application\/javascript|text\/javascript|application\/ecmascript)/i;
 // Generic / unknown content-types that S3 may return when the uploader didn't set one.
 // In these cases trust the file extension instead — otherwise PDFs/images won't render inline.
@@ -547,34 +342,6 @@ app.get('/api/object/:bucket/presign', wrap(async (req, res) => {
   res.json({ url, expires, capped: expires !== requested });
 }));
 
-// Batch existence check — used by the upload UI to detect conflicts before uploading.
-// Returns [{ key, exists, deleteMarker }] for each requested key.
-app.post('/api/objects/:bucket/exists', wrap(async (req, res) => {
-  const s3 = buildClient(req);
-  const { keys } = req.body || {};
-  if (!Array.isArray(keys) || !keys.length) {
-    return res.status(400).json({ message: 'keys array required' });
-  }
-  // Cap to prevent abuse / runaway HeadObject calls
-  const limited = keys.slice(0, 100);
-  const results = await Promise.all(limited.map(async (key) => {
-    if (typeof key !== 'string' || !key) return { key, exists: false };
-    try {
-      await s3.send(new HeadObjectCommand({ Bucket: req.params.bucket, Key: key }));
-      return { key, exists: true };
-    } catch (e) {
-      const status = e.$metadata?.httpStatusCode;
-      if (status === 404 || e.name === 'NotFound') {
-        return { key, exists: false };
-      }
-      // Some other error (perm denied, etc.) — assume not-exists to avoid blocking upload
-      console.error('[exists-check]', { user: req.user?.username, key, name: e.name });
-      return { key, exists: false, error: e.name };
-    }
-  }));
-  res.json({ results });
-}));
-
 app.post('/api/object/:bucket/upload', upload.array('files'), wrap(async (req, res) => {
   const s3 = buildClient(req);
   const prefix = req.body.prefix || '';
@@ -606,71 +373,6 @@ app.post('/api/object/:bucket/upload', upload.array('files'), wrap(async (req, r
       fs.unlink(p, () => {});
     }
   }
-}));
-
-app.post('/api/object/:bucket/folder', wrap(async (req, res) => {
-  const s3 = buildClient(req);
-  const { prefix, name } = req.body || {};
-  // SEC2-12: validate input — was crashing with TypeError → 500. Now 400 with reason.
-  if (typeof name !== 'string' || !name.trim()) {
-    return res.status(400).json({ message: 'name (string, no vacío) requerido' });
-  }
-  if (name.length > 1024) {
-    return res.status(400).json({ message: 'name demasiado largo (máx 1024 chars)' });
-  }
-  const safePrefix = typeof prefix === 'string' ? prefix : '';
-  const key = safePrefix + name.replace(/\/$/, '') + '/';
-  await s3.send(new PutObjectCommand({ Bucket: req.params.bucket, Key: key, Body: '' }));
-  res.json({ ok: true, key });
-}));
-
-app.delete('/api/object/:bucket', wrap(async (req, res) => {
-  const s3 = buildClient(req);
-  const { key, versionId } = req.body;
-  await s3.send(new DeleteObjectCommand({ Bucket: req.params.bucket, Key: key, VersionId: versionId }));
-  res.json({ ok: true });
-}));
-
-app.post('/api/object/:bucket/delete-batch', wrap(async (req, res) => {
-  const s3 = buildClient(req);
-  const { keys } = req.body;
-  const out = await s3.send(new DeleteObjectsCommand({
-    Bucket: req.params.bucket,
-    Delete: { Objects: keys.map(k => typeof k === 'string' ? { Key: k } : { Key: k.key, VersionId: k.versionId }) },
-  }));
-  res.json({ deleted: out.Deleted || [], errors: out.Errors || [] });
-}));
-
-function buildCopySource(bucket, key, versionId) {
-  const encodedKey = key.split('/').map(encodeURIComponent).join('/');
-  let src = `/${encodeURIComponent(bucket)}/${encodedKey}`;
-  if (versionId) src += `?versionId=${encodeURIComponent(versionId)}`;
-  return src;
-}
-
-app.post('/api/object/:bucket/copy', wrap(async (req, res) => {
-  const s3 = buildClient(req);
-  const { sourceKey, destKey, sourceVersionId } = req.body;
-  if (!sourceKey || !destKey) { res.status(400).json({ message: 'sourceKey and destKey required' }); return; }
-  await s3.send(new CopyObjectCommand({
-    Bucket: req.params.bucket,
-    Key: destKey,
-    CopySource: buildCopySource(req.params.bucket, sourceKey, sourceVersionId),
-  }));
-  res.json({ ok: true });
-}));
-
-app.post('/api/object/:bucket/rename', wrap(async (req, res) => {
-  const s3 = buildClient(req);
-  const { sourceKey, destKey } = req.body;
-  if (!sourceKey || !destKey) { res.status(400).json({ message: 'sourceKey and destKey required' }); return; }
-  await s3.send(new CopyObjectCommand({
-    Bucket: req.params.bucket,
-    Key: destKey,
-    CopySource: buildCopySource(req.params.bucket, sourceKey),
-  }));
-  await s3.send(new DeleteObjectCommand({ Bucket: req.params.bucket, Key: sourceKey }));
-  res.json({ ok: true });
 }));
 
 // 404 + safe JSON error fallback (never leak stacks)
