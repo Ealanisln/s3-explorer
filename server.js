@@ -8,7 +8,6 @@ const crypto = require('crypto');
 const mime = require('mime-types');
 const auth = require('./auth');
 const {
-  S3Client,
   ListBucketsCommand,
   CreateBucketCommand,
   DeleteBucketCommand,
@@ -27,6 +26,27 @@ const {
 const { Upload } = require('@aws-sdk/lib-storage');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
+// TypeScript leaf utilities — emitted to dist/ by `npm run build`.
+const { buildClient: rawBuildClient } = require('./dist/s3/client');
+const { sanitizeError } = require('./dist/s3/errors');
+const { wrap: wrapBase } = require('./dist/http/errors');
+
+// Bind buildClient with the auth-audit callback so the s3/client module
+// stays decoupled from the auth subsystem. Same shape as the inline version
+// it replaces — every call site keeps the `buildClient(req)` signature.
+function buildClient(req) {
+  return rawBuildClient(req, {
+    onBlocked: (reason, endpoint) => auth.audit('s3_endpoint_blocked', {
+      username: req.user && req.user.username,
+      endpoint,
+      reason,
+    }),
+  });
+}
+
+// Re-export wrap unchanged — wrapBase already calls sanitizeError on throw.
+const wrap = wrapBase;
+
 const app = express();
 
 // ----- Configuration via env -----
@@ -41,23 +61,8 @@ const ALLOWED_HOSTS = (process.env.ALLOWED_HOSTS ||
 const ALLOWED_ORIGINS_RAW = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
 const TRUST_PROXY = (process.env.TRUST_PROXY || '') === '1';
 
-// SSRF defense for the S3 endpoint header.
-// The app must support arbitrary custom endpoints (MinIO, Vultr, R2, etc.) — including
-// internal Docker hostnames like minio-{uuid}:9000 — so we don't denylist all internal IPs.
-// What we DO block by default: well-known cloud metadata endpoints, which would allow an
-// authenticated user to exfiltrate IAM credentials if the host has IMDSv1 enabled.
-// Override:
-//   BLOCK_METADATA_ENDPOINTS=0          → disable the metadata blocklist entirely
-//   S3_DENY_HOSTS=host1,host2,...       → additional exact-match hostnames to deny
-const METADATA_HOSTS = [
-  '169.254.169.254',          // AWS, GCP, Azure (IPv4 link-local)
-  'fd00:ec2::254',            // AWS IMDS IPv6
-  'metadata.google.internal', // GCP
-  'metadata.azure.com',       // Azure
-];
-const BLOCK_METADATA = (process.env.BLOCK_METADATA_ENDPOINTS || '1') === '1';
-const S3_DENY_HOSTS = (process.env.S3_DENY_HOSTS || '')
-  .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+// SSRF denylist for the x-s3-endpoint header (METADATA_HOSTS, BLOCK_METADATA,
+// S3_DENY_HOSTS) lives in src/s3/client.ts now and is read directly there.
 
 if (TRUST_PROXY) app.set('trust proxy', 1);
 
@@ -165,111 +170,9 @@ app.use(express.static(path.join(__dirname, 'public'), {
 // ----- All /api routes require auth + TOTP enrolled + password rotated -----
 app.use('/api', auth.requireAuth, auth.requireTotpEnrolled, auth.requirePasswordCurrent);
 
-function normalizeEndpoint(ep) {
-  if (!ep) return undefined;
-  const trimmed = ep.trim();
-  if (!trimmed) return undefined;
-  if (/^https?:\/\//i.test(trimmed)) return trimmed.replace(/\/+$/, '');
-  return 'https://' + trimmed.replace(/\/+$/, '');
-}
-
-// Returns null if endpoint is allowed; returns a short reason string if it should be blocked.
-function endpointBlockReason(endpoint) {
-  if (!endpoint) return null;
-  let host;
-  try { host = new URL(endpoint).hostname.toLowerCase(); }
-  catch { return null; } // unparseable → let the SDK reject it
-  if (BLOCK_METADATA && METADATA_HOSTS.includes(host)) return 'cloud metadata endpoint';
-  if (S3_DENY_HOSTS.includes(host)) return 'denied by S3_DENY_HOSTS';
-  return null;
-}
-
-function buildClient(req) {
-  const endpoint = normalizeEndpoint(req.header('x-s3-endpoint'));
-  const region = req.header('x-s3-region') || 'us-east-1';
-  const accessKeyId = req.header('x-s3-access-key');
-  const secretAccessKey = req.header('x-s3-secret-key');
-  const sessionToken = req.header('x-s3-session-token') || undefined;
-  const forcePathStyle = (req.header('x-s3-path-style') || 'true') === 'true';
-
-  if (!accessKeyId || !secretAccessKey) {
-    const err = new Error('Missing S3 credentials');
-    err.status = 401;
-    throw err;
-  }
-
-  const blocked = endpointBlockReason(endpoint);
-  if (blocked) {
-    auth.audit('s3_endpoint_blocked', {
-      username: req.user?.username,
-      endpoint,
-      reason: blocked,
-    });
-    const err = new Error('Endpoint not allowed');
-    err.status = 403;
-    err.name = 'EndpointBlocked';
-    throw err;
-  }
-
-  return new S3Client({
-    region,
-    endpoint,
-    forcePathStyle,
-    credentials: { accessKeyId, secretAccessKey, sessionToken },
-  });
-}
-
-// CD-SEC-005: don't leak full AWS SDK messages (ARNs, bucket names, internal paths) to clients.
-// Map known error names to generic user-facing messages; full detail stays in server logs only.
-const SAFE_AWS_ERRORS = {
-  EndpointBlocked: 'Ese endpoint está bloqueado por política del servidor.',
-  AccessDenied: 'Acceso denegado. Verifica los permisos del IAM para este bucket/objeto.',
-  NoSuchBucket: 'El bucket no existe.',
-  NoSuchKey: 'El archivo no existe.',
-  NoSuchUpload: 'La subida fue cancelada o expiró.',
-  BucketAlreadyExists: 'Ya existe un bucket con ese nombre.',
-  BucketAlreadyOwnedByYou: 'Ya tienes un bucket con ese nombre.',
-  BucketNotEmpty: 'El bucket no está vacío.',
-  InvalidAccessKeyId: 'Credenciales inválidas. Verifica access key y secret key.',
-  SignatureDoesNotMatch: 'Credenciales inválidas. Verifica access key y secret key.',
-  InvalidBucketName: 'Nombre de bucket inválido.',
-  InvalidArgument: 'Parámetro inválido.',
-  EntityTooLarge: 'Archivo demasiado grande.',
-  RequestTimeout: 'Tiempo de espera agotado.',
-  ServiceUnavailable: 'El proveedor S3 no está disponible. Reintenta en unos segundos.',
-  SlowDown: 'El proveedor S3 está limitando la velocidad. Reintenta en unos segundos.',
-  Forbidden: 'Acceso denegado.',
-  NotFound: 'Recurso no encontrado.',
-};
-
-function sanitizeError(e) {
-  const status = e.status || e.$metadata?.httpStatusCode || 500;
-  const code = e.name || 'Error';
-  const safe = SAFE_AWS_ERRORS[code];
-  if (safe) return { status, body: { error: code, message: safe } };
-  // For unknown errors: status code only, no message detail
-  if (status >= 500) return { status, body: { error: 'InternalError', message: 'Error interno del servidor.' } };
-  return { status, body: { error: code, message: 'Operación rechazada.' } };
-}
-
-function wrap(fn) {
-  return async (req, res) => {
-    try {
-      await fn(req, res);
-    } catch (e) {
-      // Full detail only to server logs (with username for audit context)
-      console.error('[s3-error]', {
-        user: req.user?.username,
-        path: req.path,
-        name: e.name,
-        message: e.message,
-        code: e.Code || e.$metadata?.httpStatusCode,
-      });
-      const { status, body } = sanitizeError(e);
-      res.status(status).json(body);
-    }
-  };
-}
+// buildClient / sanitizeError / wrap and the SAFE_AWS_ERRORS map all live in
+// src/{s3,http}/*.ts now (PR 2 of the TS migration). See the require()s near
+// the top of this file.
 
 app.post('/api/test', wrap(async (req, res) => {
   const s3 = buildClient(req);

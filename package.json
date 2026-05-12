@@ -5,9 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
+    "dev": "npm run build && node server.js",
     "build": "tsc -b",
-    "build:clean": "tsc -b --clean && tsc -b",
+    "build:clean": "rm -rf dist public/dist *.tsbuildinfo && tsc -b",
     "typecheck": "tsc -b --noEmit",
     "watch": "tsc -b --watch"
   },
