@@ -57,10 +57,19 @@ lint:
   image: node:20-alpine
   script:
     - apk add --no-cache wget
-    - for f in server.js auth.js public/app.js; do node --check "$f" || exit 1; done
+    # Syntax check on the .js files that still exist during the TS migration.
+    # As each .js gets replaced by its .ts counterpart in src/, drop it from this list.
+    - for f in server.js auth.js public/app.js; do [ -f "$f" ] && (node --check "$f" || exit 1); done
+    # TypeScript type-check across both projects (server + web).
+    - npm ci --no-audit --no-fund
+    - npm run typecheck
     - wget -qO /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
     - chmod +x /usr/local/bin/hadolint
     - hadolint --failure-threshold warning Dockerfile
+  cache:
+    key: $CI_COMMIT_REF_SLUG
+    paths:
+      - node_modules/
   rules:
     - if: $CI_PIPELINE_SOURCE == "push"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"

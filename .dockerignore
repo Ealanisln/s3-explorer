@@ -12,3 +12,7 @@ npm-debug.log*
 .env
 .env.*
 README.md
+dist
+public/dist
+*.tsbuildinfo
+.gstack
