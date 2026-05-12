@@ -24,6 +24,6 @@ EXPOSE 4569
 VOLUME ["/data"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- --header="Host: localhost" http://127.0.0.1:4569/healthz > /dev/null 2>&1 || exit 1
+  CMD wget -qO- --header="Host: localhost" "http://127.0.0.1:${PORT}/healthz" > /dev/null 2>&1 || exit 1
 
 CMD ["node", "server.js"]
