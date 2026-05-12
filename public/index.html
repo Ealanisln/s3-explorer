@@ -84,7 +84,8 @@
 </div>
 
 <div id="app">
-  <aside class="sidebar">
+  <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+  <aside class="sidebar" id="sidebar">
     <div class="brand">
       <div class="logo">S3</div>
       <div>
@@ -127,6 +128,7 @@
 
   <main class="main">
     <header class="toolbar">
+      <button class="btn-icon mobile-only" id="btn-menu" title="Menú" aria-label="Abrir menú">☰</button>
       <div class="crumbs" id="breadcrumbs"></div>
       <div class="search-box">
         <input type="text" id="search-input" placeholder="Buscar... (Enter = todo el bucket)" disabled />
