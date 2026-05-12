@@ -2,10 +2,10 @@
   "name": "s3-explorer",
   "version": "1.0.0",
   "description": "MinIO-like web console for any S3-compatible storage",
-  "main": "server.js",
+  "main": "dist/server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "npm run build && node server.js",
+    "start": "node dist/server.js",
+    "dev": "npm run build && node dist/server.js",
     "build": "tsc -b",
     "build:clean": "rm -rf dist public/dist *.tsbuildinfo && tsc -b",
     "typecheck": "tsc -b --noEmit",
