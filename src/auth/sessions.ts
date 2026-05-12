@@ -1,11 +1,11 @@
 import type { Response, Request } from 'express';
 import * as crypto from 'crypto';
-import * as fs from 'fs';
-import * as path from 'path';
+import { db, ensureDbInit } from '../db';
 import type { SessionPayload, PendingPayload, User } from '../types';
 
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', '..', 'data');
-const REVOKED_FILE = path.join(DATA_DIR, 'revoked.json');
+// Same guarantee as users-store.ts: DB tables exist before we prepare statements.
+ensureDbInit();
+
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 const SESSION_TTL_SECONDS = parseInt(process.env.SESSION_TTL_SECONDS || '43200', 10); // 12 h
 const SECURE_COOKIE = (process.env.SECURE_COOKIE || '1') === '1';
@@ -15,46 +15,25 @@ if (!process.env.SESSION_SECRET) {
     'All sessions will be invalidated on server restart. Set SESSION_SECRET in production.');
 }
 
-// CD-SEC-004: persistent revocation list — {jti: expEpoch}
-const revokedJtis = new Map<string, number>();
+// CD-SEC-004: revocation list moved into SQLite. The old file-backed Map
+// (revoked.json + in-memory hydration + tmp+rename writes + setInterval
+// cleanup) is replaced by a single table with two prepared statements and a
+// boot-time DELETE for expired rows.
+const stmtIsRevoked = db.prepare<[string]>('SELECT 1 FROM revoked_sessions WHERE jti = ?');
+const stmtAddRevoked = db.prepare<[string, number]>(
+  'INSERT OR REPLACE INTO revoked_sessions (jti, exp_epoch) VALUES (?, ?)'
+);
+const stmtPurgeExpired = db.prepare<[number]>(
+  'DELETE FROM revoked_sessions WHERE exp_epoch <= ?'
+);
 
-(function loadRevoked() {
-  try {
-    const raw = JSON.parse(fs.readFileSync(REVOKED_FILE, 'utf8')) as Record<string, number>;
-    const now = Math.floor(Date.now() / 1000);
-    for (const [jti, exp] of Object.entries(raw)) {
-      if (exp > now) revokedJtis.set(jti, exp);
-    }
-  } catch {
-    // file missing or unreadable — start with an empty list
-  }
-})();
-
-function saveRevoked(): void {
+// Purge expired entries on boot, and periodically thereafter.
+function purgeExpired(): void {
   const now = Math.floor(Date.now() / 1000);
-  const obj: Record<string, number> = {};
-  for (const [jti, exp] of revokedJtis) {
-    if (exp > now) obj[jti] = exp;
-  }
-  try {
-    const tmp = REVOKED_FILE + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(obj));
-    fs.renameSync(tmp, REVOKED_FILE);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error('[auth] Failed to persist revocation list:', msg);
-  }
+  stmtPurgeExpired.run(now);
 }
-
-// Periodic cleanup of expired entries
-setInterval(() => {
-  const now = Math.floor(Date.now() / 1000);
-  let changed = false;
-  for (const [jti, exp] of revokedJtis) {
-    if (exp <= now) { revokedJtis.delete(jti); changed = true; }
-  }
-  if (changed) saveRevoked();
-}, 60 * 60 * 1000).unref();
+purgeExpired();
+setInterval(purgeExpired, 60 * 60 * 1000).unref();
 
 function b64url(buf: Buffer | Uint8Array): string {
   return Buffer.from(buf).toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
@@ -83,13 +62,12 @@ export function verifyToken(token: string | undefined): SessionPayload | null {
   try { payload = JSON.parse(b64urlDecode(body).toString('utf8')) as SessionPayload; }
   catch { return null; }
   if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
-  if (revokedJtis.has(payload.jti)) return null;
+  if (stmtIsRevoked.get(payload.jti)) return null;
   return payload;
 }
 
 function addRevoked(jti: string, exp: number): void {
-  revokedJtis.set(jti, exp);
-  saveRevoked();
+  stmtAddRevoked.run(jti, exp);
 }
 
 export function issueSession(res: Response, user: User): string {

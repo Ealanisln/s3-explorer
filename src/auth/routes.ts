@@ -19,7 +19,7 @@ import {
 import { generateRecoveryCodes, hashCodes } from './recovery-codes';
 import { rateLimit, recordFailure, clearAttempts } from './rate-limit';
 import { issueSession, issuePending, revokeSession, verifyPending, verifyToken } from './sessions';
-import { findUser, listUsers, updateUser, withUsers } from './users-store';
+import { findUser, listUsers, updateUser, createUser } from './users-store';
 import {
   requireAuth,
   requireAdmin,
@@ -276,24 +276,20 @@ export function register(app: Application): void {
       });
       return;
     }
-    // Pre-compute the password hash OUTSIDE the lock (argon2 is slow ~85ms);
-    // the existence check + push runs atomically under the lock.
+    // Hash outside the DB insert — argon2id takes ~85ms. The INSERT itself is
+    // atomic and SQLite's UNIQUE index on LOWER(username) detects collisions.
     const passwordHash = await hashPassword(password);
-    const conflict = await withUsers((users) => {
-      if (users.some((u) => u.username.toLowerCase() === username.toLowerCase())) return true;
-      users.push({
-        username,
-        passwordHash,
-        totpSecret: null,
-        totpConfirmed: false,
-        recoveryCodesHashed: [],
-        role: role === 'admin' ? 'admin' : 'user',
-        disabled: false,
-        mustChangePassword: true,
-        createdAt: new Date().toISOString(),
-        lastLoginAt: null,
-      });
-      return false;
+    const conflict = createUser({
+      username,
+      passwordHash,
+      totpSecret: null,
+      totpConfirmed: false,
+      recoveryCodesHashed: [],
+      role: role === 'admin' ? 'admin' : 'user',
+      disabled: false,
+      mustChangePassword: true,
+      createdAt: new Date().toISOString(),
+      lastLoginAt: null,
     });
     if (conflict) { res.status(409).json({ message: 'Usuario ya existe' }); return; }
     audit('user_created', { by: actor.username, username, role });
