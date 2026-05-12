@@ -513,6 +513,16 @@ async function api(path, opts = {}) {
     }
     throw new Error(err.message || 'No autenticado');
   }
+  if (res.status === 403) {
+    const err = await res.json().catch(() => ({}));
+    if (err.code === 'PASSWORD_CHANGE_REQUIRED') {
+      // Server is enforcing the password rotation we already nag about on init.
+      // Re-open the modal so the user can't just dismiss it once and keep using the API.
+      openModal('modal-account');
+      toast('Debes cambiar tu contraseña inicial antes de continuar.', 'info', 6000);
+    }
+    throw new Error(err.message || 'Operación rechazada');
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText }));
     throw new Error(err.message || 'Error');

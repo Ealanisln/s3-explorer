@@ -162,8 +162,8 @@ app.use(express.static(path.join(__dirname, 'public'), {
   },
 }));
 
-// ----- All /api routes require auth + TOTP enrolled -----
-app.use('/api', auth.requireAuth, auth.requireTotpEnrolled);
+// ----- All /api routes require auth + TOTP enrolled + password rotated -----
+app.use('/api', auth.requireAuth, auth.requireTotpEnrolled, auth.requirePasswordCurrent);
 
 function normalizeEndpoint(ep) {
   if (!ep) return undefined;
