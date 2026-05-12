@@ -6,7 +6,7 @@
 
 import { State } from '../state.js';
 import { api } from '../api/client.js';
-import { toast } from '../util/toast.js';
+import { toast, errorIdOpts } from '../util/toast.js';
 import { $ } from '../util/dom.js';
 
 interface IndexStatus {
@@ -56,7 +56,7 @@ async function reindexBucket(): Promise<void> {
     toast(`Índice listo: ${count.toLocaleString()} objetos en ${Math.round(durationMs / 1000)}s`, 'success', 5000);
     await refreshBadge();
   } catch (e) {
-    toast('Error al reindexar: ' + (e as Error).message, 'error');
+    toast('Error al reindexar: ' + (e as Error).message, 'error', errorIdOpts(e));
   } finally {
     btn.disabled = false;
     btn.textContent = original;

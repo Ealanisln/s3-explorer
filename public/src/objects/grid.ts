@@ -2,7 +2,7 @@
 
 import { State } from '../state.js';
 import { api } from '../api/client.js';
-import { toast } from '../util/toast.js';
+import { toast, errorIdOpts } from '../util/toast.js';
 import { $, escapeHtml } from '../util/dom.js';
 import { formatSize, formatDate, fileIcon } from '../util/format.js';
 import { openPreview } from './preview.js';
@@ -127,7 +127,7 @@ function showRowMenu(e: MouseEvent, o: S3Object): void {
           toast('Marker borrado', 'success');
           await loadObjects();
         } catch (e) {
-          toast((e as Error).message, 'error');
+          toast((e as Error).message, 'error', errorIdOpts(e));
         }
       }
     }
@@ -386,7 +386,7 @@ export async function loadObjects(): Promise<void> {
     State.selected.clear();
     renderGrid();
   } catch (e) {
-    toast('Error: ' + (e as Error).message, 'error');
+    toast('Error: ' + (e as Error).message, 'error', errorIdOpts(e));
   } finally {
     loader.remove();
   }
@@ -404,7 +404,7 @@ export function initBatchBar(): void {
       State.selected.clear();
       await loadObjects();
     } catch (e) {
-      toast((e as Error).message, 'error');
+      toast((e as Error).message, 'error', errorIdOpts(e));
     }
   };
 }

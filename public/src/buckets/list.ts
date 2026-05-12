@@ -2,7 +2,7 @@
 
 import { State } from '../state.js';
 import { api } from '../api/client.js';
-import { toast } from '../util/toast.js';
+import { toast, errorIdOpts } from '../util/toast.js';
 import { $, escapeHtml } from '../util/dom.js';
 import { loadObjects } from '../objects/grid.js';
 
@@ -31,7 +31,7 @@ function showBucketMenu(e: MouseEvent, b: BucketRow): void {
         State.buckets = buckets;
         renderBuckets();
       } catch (e) {
-        toast((e as Error).message, 'error');
+        toast((e as Error).message, 'error', errorIdOpts(e));
       }
     }
   };
@@ -110,7 +110,7 @@ export async function loadVersioning(): Promise<void> {
           toast('Versionado activado', 'success');
           await loadVersioning();
         } catch (e) {
-          toast((e as Error).message, 'error');
+          toast((e as Error).message, 'error', errorIdOpts(e));
         }
       };
     }

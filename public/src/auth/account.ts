@@ -1,7 +1,7 @@
 // "Mi cuenta" modal: change password + regenerate recovery codes.
 
 import { $ } from '../util/dom.js';
-import { toast } from '../util/toast.js';
+import { toast, errorIdOpts } from '../util/toast.js';
 import { setCurrentUser, getCurrentUser } from './bootstrap.js';
 
 function escapeHtml(s: string): string {
@@ -48,7 +48,7 @@ export function initAccountForms(): void {
       list.innerHTML = (data.recoveryCodes || []).map((c) => `<div class="code">${escapeHtml(c)}</div>`).join('');
       toast('Códigos regenerados. Guárdalos ahora.', 'success', 8000);
     } catch (ex) {
-      toast((ex as Error).message, 'error');
+      toast((ex as Error).message, 'error', errorIdOpts(ex));
     }
   };
 }

@@ -538,6 +538,15 @@ tr.deleted .badge-deleted {
 .toast.success { border-left: 4px solid var(--green); }
 .toast.error { border-left: 4px solid var(--red); }
 .toast.info { border-left: 4px solid var(--primary); }
+.toast-error-id {
+  margin-top: 6px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
+  user-select: all;
+}
+.toast-error-id:hover { color: var(--text); }
 @keyframes slide-in {
   from { transform: translateX(20px); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }

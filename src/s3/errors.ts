@@ -24,7 +24,7 @@ export const SAFE_AWS_ERRORS: Readonly<Record<string, string>> = {
 
 export interface SanitizedError {
   status: number;
-  body: { error: string; message: string };
+  body: { error: string; message: string; errorId?: string };
 }
 
 // Minimal shape we care about — covers stdlib Error, AWS SDK errors, and our own
@@ -36,14 +36,30 @@ export interface ErrorLike {
   $metadata?: { httpStatusCode?: number };
 }
 
-export function sanitizeError(e: ErrorLike): SanitizedError {
+// When `errorId` is provided, it's included in the response body so the SPA
+// can show it to the user and the admin can grep the same ID in server logs.
+// The ID itself doesn't leak any actionable info — it's a random 4-byte hex
+// generated per-error in wrap().
+export function sanitizeError(e: ErrorLike, errorId?: string): SanitizedError {
   const status = e.status || e.$metadata?.httpStatusCode || 500;
   const code = e.name || 'Error';
   const safe = SAFE_AWS_ERRORS[code];
-  if (safe) return { status, body: { error: code, message: safe } };
+  if (safe) {
+    return { status, body: errorId ? { error: code, message: safe, errorId } : { error: code, message: safe } };
+  }
   // For unknown errors: status code only, no message detail
   if (status >= 500) {
-    return { status, body: { error: 'InternalError', message: 'Error interno del servidor.' } };
+    return {
+      status,
+      body: errorId
+        ? { error: 'InternalError', message: 'Error interno del servidor.', errorId }
+        : { error: 'InternalError', message: 'Error interno del servidor.' },
+    };
   }
-  return { status, body: { error: code, message: 'Operación rechazada.' } };
+  return {
+    status,
+    body: errorId
+      ? { error: code, message: 'Operación rechazada.', errorId }
+      : { error: code, message: 'Operación rechazada.' },
+  };
 }

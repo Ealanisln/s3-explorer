@@ -3,7 +3,7 @@
 import { State, activeConn } from '../state.js';
 import { api } from '../api/client.js';
 import { saveConnections } from '../vault/persistence.js';
-import { toast } from '../util/toast.js';
+import { toast, errorIdOpts } from '../util/toast.js';
 import { $, escapeHtml } from '../util/dom.js';
 import { renderBuckets } from '../buckets/list.js';
 import { toggleEmpty } from '../objects/grid.js';
@@ -116,7 +116,7 @@ export async function selectConnection(id: string): Promise<void> {
       `;
       $('btn-edit-this-conn').onclick = (): void => openEditModal(conn);
     } else {
-      toast('Error al conectar: ' + err.message, 'error');
+      toast('Error al conectar: ' + err.message, 'error', errorIdOpts(err));
     }
   }
 }
