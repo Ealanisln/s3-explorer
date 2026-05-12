@@ -39,7 +39,12 @@ audit:
   stage: quality
   image: node:20-alpine
   script:
-    - npm ci --no-audit --no-fund
+    # --ignore-scripts skips better-sqlite3's postinstall (node-gyp rebuild
+    # needs python3/g++ which Alpine doesn't ship). CI jobs only do `audit` +
+    # `typecheck`; neither touches the native binding — just .d.ts types and
+    # package-lock.json. The runtime image still gets the native build via
+    # the Dockerfile's `builder` stage, which is the only place it matters.
+    - npm ci --no-audit --no-fund --ignore-scripts
     - npm audit --audit-level=high
   cache:
     key: $CI_COMMIT_REF_SLUG
@@ -61,7 +66,12 @@ lint:
     # As each .js gets replaced by its .ts counterpart in src/, drop it from this list.
     - for f in server.js auth.js public/app.js; do [ -f "$f" ] && (node --check "$f" || exit 1); done
     # TypeScript type-check across both projects (server + web).
-    - npm ci --no-audit --no-fund
+    # --ignore-scripts skips better-sqlite3's postinstall (node-gyp rebuild
+    # needs python3/g++ which Alpine doesn't ship). CI jobs only do `audit` +
+    # `typecheck`; neither touches the native binding — just .d.ts types and
+    # package-lock.json. The runtime image still gets the native build via
+    # the Dockerfile's `builder` stage, which is the only place it matters.
+    - npm ci --no-audit --no-fund --ignore-scripts
     - npm run typecheck
     - wget -qO /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
     - chmod +x /usr/local/bin/hadolint
