@@ -11,9 +11,12 @@ import type { Request } from 'express';
 // Override:
 //   BLOCK_METADATA_ENDPOINTS=0          → disable the metadata blocklist
 //   S3_DENY_HOSTS=host1,host2,...       → additional exact-match hostnames
+// WHATWG URL returns IPv6 hostnames wrapped in brackets (e.g. '[fd00:ec2::254]'),
+// so the IPv6 IMDS entry must include them — without the brackets, the match
+// silently fails and the endpoint is allowed through.
 const METADATA_HOSTS: readonly string[] = [
   '169.254.169.254',          // AWS, GCP, Azure (IPv4 link-local)
-  'fd00:ec2::254',            // AWS IMDS IPv6
+  '[fd00:ec2::254]',          // AWS IMDS IPv6
   'metadata.google.internal', // GCP
   'metadata.azure.com',       // Azure
 ];
