@@ -850,8 +850,21 @@ body.is-resizing * { user-select: none !important; }
   color: var(--text-2);
 }
 .col-check { width: 36px; padding-right: 0; }
-.col-size  { width: 110px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.col-date  { width: 156px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+/* Both numeric columns: nowrap so a tight viewport doesn't wrap "13/05/26,
+   3:40 p.m." onto two lines and visually misalign the row's other cells.
+   Tabular-nums keeps digit widths consistent. */
+.col-size {
+  width: 110px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.col-date {
+  width: 168px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .col-act   { width: 56px; text-align: right; }
 
 .cell-name {
