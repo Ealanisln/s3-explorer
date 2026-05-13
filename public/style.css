@@ -144,8 +144,48 @@ html, body {
 }
 .status.online::before { color: var(--green); }
 
-/* MAIN */
-.main {
+/* TWO-PANE WRAPPER */
+.panes-wrap {
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  min-width: 0;
+}
+.pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1 1 0;
+  min-width: 0;
+  position: relative;
+  border-right: 1px solid var(--border);
+}
+.pane:last-child { border-right: 0; }
+.panes-wrap.dual .pane.active::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 2px solid var(--accent);
+  z-index: 5;
+}
+.pane[hidden] { display: none !important; }
+
+/* The dual-mode toggle button sits in each toolbar's actions cluster. */
+.dual-only-trigger { font-size: 18px; line-height: 1; }
+.panes-wrap.dual .dual-only-trigger { color: var(--accent); }
+
+@media (max-width: 900px) {
+  /* Mobile is single-pane only — the dual toggle is hidden and the right
+     pane forced shut by panes/init.ts when crossing the breakpoint. */
+  .dual-only-trigger { display: none !important; }
+  .panes-wrap { flex-direction: column; }
+  .pane { border-right: 0; }
+  .panes-wrap.dual .pane.active::before { display: none; }
+}
+
+/* MAIN (kept for legacy `.main` references — every .pane behaves like one). */
+.main, .pane {
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -583,19 +623,20 @@ tr.deleted .badge-deleted {
   to { transform: translateX(0); opacity: 1; }
 }
 
-/* INFO PANEL */
+/* INFO PANEL — positioned within its parent pane so it slides over only
+   that pane's content (in dual mode the other pane stays usable). */
 .info-panel {
-  position: fixed;
+  position: absolute;
   top: 0; right: 0;
   width: 360px;
-  height: 100vh;
+  height: 100%;
   background: var(--bg-2);
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   transform: translateX(100%);
   transition: transform .22s ease-out;
-  z-index: 80;
+  z-index: 10;
   box-shadow: -8px 0 24px rgba(0,0,0,.35);
 }
 .info-panel.open { transform: translateX(0); }
@@ -627,10 +668,10 @@ tr.deleted .badge-deleted {
 .info-section dd { font-size: 13px; word-break: break-all; }
 .info-section .mono { font-family: 'Consolas', 'Monaco', monospace; font-size: 11px; }
 
-.main.with-info { padding-right: 360px; }
+.pane.with-info, .main.with-info { padding-right: 360px; }
 @media (max-width: 900px) {
   .info-panel { width: 100%; }
-  .main.with-info { padding-right: 0; }
+  .pane.with-info, .main.with-info { padding-right: 0; }
 }
 
 /* AUTH OVERLAY */

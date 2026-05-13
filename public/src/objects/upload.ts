@@ -1,75 +1,79 @@
-// Upload flow: file picker + drag-and-drop + JL's pre-upload conflict
-// detection (POST /api/objects/:bucket/exists → overwrite modal).
+// Upload flow: file picker + drag-and-drop + pre-upload conflict detection
+// (POST /api/objects/:bucket/exists → overwrite modal).
+//
+// Uploads target the pane that owned the file picker / drop target, so a
+// drop on the left pane never overwrites files on the right.
 
-import { State } from '../state.js';
+import { getPane, setActivePane } from '../state.js';
+import type { PaneId } from '../state.js';
 import { api } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
-import { $, openModal, closeModal, escapeHtml } from '../util/dom.js';
+import { $, paneEl, openModal, closeModal, escapeHtml } from '../util/dom.js';
 import { formatSize } from '../util/format.js';
 
 interface UploadItem { file: File; key: string }
 
-let onUploadComplete: () => void | Promise<void> = () => undefined;
+let onUploadComplete: (paneId: PaneId) => void | Promise<void> = () => undefined;
 
-export function configureUpload(deps: { onUploadComplete: () => void | Promise<void> }): void {
+export function configureUpload(deps: { onUploadComplete: (paneId: PaneId) => void | Promise<void> }): void {
   onUploadComplete = deps.onUploadComplete;
 }
 
-export async function uploadFiles(files: FileList | null): Promise<void> {
-  if (!files || !files.length || !State.activeBucket) return;
+export async function uploadFiles(files: FileList | null, paneId: PaneId): Promise<void> {
+  const pane = getPane(paneId);
+  if (!files || !files.length || !pane.activeBucket) return;
 
-  const items: UploadItem[] = [...files].map((f) => ({ file: f, key: State.prefix + f.name }));
+  const items: UploadItem[] = [...files].map((f) => ({ file: f, key: pane.prefix + f.name }));
 
-  // Pre-flight: detect collisions. UX differs by versioning state.
   let conflicts: UploadItem[] = [];
   try {
     const data = await api<{ results: { key: string; exists: boolean }[] }>(
-      `/api/objects/${encodeURIComponent(State.activeBucket)}/exists`,
+      `/api/objects/${encodeURIComponent(pane.activeBucket)}/exists`,
       { method: 'POST', body: { keys: items.map((i) => i.key) } },
     );
     const existing = new Set(data.results.filter((r) => r.exists).map((r) => r.key));
     conflicts = items.filter((i) => existing.has(i.key));
   } catch (e) {
-    // Pre-check fails → fall through and upload normally. Server still gates
-    // the write; this check is just UX.
     console.warn('[upload] exists-check failed, proceeding without conflict warning:', (e as Error).message);
   }
 
   if (conflicts.length === 0) {
-    await doUpload(items);
+    await doUpload(items, paneId);
     return;
   }
 
-  if (State.versioning === 'Enabled') {
+  if (pane.versioning === 'Enabled') {
     toast(`${conflicts.length} archivo(s) crearán nuevas versiones`, 'info', 4000);
-    await doUpload(items);
+    await doUpload(items, paneId);
     return;
   }
 
-  promptOverwrite(items, conflicts);
+  promptOverwrite(items, conflicts, paneId);
 }
 
-async function doUpload(items: UploadItem[]): Promise<void> {
-  if (!items.length || !State.activeBucket) return;
+async function doUpload(items: UploadItem[], paneId: PaneId): Promise<void> {
+  const pane = getPane(paneId);
+  if (!items.length || !pane.activeBucket) return;
   const fd = new FormData();
-  fd.append('prefix', State.prefix);
+  fd.append('prefix', pane.prefix);
   for (const it of items) fd.append('files', it.file);
   try {
     toast(`Subiendo ${items.length} archivo(s)...`, 'info');
-    await api(`/api/object/${encodeURIComponent(State.activeBucket)}/upload`, { method: 'POST', body: fd });
+    await api(`/api/object/${encodeURIComponent(pane.activeBucket)}/upload`, { method: 'POST', body: fd });
     toast('Subida completa', 'success');
-    await onUploadComplete();
+    await onUploadComplete(paneId);
   } catch (e) {
     toast((e as Error).message, 'error', errorIdOpts(e));
   }
 }
 
-function promptOverwrite(allItems: UploadItem[], conflicts: UploadItem[]): void {
+function promptOverwrite(allItems: UploadItem[], conflicts: UploadItem[], paneId: PaneId): void {
   const conflictKeys = new Set(conflicts.map((c) => c.key));
   const newOnes = allItems.filter((i) => !conflictKeys.has(i.key));
+  const pane = getPane(paneId);
 
   $('overwrite-conflict-count').textContent = String(conflicts.length);
-  $('overwrite-dest').textContent = (State.activeBucket || '') + '/' + (State.prefix || '');
+  $('overwrite-dest').textContent = (pane.activeBucket || '') + '/' + (pane.prefix || '');
   const list = $('overwrite-list');
   list.innerHTML = conflicts.map((c) => `
     <div class="overwrite-item">
@@ -101,33 +105,34 @@ function promptOverwrite(allItems: UploadItem[], conflicts: UploadItem[]): void 
   };
   $('btn-overwrite-skip').onclick = (): void => {
     cleanup();
-    void doUpload(newOnes);
+    void doUpload(newOnes, paneId);
   };
   $('btn-overwrite-all').onclick = (): void => {
     cleanup();
-    void doUpload(allItems);
+    void doUpload(allItems, paneId);
   };
 }
 
-export function initUpload(): void {
-  $('btn-upload').onclick = (): void => {
-    const input = $('file-input') as HTMLInputElement;
+export function initUpload(paneId: PaneId): void {
+  paneEl('btn-upload', paneId).onclick = (): void => {
+    setActivePane(paneId);
+    const input = paneEl('file-input', paneId) as HTMLInputElement;
     input.value = '';
     input.click();
   };
-  ($('file-input') as HTMLInputElement).onchange = async (e: Event): Promise<void> => {
+  (paneEl('file-input', paneId) as HTMLInputElement).onchange = async (e: Event): Promise<void> => {
     const input = e.target as HTMLInputElement;
-    await uploadFiles(input.files);
-    input.value = ''; // belt-and-suspenders so re-uploading the same file works
+    await uploadFiles(input.files, paneId);
+    input.value = '';
   };
 
   // Drag & drop on the content area.
-  const content = $('content');
-  const dz = $('dropzone');
+  const content = paneEl('content', paneId);
+  const dz = paneEl('dropzone', paneId);
   let dragCounter = 0;
   content.addEventListener('dragenter', (e: Event) => {
     e.preventDefault();
-    if (State.activeBucket) { dragCounter++; dz.classList.add('show'); }
+    if (getPane(paneId).activeBucket) { dragCounter++; dz.classList.add('show'); }
   });
   content.addEventListener('dragleave', () => {
     dragCounter--;
@@ -139,7 +144,9 @@ export function initUpload(): void {
     ev.preventDefault();
     dragCounter = 0;
     dz.classList.remove('show');
-    if (!State.activeBucket) return;
-    void uploadFiles(ev.dataTransfer?.files || null);
+    setActivePane(paneId);
+    if (!getPane(paneId).activeBucket) return;
+    void uploadFiles(ev.dataTransfer?.files || null, paneId);
   });
 }
+

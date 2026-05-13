@@ -3,11 +3,14 @@
 // Triggers POST /api/index/:bucket/rebuild and polls /status until done.
 // The search module (objects/search.ts) reads the same /status endpoint when
 // the user hits Enter, choosing FTS5 vs the legacy /search-stream automatically.
+//
+// One reindex button + status badge per pane.
 
-import { State } from '../state.js';
+import { getPane, setActivePane } from '../state.js';
+import type { PaneId } from '../state.js';
 import { api } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
-import { $ } from '../util/dom.js';
+import { paneEl, paneElMaybe } from '../util/dom.js';
 
 interface IndexStatus {
   last_indexed_at: string | null;
@@ -28,12 +31,13 @@ function badgeText(status: IndexStatus): string {
   return `⚠ índice ${status.object_count.toLocaleString()} obj (hace ${days} d, stale)`;
 }
 
-async function refreshBadge(): Promise<void> {
-  if (!State.activeBucket) return;
-  const badge = document.getElementById('index-status-badge');
+async function refreshBadge(paneId: PaneId): Promise<void> {
+  const pane = getPane(paneId);
+  if (!pane.activeBucket) return;
+  const badge = paneElMaybe('index-status-badge', paneId);
   if (!badge) return;
   try {
-    const status = await api<IndexStatus>(`/api/index/${encodeURIComponent(State.activeBucket)}/status`);
+    const status = await api<IndexStatus>(`/api/index/${encodeURIComponent(pane.activeBucket)}/status`);
     badge.textContent = badgeText(status);
     badge.style.display = status.last_indexed_at ? 'inline' : 'none';
     badge.classList.toggle('stale', status.stale);
@@ -42,19 +46,20 @@ async function refreshBadge(): Promise<void> {
   }
 }
 
-async function reindexBucket(): Promise<void> {
-  if (!State.activeBucket) return;
-  const btn = $('btn-reindex') as HTMLButtonElement;
+async function reindexBucket(paneId: PaneId): Promise<void> {
+  const pane = getPane(paneId);
+  if (!pane.activeBucket) return;
+  const btn = paneEl('btn-reindex', paneId) as HTMLButtonElement;
   const original = btn.textContent || '';
   btn.disabled = true;
   btn.textContent = '⏳ Indexando...';
   try {
     const { count, durationMs } = await api<{ count: number; durationMs: number }>(
-      `/api/index/${encodeURIComponent(State.activeBucket)}/rebuild`,
+      `/api/index/${encodeURIComponent(pane.activeBucket)}/rebuild`,
       { method: 'POST' },
     );
     toast(`Índice listo: ${count.toLocaleString()} objetos en ${Math.round(durationMs / 1000)}s`, 'success', 5000);
-    await refreshBadge();
+    await refreshBadge(paneId);
   } catch (e) {
     toast('Error al reindexar: ' + (e as Error).message, 'error', errorIdOpts(e));
   } finally {
@@ -63,12 +68,14 @@ async function reindexBucket(): Promise<void> {
   }
 }
 
-export function initReindex(): void {
-  const btn = $('btn-reindex') as HTMLButtonElement;
-  btn.onclick = (): void => { void reindexBucket(); };
+export function initReindex(paneId: PaneId): void {
+  const btn = paneEl('btn-reindex', paneId) as HTMLButtonElement;
+  btn.onclick = (): void => {
+    setActivePane(paneId);
+    void reindexBucket(paneId);
+  };
 }
 
-// Called from main.ts when a bucket is opened (passed to buckets/list.ts deps).
-export function onBucketOpened(): void {
-  void refreshBadge();
+export function onBucketOpened(paneId: PaneId): void {
+  void refreshBadge(paneId);
 }

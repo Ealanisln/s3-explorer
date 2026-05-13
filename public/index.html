@@ -126,54 +126,99 @@
     </div>
   </aside>
 
-  <main class="main">
-    <header class="toolbar">
-      <button class="btn-icon mobile-only" id="btn-menu" title="Menú" aria-label="Abrir menú">☰</button>
-      <div class="crumbs" id="breadcrumbs"></div>
-      <div class="search-box">
-        <input type="text" id="search-input" placeholder="Buscar... (Enter = todo el bucket)" disabled />
-        <button id="btn-search-clear" class="btn-icon" title="Limpiar" style="display:none">✕</button>
-      </div>
-      <div class="actions">
-        <label class="toggle-deleted" style="display:none">
-          <input type="checkbox" id="chk-deleted"/> Mostrar eliminados
-        </label>
-        <button id="btn-versioning" class="btn" style="display:none">Versionado: ?</button>
-        <span id="index-status-badge" class="index-status-badge" style="display:none;font-size:11px;color:var(--text-dim);padding:0 8px"></span>
-        <button id="btn-reindex" class="btn" title="Reconstruir el índice de búsqueda FTS5 para este bucket">🔄 Reindexar</button>
-        <button id="btn-new-folder" class="btn" disabled>Nueva carpeta</button>
-        <button id="btn-upload" class="btn btn-primary" disabled>Subir archivos</button>
-        <input type="file" id="file-input" multiple hidden />
-        <button id="btn-refresh" class="btn-icon" title="Refrescar">⟳</button>
-      </div>
-    </header>
-    <div id="search-banner" class="search-banner" style="display:none"></div>
+  <!-- Two-pane wrapper. The right pane is cloned at runtime from the left by
+       panes/init.ts when dual mode is enabled; it stays hidden otherwise. -->
+  <div class="panes-wrap" id="panes-wrap">
+    <section class="pane active" data-pane="left">
+      <header class="toolbar">
+        <button class="btn-icon mobile-only" id="btn-menu" title="Menú" aria-label="Abrir menú">☰</button>
+        <div class="crumbs" data-el="breadcrumbs"></div>
+        <div class="search-box">
+          <input type="text" data-el="search-input" placeholder="Buscar... (Enter = todo el bucket)" disabled />
+          <button data-el="btn-search-clear" class="btn-icon" title="Limpiar" style="display:none">✕</button>
+        </div>
+        <div class="actions">
+          <label class="toggle-deleted" data-el="toggle-deleted" style="display:none">
+            <input type="checkbox" data-el="chk-deleted"/> Mostrar eliminados
+          </label>
+          <button data-el="btn-versioning" class="btn" style="display:none">Versionado: ?</button>
+          <span data-el="index-status-badge" class="index-status-badge" style="display:none;font-size:11px;color:var(--text-dim);padding:0 8px"></span>
+          <button data-el="btn-reindex" class="btn" title="Reconstruir el índice de búsqueda FTS5 para este bucket">🔄 Reindexar</button>
+          <button data-el="btn-new-folder" class="btn" disabled>Nueva carpeta</button>
+          <button data-el="btn-upload" class="btn btn-primary" disabled>Subir archivos</button>
+          <input type="file" data-el="file-input" multiple hidden />
+          <button data-el="btn-refresh" class="btn-icon" title="Refrescar">⟳</button>
+          <button id="btn-toggle-dual" class="btn-icon dual-only-trigger" title="Vista de dos paneles" aria-label="Vista de dos paneles">⫴</button>
+        </div>
+      </header>
+      <div data-el="search-banner" class="search-banner" style="display:none"></div>
 
-    <div class="content" id="content">
-      <div class="empty-state" id="empty">
-        <h2>Bienvenido a S3 Explorer</h2>
-        <p>Crea una conexión para empezar a navegar tus archivos en cualquier almacenamiento compatible con S3 (AWS S3, MinIO, Wasabi, Backblaze B2, Cloudflare R2, etc.).</p>
-        <button class="btn btn-primary" id="btn-first-conn">Agregar conexión</button>
+      <div class="content" data-el="content">
+        <div class="empty-state" data-el="empty">
+          <h2>Bienvenido a S3 Explorer</h2>
+          <p>Crea una conexión para empezar a navegar tus archivos en cualquier almacenamiento compatible con S3 (AWS S3, MinIO, Wasabi, Backblaze B2, Cloudflare R2, etc.).</p>
+          <button class="btn btn-primary" id="btn-first-conn">Agregar conexión</button>
+        </div>
+        <div class="dropzone" data-el="dropzone"></div>
+        <table class="grid" data-el="grid" style="display:none">
+          <thead>
+            <tr>
+              <th class="col-check"><input type="checkbox" data-el="check-all"/></th>
+              <th class="sortable" data-sort="name">Nombre <span class="sort-indicator"></span></th>
+              <th class="col-size sortable" data-sort="size">Tamaño <span class="sort-indicator"></span></th>
+              <th class="col-date sortable" data-sort="modified">Modificado <span class="sort-indicator"></span></th>
+              <th class="col-act"></th>
+            </tr>
+          </thead>
+          <tbody data-el="grid-body"></tbody>
+        </table>
+        <div class="batch-bar" data-el="batch-bar" style="display:none">
+          <span data-el="batch-info"></span>
+          <button class="btn btn-danger" data-el="btn-batch-delete">Eliminar seleccionados</button>
+        </div>
       </div>
-      <div class="dropzone" id="dropzone"></div>
-      <table class="grid" id="grid" style="display:none">
-        <thead>
-          <tr>
-            <th class="col-check"><input type="checkbox" id="check-all"/></th>
-            <th class="sortable" data-sort="name">Nombre <span class="sort-indicator"></span></th>
-            <th class="col-size sortable" data-sort="size">Tamaño <span class="sort-indicator"></span></th>
-            <th class="col-date sortable" data-sort="modified">Modificado <span class="sort-indicator"></span></th>
-            <th class="col-act"></th>
-          </tr>
-        </thead>
-        <tbody id="grid-body"></tbody>
-      </table>
-      <div class="batch-bar" id="batch-bar" style="display:none">
-        <span id="batch-info"></span>
-        <button class="btn btn-danger" id="btn-batch-delete">Eliminar seleccionados</button>
-      </div>
-    </div>
-  </main>
+
+      <!-- Object Info Panel — one per pane (cloned with the pane). -->
+      <aside class="info-panel" data-el="info-panel">
+        <header>
+          <div class="info-title">
+            <span class="icon-file" data-el="info-icon">·</span>
+            <div class="info-name-wrap">
+              <div class="info-name" data-el="info-name"></div>
+              <div class="info-path" data-el="info-path"></div>
+            </div>
+          </div>
+          <button class="btn-icon" data-el="info-close" title="Cerrar">✕</button>
+        </header>
+
+        <div class="info-actions">
+          <button class="btn btn-primary" data-el="info-preview">Vista previa</button>
+          <button class="btn" data-el="info-download">Descargar</button>
+          <button class="btn" data-el="info-share">Enlace temporal</button>
+          <button class="btn" data-el="info-versions">Versiones</button>
+          <button class="btn" data-el="info-rename">Renombrar</button>
+          <button class="btn btn-danger" data-el="info-delete">Eliminar</button>
+        </div>
+
+        <div class="info-section">
+          <h4>Object Info</h4>
+          <dl data-el="info-meta">
+            <div><dt>Tamaño</dt><dd data-k="size">—</dd></div>
+            <div><dt>Modificado</dt><dd data-k="modified">—</dd></div>
+            <div><dt>Content-Type</dt><dd data-k="content-type">—</dd></div>
+            <div><dt>ETag</dt><dd data-k="etag" class="mono">—</dd></div>
+            <div><dt>Storage Class</dt><dd data-k="storage-class">—</dd></div>
+            <div><dt>Versión</dt><dd data-k="version-id" class="mono">—</dd></div>
+          </dl>
+        </div>
+
+        <div class="info-section" data-el="info-user-meta-wrap" style="display:none">
+          <h4>Metadata personalizada</h4>
+          <dl data-el="info-user-meta"></dl>
+        </div>
+      </aside>
+    </section>
+  </div>
 </div>
 
 <!-- Modal: Passphrase / Vault -->
@@ -309,45 +354,7 @@
   </div>
 </div>
 
-<!-- Object Info Panel -->
-<aside class="info-panel" id="info-panel">
-  <header>
-    <div class="info-title">
-      <span class="icon-file" id="info-icon">·</span>
-      <div class="info-name-wrap">
-        <div class="info-name" id="info-name"></div>
-        <div class="info-path" id="info-path"></div>
-      </div>
-    </div>
-    <button class="btn-icon" id="info-close" title="Cerrar">✕</button>
-  </header>
-
-  <div class="info-actions">
-    <button class="btn btn-primary" id="info-preview">Vista previa</button>
-    <button class="btn" id="info-download">Descargar</button>
-    <button class="btn" id="info-share">Enlace temporal</button>
-    <button class="btn" id="info-versions">Versiones</button>
-    <button class="btn" id="info-rename">Renombrar</button>
-    <button class="btn btn-danger" id="info-delete">Eliminar</button>
-  </div>
-
-  <div class="info-section">
-    <h4>Object Info</h4>
-    <dl id="info-meta">
-      <div><dt>Tamaño</dt><dd data-k="size">—</dd></div>
-      <div><dt>Modificado</dt><dd data-k="modified">—</dd></div>
-      <div><dt>Content-Type</dt><dd data-k="content-type">—</dd></div>
-      <div><dt>ETag</dt><dd data-k="etag" class="mono">—</dd></div>
-      <div><dt>Storage Class</dt><dd data-k="storage-class">—</dd></div>
-      <div><dt>Versión</dt><dd data-k="version-id" class="mono">—</dd></div>
-    </dl>
-  </div>
-
-  <div class="info-section" id="info-user-meta-wrap" style="display:none">
-    <h4>Metadata personalizada</h4>
-    <dl id="info-user-meta"></dl>
-  </div>
-</aside>
+<!-- (Info panel moved inside each pane — see <section data-pane="..."> above.) -->
 
 <!-- Modal: My account -->
 <div class="modal-backdrop" id="modal-account" style="display:none">

@@ -5,6 +5,10 @@
 //   2. Inject cross-module callbacks (the deps the modules need that come
 //      from other modules — keeps each module testable in isolation).
 //   3. Boot: authInit → if authed, loadConnections.
+//
+// Two-pane: the right pane is cloned from the left at boot (panes/init.ts),
+// then every pane-scoped initX() is called twice — once per paneId. The
+// right pane stays `hidden` until the user toggles dual-mode on.
 
 import { authInit, initAuthForms, configureAuthDeps } from './auth/bootstrap.js';
 import { initAccountForms } from './auth/account.js';
@@ -15,9 +19,10 @@ import {
 import {
   getVault, readLegacyConnections, setPendingMigration, setVaultKey,
 } from './vault/persistence.js';
-import { State } from './state.js';
+import { State, getPane } from './state.js';
+import type { PaneId } from './state.js';
 import { toast } from './util/toast.js';
-import { $ } from './util/dom.js';
+import { paneEl } from './util/dom.js';
 import {
   renderConnections, configureConnections,
 } from './connections/list.js';
@@ -36,40 +41,46 @@ import {
 import { initUpload, configureUpload } from './objects/upload.js';
 import { initSearch, configureSearch } from './objects/search.js';
 import {
-  initSmallForms, initModalDismiss, initLockButton, configureLock,
+  initGlobalForms, initPaneForms, initModalDismiss, initLockButton, configureLock,
 } from './objects/forms.js';
 import { initReindex, onBucketOpened as reindexOnBucketOpened } from './index/reindex.js';
 import { initThemeToggle, applyTheme, loadTheme } from './util/theme.js';
 import { initDrawer } from './util/drawer.js';
+import {
+  mountRightPane, initActivation, initDualToggle, paintRightPanePlaceholder,
+} from './panes/init.js';
 
-// Theme init runs FIRST so the toggle icon shows the right preference
-// glyph from the very first paint. The effective theme is already set on
-// <html> by /theme-init.js (loaded synchronously in <head>); this call
-// is the runtime counterpart that wires the toggle + system-pref listener.
 applyTheme(loadTheme());
 
+// ─── Right pane cloned BEFORE init*() runs so listener wiring covers both ──
+mountRightPane();
+
+const PANES: PaneId[] = ['left', 'right'];
+
 // ─── Dependency wiring ─────────────────────────────────────────────────────
-//
-// Each "configure*" call hands a module its cross-module callback so it doesn't
-// have to import the consumer directly (which would risk cycles).
 
 configureAuthDeps({ onAuthenticated: () => loadConnectionsFlow() });
 configurePreview({ onObjectsChanged: () => loadObjects() });
-configureInfoPanel({ onObjectsChanged: () => loadObjects() });
-configureUpload({ onUploadComplete: () => loadObjects() });
-configureSearch({ onRenderGrid: () => renderGrid(), onLoadObjects: () => loadObjects() });
+configureInfoPanel({ onObjectsChanged: (paneId) => loadObjects(paneId) });
+configureUpload({ onUploadComplete: (paneId) => loadObjects(paneId) });
+configureSearch({ onRenderGrid: (paneId) => renderGrid(paneId), onLoadObjects: (paneId) => loadObjects(paneId) });
 configureConnections({ openEditModal: (c) => openConnModal(c) });
-configureBuckets({ onBucketOpened: () => reindexOnBucketOpened() });
+configureBuckets({ onBucketOpened: (paneId) => reindexOnBucketOpened(paneId) });
 configureLock({
   onLock: () => {
     if (!confirm('Bloquear la bóveda? Tendrás que ingresar la contraseña de nuevo.')) return;
     setVaultKey(null);
     State.connections = [];
-    State.activeConnId = null;
+    for (const p of PANES) {
+      getPane(p).activeConnId = null;
+      getPane(p).activeBucket = null;
+    }
     renderConnections();
-    toggleEmpty(true);
-    $('empty').innerHTML = '<h2>Bóveda bloqueada</h2><p>Desbloquea para acceder a tus conexiones.</p><button class="btn btn-primary" id="btn-unlock-now">Desbloquear</button>';
-    $('btn-unlock-now').onclick = (): void => openPassphraseModal({ mode: 'unlock' });
+    toggleEmpty(true, 'left');
+    toggleEmpty(true, 'right');
+    paneEl('empty', 'left').innerHTML = '<h2>Bóveda bloqueada</h2><p>Desbloquea para acceder a tus conexiones.</p><button class="btn btn-primary" id="btn-unlock-now">Desbloquear</button>';
+    const btn = document.getElementById('btn-unlock-now');
+    if (btn) btn.onclick = (): void => openPassphraseModal({ mode: 'unlock' });
   },
 });
 
@@ -82,15 +93,23 @@ initPassphraseForm({ onUnlocked: () => onVaultUnlocked() });
 initConnModal();
 initImport();
 initPreview();
-initInfoPanel();
-initUpload();
-initSearch();
-initSmallForms();
+initGlobalForms();
 initModalDismiss();
 initLockButton();
-initReindex();
 initThemeToggle();
 initDrawer();
+initActivation();
+initDualToggle();
+
+// Pane-scoped wiring for both left and right.
+for (const p of PANES) {
+  initInfoPanel(p);
+  initUpload(p);
+  initSearch(p);
+  initPaneForms(p);
+  initReindex(p);
+  initBatchBar(p);
+}
 
 // ─── Boot ───────────────────────────────────────────────────────────────────
 
@@ -110,17 +129,16 @@ async function loadConnectionsFlow(): Promise<void> {
 async function onVaultUnlocked(): Promise<void> {
   renderConnections();
   if (State.connections.length) {
-    toggleEmpty(true);
-    $('empty').innerHTML = '<h2>Bóveda desbloqueada</h2><p>Selecciona una conexión en la barra lateral.</p>';
+    toggleEmpty(true, 'left');
+    paneEl('empty', 'left').innerHTML = '<h2>Bóveda desbloqueada</h2><p>Selecciona una conexión en la barra lateral.</p>';
   } else {
-    toggleEmpty(true);
-    $('empty').innerHTML = '<h2>Bienvenido a S3 Explorer</h2><p>Crea una conexión para empezar a navegar tus archivos en cualquier almacenamiento compatible con S3 (AWS S3, MinIO, Wasabi, Backblaze B2, Cloudflare R2, etc.).</p><button class="btn btn-primary" id="btn-first-conn-empty">Agregar conexión</button>';
+    toggleEmpty(true, 'left');
+    paneEl('empty', 'left').innerHTML = '<h2>Bienvenido a S3 Explorer</h2><p>Crea una conexión para empezar a navegar tus archivos en cualquier almacenamiento compatible con S3 (AWS S3, MinIO, Wasabi, Backblaze B2, Cloudflare R2, etc.).</p><button class="btn btn-primary" id="btn-first-conn-empty">Agregar conexión</button>';
     const btn = document.getElementById('btn-first-conn-empty');
     if (btn) btn.onclick = (): void => openConnModal(null);
   }
+  paintRightPanePlaceholder();
 }
-
-initBatchBar();
 
 (async (): Promise<void> => {
   const ok = await authInit();
@@ -129,3 +147,4 @@ initBatchBar();
   console.error('[main] boot failed:', e);
   toast('Error al iniciar la aplicación', 'error', 8000);
 });
+
