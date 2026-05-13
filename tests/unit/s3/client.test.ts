@@ -53,12 +53,13 @@ describe('endpointBlockReason', () => {
       .toBe('cloud metadata endpoint');
   });
 
-  // BUG: src/s3/client.ts METADATA_HOSTS lists 'fd00:ec2::254' without brackets,
-  // but URL parser returns IPv6 hostnames WITH brackets ('[fd00:ec2::254]'),
-  // so the AWS IMDS IPv6 endpoint is currently NOT blocked. Fix lives in branch
-  // security/block-imds-ipv6 — when that lands, promote this to an active test:
-  //   expect(endpointBlockReason('http://[fd00:ec2::254]')).toBe('cloud metadata endpoint');
-  it.todo('blocks the AWS IMDS IPv6 endpoint (currently broken: bracket mismatch)');
+  // WHATWG URL parser returns IPv6 hostnames wrapped in brackets, so the entry
+  // in METADATA_HOSTS must include them. Without the brackets the match
+  // silently failed and IMDS IPv6 was reachable — fixed in dd77c83.
+  it('blocks the AWS IMDS IPv6 endpoint', () => {
+    expect(endpointBlockReason('http://[fd00:ec2::254]')).toBe('cloud metadata endpoint');
+    expect(endpointBlockReason('http://[fd00:ec2::254]:80')).toBe('cloud metadata endpoint');
+  });
 
   it('allows legitimate S3 endpoints', () => {
     expect(endpointBlockReason('https://s3.amazonaws.com')).toBeNull();

@@ -79,9 +79,14 @@ export async function loginAs(app: Express, user: TestUser): Promise<string> {
 
 // Convenience: seed an admin with TOTP enrolled and return both the user and
 // an active session cookie. Most integration tests need this exact setup.
-export async function loginAsAdmin(app: Express): Promise<{ user: TestUser; cookie: string }> {
+// Pass a custom username when the same test file logs in as admin more than
+// once (createUser enforces UNIQUE on username).
+export async function loginAsAdmin(
+  app: Express,
+  username = 'admin-test',
+): Promise<{ user: TestUser; cookie: string }> {
   const user = createTestUser({
-    username: 'admin-test',
+    username,
     password: 'admin-pass-12345!',
     role: 'admin',
     totpEnrolled: true,

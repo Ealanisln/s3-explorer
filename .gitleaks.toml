@@ -17,6 +17,7 @@ paths = [
   '''dev-data/''',
   '''README\.md$''',
   '''CHANGELOG\.md$''',
+  '''tests/''',                        # fixture passwords + AWS SDK Key: field literals trip generic-api-key
 ]
 
 regexes = [
