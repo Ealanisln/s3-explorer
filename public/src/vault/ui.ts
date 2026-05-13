@@ -3,6 +3,7 @@
 // flow when an old plaintext vault is present.
 
 import { $, openModal, closeModal } from '../util/dom.js';
+import { confirmDialog } from '../util/dialog.js';
 import { toast } from '../util/toast.js';
 import { State } from '../state.js';
 import {
@@ -88,8 +89,14 @@ export function initPassphraseForm(deps: PassphraseDeps): void {
     }
   };
 
-  $('btn-passphrase-reset').onclick = (): void => {
-    if (!confirm('Esto borrará permanentemente todas tus conexiones guardadas. ¿Continuar?')) return;
+  $('btn-passphrase-reset').onclick = async (): Promise<void> => {
+    const ok = await confirmDialog({
+      title: 'Borrar bóveda',
+      message: 'Esto borrará permanentemente todas tus conexiones guardadas. Tendrás que reingresarlas. Esta acción no se puede deshacer.',
+      confirmLabel: 'Borrar bóveda',
+      danger: true,
+    });
+    if (!ok) return;
     clearVault();
     setVaultKey(null);
     State.connections = [];

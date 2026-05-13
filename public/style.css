@@ -1709,3 +1709,120 @@ tr.deleted .badge-deleted {
 @media (max-width: 480px) {
   .auth-card { padding: 22px 20px; border-radius: 10px; }
 }
+
+/* ============================================================
+   In-app dialogs (confirm / prompt / choice) — replace
+   browser-native window.confirm/alert/prompt.
+   ============================================================ */
+.dialog-backdrop .modal.modal-sm {
+  width: 440px;
+  max-width: 100%;
+}
+.dialog-body {
+  padding: 18px 22px 8px;
+}
+.dialog-msg {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.dialog-msg code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--surface-2);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+.dialog-input {
+  display: block;
+  width: 100%;
+  height: 38px;
+  margin-top: 14px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.dialog-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+.dialog-error {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+.dialog-foot {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 18px 18px;
+  border-top: 1px solid var(--divider);
+  background: var(--surface-2);
+}
+.dialog-foot .btn { min-width: 90px; }
+.dialog-foot .btn:empty,
+.dialog-foot .btn[data-act="cancel"]:not(:has(*))[hidden] { display: none; }
+
+.dialog-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+.dialog-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.dialog-choice:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+.dialog-choice:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+.dialog-choice.recommended {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.dialog-choice-label {
+  font-size: 14px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.dialog-choice-label .recommended-tag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+.dialog-choice-hint {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}

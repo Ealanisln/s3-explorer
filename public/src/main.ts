@@ -23,6 +23,7 @@ import { State, getPane } from './state.js';
 import type { PaneId } from './state.js';
 import { toast } from './util/toast.js';
 import { paneEl } from './util/dom.js';
+import { confirmDialog } from './util/dialog.js';
 import {
   renderConnections, configureConnections,
 } from './connections/list.js';
@@ -76,8 +77,13 @@ configureConnections({ openEditModal: (c) => openConnModal(c) });
 configureBuckets({ onBucketOpened: (paneId) => reindexOnBucketOpened(paneId) });
 setTreeRenderer(() => renderConnections());
 configureLock({
-  onLock: () => {
-    if (!confirm('Bloquear la bóveda? Tendrás que ingresar la contraseña de nuevo.')) return;
+  onLock: async () => {
+    const ok = await confirmDialog({
+      title: 'Bloquear bóveda',
+      message: 'Tus conexiones quedarán cifradas hasta que vuelvas a ingresar tu contraseña. ¿Continuar?',
+      confirmLabel: 'Bloquear',
+    });
+    if (!ok) return;
     setVaultKey(null);
     State.connections = [];
     for (const p of PANES) {

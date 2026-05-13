@@ -12,6 +12,7 @@ import type { PaneId } from '../state.js';
 import { api } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
 import { paneEl, paneElMaybe } from '../util/dom.js';
+import { confirmDialog } from '../util/dialog.js';
 import { loadObjects } from '../objects/grid.js';
 
 interface BucketRow { Name: string; CreationDate: string | null }
@@ -69,12 +70,14 @@ export async function loadVersioning(paneId?: PaneId): Promise<void> {
       btn.title = 'Activar versionado en este bucket (no se puede desactivar después desde esta app)';
       btn.disabled = false;
       btn.onclick = async (): Promise<void> => {
-        if (!confirm(
-          `Activar versionado en "${pane.activeBucket}"?\n\n`
-          + 'IMPORTANTE: una vez activado, NO podrás desactivarlo desde esta app. '
-          + 'Si necesitas suspenderlo, deberás usar awscli o la consola del proveedor.\n\n'
-          + '¿Continuar?',
-        )) return;
+        const ok = await confirmDialog({
+          title: 'Activar versionado',
+          message: `Se activará versionado en "${pane.activeBucket}".\n\n`
+            + 'IMPORTANTE: una vez activado, NO podrás desactivarlo desde esta app. '
+            + 'Si necesitas suspenderlo, deberás usar awscli o la consola del proveedor.',
+          confirmLabel: 'Activar versionado',
+        });
+        if (!ok) return;
         try {
           await api(`/api/buckets/${encodeURIComponent(pane.activeBucket || '')}/versioning`, {
             method: 'PUT',

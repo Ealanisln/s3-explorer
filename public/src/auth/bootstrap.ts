@@ -6,6 +6,7 @@
 // `deps.onAuthenticated`. Default is no-op so this module compiles standalone.
 
 import { $, $maybe, openModal } from '../util/dom.js';
+import { confirmDialog } from '../util/dialog.js';
 import { toast } from '../util/toast.js';
 import { setVaultKey } from '../vault/persistence.js';
 import { State } from '../state.js';
@@ -213,7 +214,12 @@ export function initAuthForms(d?: AuthBootstrapDeps): void {
   };
 
   $('btn-regen-qr').onclick = async (): Promise<void> => {
-    if (!confirm('Generar QR nuevo? Tu app de autenticación deberá escanearlo de nuevo y el QR anterior dejará de funcionar.')) return;
+    const ok = await confirmDialog({
+      title: 'Generar QR nuevo',
+      message: 'Se generará un código QR nuevo. Tu app de autenticación deberá escanearlo de nuevo y el QR anterior dejará de funcionar.',
+      confirmLabel: 'Generar nuevo',
+    });
+    if (!ok) return;
     await startEnrollment(true);
   };
 
@@ -238,7 +244,12 @@ export function initAuthForms(d?: AuthBootstrapDeps): void {
   };
 
   $('btn-logout').onclick = async (): Promise<void> => {
-    if (!confirm('Cerrar sesión?')) return;
+    const ok = await confirmDialog({
+      title: 'Cerrar sesión',
+      message: '¿Cerrar tu sesión en este navegador?',
+      confirmLabel: 'Cerrar sesión',
+    });
+    if (!ok) return;
     try { await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' }); } catch { /* ignore */ }
     currentUser = null;
     setVaultKey(null);

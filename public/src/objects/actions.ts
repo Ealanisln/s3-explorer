@@ -5,6 +5,7 @@ import { State } from '../state.js';
 import { api, authHeaders } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
 import { $, openModal } from '../util/dom.js';
+import { confirmDialog, choiceDialog } from '../util/dialog.js';
 
 export async function fetchAsBlob(url: string, filename: string): Promise<void> {
   try {
@@ -36,13 +37,18 @@ export function downloadObject(key: string, versionId?: string): void {
 
 export async function shareObject(key: string, versionId?: string): Promise<void> {
   if (!State.activeBucket) return;
-  const choice = prompt(
-    'Validez del enlace temporal:\n  1 = 5 minutos (recomendado)\n  2 = 1 hora\n  3 = 24 horas\n\nIngresa 1, 2 o 3:',
-    '1',
-  );
+  const choice = await choiceDialog<'5m' | '1h' | '24h'>({
+    title: 'Enlace temporal',
+    message: 'Selecciona la validez del enlace. El archivo será accesible vía URL durante ese tiempo.',
+    choices: [
+      { value: '5m', label: '5 minutos', hint: 'Ideal para compartir rápidamente.', recommended: true },
+      { value: '1h', label: '1 hora', hint: 'Para envíos por chat o correo.' },
+      { value: '24h', label: '24 horas', hint: 'Acceso temporal extendido.' },
+    ],
+  });
   if (choice === null) return;
-  const expiresMap: Record<string, number> = { '1': 300, '2': 3600, '3': 86400 };
-  const expires = expiresMap[choice.trim()] || 300;
+  const expiresMap: Record<string, number> = { '5m': 300, '1h': 3600, '24h': 86400 };
+  const expires = expiresMap[choice];
   try {
     const params = new URLSearchParams({ key, expires: String(expires) });
     if (versionId) params.set('versionId', versionId);
@@ -62,7 +68,14 @@ export async function deleteObject(
   onAfter: () => void | Promise<void>,
 ): Promise<void> {
   if (!State.activeBucket) return;
-  if (!confirm(`Eliminar "${key}"?`)) return;
+  const name = key.split('/').pop() || key;
+  const ok = await confirmDialog({
+    title: 'Eliminar archivo',
+    message: `Se eliminará "${name}". ¿Continuar?`,
+    confirmLabel: 'Eliminar',
+    danger: true,
+  });
+  if (!ok) return;
   try {
     await api(`/api/object/${encodeURIComponent(State.activeBucket)}`, {
       method: 'DELETE',

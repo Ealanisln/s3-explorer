@@ -12,6 +12,7 @@ import { saveConnections } from '../vault/persistence.js';
 import { toast, errorIdOpts } from '../util/toast.js';
 import { mountIcons } from '../util/icons.js';
 import { $, paneEl, escapeHtml, openModal } from '../util/dom.js';
+import { confirmDialog } from '../util/dialog.js';
 import { openBucket, loadVersioning } from '../buckets/list.js';
 import { toggleEmpty } from '../objects/grid.js';
 import type { Connection } from '../types.js';
@@ -44,7 +45,7 @@ function showConnMenu(e: MouseEvent, c: Connection): void {
   document.body.appendChild(dd);
   const close = (): void => { dd.remove(); document.removeEventListener('click', close); };
   setTimeout(() => document.addEventListener('click', close), 10);
-  dd.onclick = (ev: Event): void => {
+  dd.onclick = async (ev: Event): Promise<void> => {
     const target = ev.target as HTMLElement;
     const act = target.dataset.act;
     if (act === 'edit') openEditModal(c);
@@ -55,7 +56,13 @@ function showConnMenu(e: MouseEvent, c: Connection): void {
       renderConnections();
     }
     if (act === 'delete') {
-      if (confirm(`¿Eliminar conexión "${c.name}"?`)) {
+      const ok = await confirmDialog({
+        title: 'Eliminar conexión',
+        message: `Se eliminará la conexión "${c.name}" de tu bóveda local. Los datos en S3 no se tocan.`,
+        confirmLabel: 'Eliminar',
+        danger: true,
+      });
+      if (ok) {
         State.connections = State.connections.filter((x) => x.id !== c.id);
         void saveConnections();
         bucketCache.delete(c.id);
@@ -91,7 +98,13 @@ function showBucketMenu(e: MouseEvent, conn: Connection, b: BucketRow): void {
   dd.onclick = async (ev: Event): Promise<void> => {
     const target = ev.target as HTMLElement;
     if (target.dataset.act === 'delete') {
-      if (!confirm(`Eliminar bucket "${b.Name}"? Debe estar vacío.`)) return;
+      const ok = await confirmDialog({
+        title: 'Eliminar bucket',
+        message: `Se eliminará el bucket "${b.Name}". Debe estar vacío para que S3 lo acepte.`,
+        confirmLabel: 'Eliminar',
+        danger: true,
+      });
+      if (!ok) return;
       try {
         await api(`/api/buckets/${encodeURIComponent(b.Name)}`, {
           method: 'DELETE',

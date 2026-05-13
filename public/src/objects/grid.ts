@@ -10,6 +10,7 @@ import type { PaneId } from '../state.js';
 import { api } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
 import { paneEl, escapeHtml } from '../util/dom.js';
+import { confirmDialog } from '../util/dialog.js';
 import { formatSize, formatDate, fileIcon } from '../util/format.js';
 import { mountIcons } from '../util/icons.js';
 import { openPreview } from './preview.js';
@@ -184,7 +185,13 @@ function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
     const reload = (): Promise<void> => loadObjects(paneId);
     if (act === 'restore') await restoreDeleteMarker(o, reload);
     if (act === 'purge') {
-      if (confirm('Borrar permanentemente el delete marker?')) {
+      const ok = await confirmDialog({
+        title: 'Borrar delete marker',
+        message: 'Esta acción borra permanentemente el delete marker. ¿Continuar?',
+        confirmLabel: 'Borrar',
+        danger: true,
+      });
+      if (ok) {
         try {
           await api(`/api/object/${encodeURIComponent(getPane(paneId).activeBucket || '')}`, {
             method: 'DELETE',
@@ -272,9 +279,14 @@ function bindRowEvents(tr: HTMLTableRowElement, o: S3Object, paneId: PaneId): vo
     const t = e.target as HTMLElement;
     if (t.closest('input,button')) return;
     if (o.IsDeleteMarker) {
-      if (confirm(`"${(o.Key.split('/').pop() || o.Key)}" está eliminado.\n\n¿Restaurarlo (borrar el delete marker)?`)) {
-        void restoreDeleteMarker(o, () => loadObjects(paneId));
-      }
+      const fname = (o.Key.split('/').pop() || o.Key);
+      void confirmDialog({
+        title: 'Archivo eliminado',
+        message: `"${fname}" está eliminado.\n\n¿Restaurarlo (borrar el delete marker)?`,
+        confirmLabel: 'Restaurar',
+      }).then((ok) => {
+        if (ok) void restoreDeleteMarker(o, () => loadObjects(paneId));
+      });
       return;
     }
     openInfoPanel(o, paneId);
@@ -584,7 +596,14 @@ export function initBatchBar(paneId: PaneId): void {
   paneEl('btn-batch-delete', paneId).onclick = async (): Promise<void> => {
     setActivePane(paneId);
     const pane = getPane(paneId);
-    if (!confirm(`Eliminar ${pane.selected.size} archivo(s)?`)) return;
+    const count = pane.selected.size;
+    const ok = await confirmDialog({
+      title: 'Eliminar archivos',
+      message: `Se eliminarán ${count} archivo(s). ¿Continuar?`,
+      confirmLabel: `Eliminar ${count}`,
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api(`/api/object/${encodeURIComponent(pane.activeBucket || '')}/delete-batch`, {
         method: 'POST',
