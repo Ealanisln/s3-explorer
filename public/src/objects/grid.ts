@@ -1,9 +1,15 @@
 // Object grid renderer + listing loader. The big visual surface of the SPA.
+//
+// All pane-scoped DOM lookups go through `paneEl(name, paneId)`. Render
+// functions take an optional `paneId` and use `withPane()` so the Proxy on
+// State resolves to that pane during the render, even if the user is
+// currently focused on the other side.
 
-import { State } from '../state.js';
+import { State, withPane, setActivePane, getPane } from '../state.js';
+import type { PaneId } from '../state.js';
 import { api } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
-import { $, escapeHtml } from '../util/dom.js';
+import { paneEl, escapeHtml } from '../util/dom.js';
 import { formatSize, formatDate, fileIcon } from '../util/format.js';
 import { openPreview } from './preview.js';
 import { openInfoPanel, closeInfoPanel } from './info-panel.js';
@@ -13,18 +19,19 @@ import {
 import { runRecursiveSearchForLink, updateSearchBanner } from './search.js';
 import type { S3Object, SearchFolderInfo } from '../types.js';
 
-export function toggleEmpty(show: boolean): void {
-  $('empty').style.display = show ? 'block' : 'none';
-  $('grid').style.display = show ? 'none' : 'table';
+export function toggleEmpty(show: boolean, paneId?: PaneId): void {
+  const p: PaneId = paneId || State.activePane;
+  (paneEl('empty', p) as HTMLElement).style.display = show ? 'block' : 'none';
+  (paneEl('grid', p) as HTMLElement).style.display = show ? 'none' : 'table';
 }
 
-export function showLoadingRow(): HTMLTableRowElement {
-  const tbody = $('grid-body');
+export function showLoadingRow(paneId: PaneId): HTMLTableRowElement {
+  const tbody = paneEl('grid-body', paneId);
   tbody.innerHTML = '';
   const tr = document.createElement('tr');
   tr.innerHTML = '<td colspan="5" style="text-align:center; padding:40px; color:var(--text-dim)">⏳ Cargando carpeta...</td>';
   tbody.appendChild(tr);
-  return tr;
+  return tr as HTMLTableRowElement;
 }
 
 function applySort<T extends S3Object>(list: T[]): T[];
@@ -50,8 +57,10 @@ function applySort(list: S3Object[] | string[], isPrefixList = false): S3Object[
   });
 }
 
-function updateSortIndicators(): void {
-  document.querySelectorAll<HTMLElement>('.grid th.sortable').forEach((th) => {
+function updateSortIndicators(paneId: PaneId): void {
+  const root = paneEl('grid', paneId).closest('.pane') as HTMLElement | null;
+  if (!root) return;
+  root.querySelectorAll<HTMLElement>('.grid th.sortable').forEach((th) => {
     const active = th.dataset.sort === State.sort.field;
     th.classList.toggle('active', active);
     const ind = th.querySelector('.sort-indicator');
@@ -59,39 +68,48 @@ function updateSortIndicators(): void {
   });
 }
 
-export function renderBreadcrumbs(): void {
-  const el = $('breadcrumbs');
-  el.innerHTML = '';
-  const parts: { name: string; prefix: string }[] = [];
-  parts.push({ name: State.activeBucket || '', prefix: '' });
-  const segs = State.prefix.split('/').filter(Boolean);
-  let acc = '';
-  for (const s of segs) {
-    acc += s + '/';
-    parts.push({ name: s, prefix: acc });
-  }
-  parts.forEach((p, i) => {
-    const last = i === parts.length - 1;
-    const link = document.createElement('a');
-    link.textContent = p.name;
-    link.className = last ? 'current' : '';
-    if (!last) link.onclick = (): void => { State.prefix = p.prefix; void loadObjects(); };
-    el.appendChild(link);
-    if (!last) {
-      const s = document.createElement('span'); s.className = 'sep'; s.textContent = '/';
-      el.appendChild(s);
+export function renderBreadcrumbs(paneId?: PaneId): void {
+  const p: PaneId = paneId || State.activePane;
+  withPane(p, () => {
+    const el = paneEl('breadcrumbs', p);
+    el.innerHTML = '';
+    const parts: { name: string; prefix: string }[] = [];
+    parts.push({ name: State.activeBucket || '', prefix: '' });
+    const segs = State.prefix.split('/').filter(Boolean);
+    let acc = '';
+    for (const s of segs) {
+      acc += s + '/';
+      parts.push({ name: s, prefix: acc });
     }
+    parts.forEach((part, i) => {
+      const last = i === parts.length - 1;
+      const link = document.createElement('a');
+      link.textContent = part.name;
+      link.className = last ? 'current' : '';
+      if (!last) link.onclick = (): void => {
+        setActivePane(p);
+        getPane(p).prefix = part.prefix;
+        void loadObjects(p);
+      };
+      el.appendChild(link);
+      if (!last) {
+        const s = document.createElement('span'); s.className = 'sep'; s.textContent = '/';
+        el.appendChild(s);
+      }
+    });
   });
 }
 
-export function updateBatchBar(): void {
-  const bar = $('batch-bar');
-  if (State.selected.size === 0) { bar.style.display = 'none'; return; }
+export function updateBatchBar(paneId?: PaneId): void {
+  const p: PaneId = paneId || State.activePane;
+  const bar = paneEl('batch-bar', p);
+  const pane = getPane(p);
+  if (pane.selected.size === 0) { bar.style.display = 'none'; return; }
   bar.style.display = 'flex';
-  $('batch-info').textContent = `${State.selected.size} archivo(s) seleccionado(s)`;
+  paneEl('batch-info', p).textContent = `${pane.selected.size} archivo(s) seleccionado(s)`;
 }
 
-function showRowMenu(e: MouseEvent, o: S3Object): void {
+function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
   document.querySelectorAll('.dropdown.row-menu').forEach((d) => d.remove());
   const dd = document.createElement('div');
   dd.className = 'dropdown row-menu';
@@ -114,18 +132,20 @@ function showRowMenu(e: MouseEvent, o: S3Object): void {
   const close = (): void => { dd.remove(); document.removeEventListener('click', close); };
   setTimeout(() => document.addEventListener('click', close), 10);
   dd.onclick = async (ev: Event): Promise<void> => {
+    setActivePane(paneId);
     const target = ev.target as HTMLElement;
     const act = target.dataset.act;
-    if (act === 'restore') await restoreDeleteMarker(o, loadObjects);
+    const reload = (): Promise<void> => loadObjects(paneId);
+    if (act === 'restore') await restoreDeleteMarker(o, reload);
     if (act === 'purge') {
       if (confirm('Borrar permanentemente el delete marker?')) {
         try {
-          await api(`/api/object/${encodeURIComponent(State.activeBucket || '')}`, {
+          await api(`/api/object/${encodeURIComponent(getPane(paneId).activeBucket || '')}`, {
             method: 'DELETE',
             body: { key: o.Key, versionId: o.VersionId },
           });
           toast('Marker borrado', 'success');
-          await loadObjects();
+          await reload();
         } catch (e) {
           toast((e as Error).message, 'error', errorIdOpts(e));
         }
@@ -136,60 +156,73 @@ function showRowMenu(e: MouseEvent, o: S3Object): void {
     if (act === 'share') await shareObject(o.Key);
     if (act === 'versions') {
       void openPreview(o);
-      setTimeout(() => ($('btn-show-versions') as HTMLButtonElement).click(), 200);
+      setTimeout(() => (document.getElementById('btn-show-versions') as HTMLButtonElement)?.click(), 200);
     }
     if (act === 'rename') openRename(o.Key);
-    if (act === 'delete') await deleteObject(o.Key, loadObjects);
+    if (act === 'delete') await deleteObject(o.Key, reload);
   };
 }
 
-function bindRowEvents(tr: HTMLTableRowElement, o: S3Object): void {
+function bindRowEvents(tr: HTMLTableRowElement, o: S3Object, paneId: PaneId): void {
   const cb = tr.querySelector<HTMLInputElement>('input[type=checkbox]');
   if (cb) {
     cb.onclick = (e: Event): void => {
+      setActivePane(paneId);
       e.stopPropagation();
       const checked = (e.target as HTMLInputElement).checked;
-      if (checked) State.selected.add(o.Key); else State.selected.delete(o.Key);
+      const sel = getPane(paneId).selected;
+      if (checked) sel.add(o.Key); else sel.delete(o.Key);
       tr.classList.toggle('selected', checked);
-      updateBatchBar();
+      updateBatchBar(paneId);
     };
   }
   const mb = tr.querySelector<HTMLButtonElement>('.menu-btn');
-  if (mb) mb.onclick = (e: MouseEvent): void => { e.stopPropagation(); showRowMenu(e, o); };
+  if (mb) mb.onclick = (e: MouseEvent): void => {
+    setActivePane(paneId);
+    e.stopPropagation();
+    showRowMenu(e, o, paneId);
+  };
   tr.addEventListener('click', (e: Event) => {
+    setActivePane(paneId);
     const t = e.target as HTMLElement;
     if (t.closest('input,button')) return;
     if (o.IsDeleteMarker) {
       if (confirm(`"${(o.Key.split('/').pop() || o.Key)}" está eliminado.\n\n¿Restaurarlo (borrar el delete marker)?`)) {
-        void restoreDeleteMarker(o, loadObjects);
+        void restoreDeleteMarker(o, () => loadObjects(paneId));
       }
       return;
     }
-    openInfoPanel(o);
+    openInfoPanel(o, paneId);
   });
   tr.addEventListener('dblclick', (e: Event) => {
+    setActivePane(paneId);
     const t = e.target as HTMLElement;
     if (t.closest('input,button')) return;
     if (!o.IsDeleteMarker) void openPreview(o);
   });
 }
 
-export function renderGrid(): void {
-  const tbody = $('grid-body');
+export function renderGrid(paneId?: PaneId): void {
+  const p: PaneId = paneId || State.activePane;
+  withPane(p, () => renderGridInner(p));
+}
+
+function renderGridInner(paneId: PaneId): void {
+  const tbody = paneEl('grid-body', paneId);
   tbody.innerHTML = '';
 
-  updateSortIndicators();
+  updateSortIndicators(paneId);
   const isSearchMode = State.searchResults !== null;
   const term = State.filterTerm.toLowerCase();
 
   if (isSearchMode) {
-    renderSearchMode(tbody);
+    renderSearchMode(tbody, paneId);
     return;
   }
 
   // Normal mode: filter prefixes + objects by filterTerm locally
   const visiblePrefixes = applySort(
-    term ? State.prefixes.filter((p) => p.toLowerCase().includes(term)) : State.prefixes,
+    term ? State.prefixes.filter((pp) => pp.toLowerCase().includes(term)) : State.prefixes,
     true,
   );
   const visibleObjects = applySort(
@@ -199,13 +232,13 @@ export function renderGrid(): void {
   if (!visiblePrefixes.length && !visibleObjects.length) {
     const tr = document.createElement('tr');
     const msg = term
-      ? `Sin coincidencias en esta carpeta para "${escapeHtml(State.filterTerm)}". <a href="#" id="link-recursive-search" style="color:var(--primary-2)">Buscar en todo el bucket →</a>`
+      ? `Sin coincidencias en esta carpeta para "${escapeHtml(State.filterTerm)}". <a href="#" data-recursive-search style="color:var(--primary-2)">Buscar en todo el bucket →</a>`
       : 'Carpeta vacía. Arrastra archivos aquí o usa "Subir archivos".';
     tr.innerHTML = `<td colspan="5" style="text-align:center; padding:40px; color:var(--text-dim)">${msg}</td>`;
     tbody.appendChild(tr);
-    const link = tr.querySelector<HTMLAnchorElement>('#link-recursive-search');
-    if (link) link.onclick = (e: Event): void => { e.preventDefault(); void runRecursiveSearchForLink(); };
-    updateBatchBar();
+    const link = tr.querySelector<HTMLAnchorElement>('[data-recursive-search]');
+    if (link) link.onclick = (e: Event): void => { e.preventDefault(); void runRecursiveSearchForLink(paneId); };
+    updateBatchBar(paneId);
     return;
   }
 
@@ -217,8 +250,8 @@ export function renderGrid(): void {
     tbody.appendChild(tr);
   }
 
-  for (const p of visiblePrefixes) {
-    const name = p.replace(State.prefix, '').replace('/', '');
+  for (const pp of visiblePrefixes) {
+    const name = pp.replace(State.prefix, '').replace('/', '');
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="col-check"></td>
@@ -228,11 +261,13 @@ export function renderGrid(): void {
       <td class="col-act"></td>
     `;
     tr.onclick = (): void => {
-      State.prefix = p;
-      ($('search-input') as HTMLInputElement).value = '';
-      State.filterTerm = '';
-      updateSearchBanner();
-      void loadObjects();
+      setActivePane(paneId);
+      const pane = getPane(paneId);
+      pane.prefix = pp;
+      pane.filterTerm = '';
+      (paneEl('search-input', paneId) as HTMLInputElement).value = '';
+      updateSearchBanner(paneId);
+      void loadObjects(paneId);
     };
     tbody.appendChild(tr);
   }
@@ -252,22 +287,23 @@ export function renderGrid(): void {
       <td class="col-date">${escapeHtml(formatDate(o.LastModified))}</td>
       <td class="col-act"><button class="menu-btn" data-menu="${escapeHtml(o.Key)}">⋯</button></td>
     `;
-    bindRowEvents(tr, o);
+    bindRowEvents(tr as HTMLTableRowElement, o, paneId);
     tbody.appendChild(tr);
   }
 
-  ($('check-all') as HTMLInputElement).onclick = (e: Event): void => {
+  (paneEl('check-all', paneId) as HTMLInputElement).onclick = (e: Event): void => {
+    setActivePane(paneId);
     const checked = (e.target as HTMLInputElement).checked;
-    document.querySelectorAll<HTMLInputElement>('#grid-body input[type=checkbox]').forEach((cb) => {
+    tbody.querySelectorAll<HTMLInputElement>('input[type=checkbox]').forEach((cb) => {
       cb.checked = checked;
       cb.dispatchEvent(new Event('click'));
     });
   };
 
-  updateBatchBar();
+  updateBatchBar(paneId);
 }
 
-function renderSearchMode(tbody: HTMLElement): void {
+function renderSearchMode(tbody: HTMLElement, paneId: PaneId): void {
   const folderHits = State.searchFolderHits ? [...State.searchFolderHits.entries()] : [];
   const sortedFolders = folderHits.sort((a, b) => {
     const { field, dir } = State.sort;
@@ -289,20 +325,20 @@ function renderSearchMode(tbody: HTMLElement): void {
       : `Sin resultados para "${escapeHtml(State.filterTerm)}".`;
     tr.innerHTML = `<td colspan="5" style="text-align:center; padding:40px; color:var(--text-dim)">${msg}</td>`;
     tbody.appendChild(tr);
-    updateBatchBar();
+    updateBatchBar(paneId);
     return;
   }
 
   for (const [folderKey, info] of sortedFolders) {
-    renderSearchFolderRow(tbody, folderKey, info);
+    renderSearchFolderRow(tbody, folderKey, info, paneId);
   }
   for (const o of sortedFiles) {
-    renderSearchFileRow(tbody, o);
+    renderSearchFileRow(tbody, o, paneId);
   }
-  updateBatchBar();
+  updateBatchBar(paneId);
 }
 
-function renderSearchFolderRow(tbody: HTMLElement, folderKey: string, info: SearchFolderInfo): void {
+function renderSearchFolderRow(tbody: HTMLElement, folderKey: string, info: SearchFolderInfo, paneId: PaneId): void {
   const name = folderKey.replace(/\/$/, '').split('/').pop() || folderKey;
   const parent = folderKey.slice(0, folderKey.length - name.length - 1);
   const tr = document.createElement('tr');
@@ -321,19 +357,21 @@ function renderSearchFolderRow(tbody: HTMLElement, folderKey: string, info: Sear
     <td class="col-act"></td>
   `;
   tr.onclick = (): void => {
-    State.prefix = folderKey;
-    State.searchResults = null;
-    State.searchFolderHits = null;
-    State.searchMeta = null;
-    State.filterTerm = '';
-    ($('search-input') as HTMLInputElement).value = '';
-    $('btn-search-clear').style.display = 'none';
-    void loadObjects();
+    setActivePane(paneId);
+    const pane = getPane(paneId);
+    pane.prefix = folderKey;
+    pane.searchResults = null;
+    pane.searchFolderHits = null;
+    pane.searchMeta = null;
+    pane.filterTerm = '';
+    (paneEl('search-input', paneId) as HTMLInputElement).value = '';
+    paneEl('btn-search-clear', paneId).style.display = 'none';
+    void loadObjects(paneId);
   };
   tbody.appendChild(tr);
 }
 
-function renderSearchFileRow(tbody: HTMLElement, o: S3Object): void {
+function renderSearchFileRow(tbody: HTMLElement, o: S3Object, paneId: PaneId): void {
   const name = o.Key.split('/').pop() || o.Key;
   const folder = o.Key.slice(0, o.Key.length - name.length);
   const ico = fileIcon(name);
@@ -352,7 +390,7 @@ function renderSearchFileRow(tbody: HTMLElement, o: S3Object): void {
     <td class="col-date">${escapeHtml(formatDate(o.LastModified))}</td>
     <td class="col-act"><button class="menu-btn">⋯</button></td>
   `;
-  bindRowEvents(tr, o);
+  bindRowEvents(tr as HTMLTableRowElement, o, paneId);
   tbody.appendChild(tr);
 }
 
@@ -363,28 +401,30 @@ interface ListingResponse {
   pages?: number;
 }
 
-export async function loadObjects(): Promise<void> {
-  if (!State.activeBucket) return;
-  toggleEmpty(false);
-  ($('btn-upload') as HTMLButtonElement).disabled = false;
-  ($('btn-new-folder') as HTMLButtonElement).disabled = false;
-  ($('search-input') as HTMLInputElement).disabled = false;
-  State.searchResults = null;
-  State.searchMeta = null;
-  updateSearchBanner();
-  renderBreadcrumbs();
-  closeInfoPanel();
-  const loader = showLoadingRow();
+export async function loadObjects(paneId?: PaneId): Promise<void> {
+  const p: PaneId = paneId || State.activePane;
+  const pane = getPane(p);
+  if (!pane.activeBucket) return;
+  toggleEmpty(false, p);
+  (paneEl('btn-upload', p) as HTMLButtonElement).disabled = false;
+  (paneEl('btn-new-folder', p) as HTMLButtonElement).disabled = false;
+  (paneEl('search-input', p) as HTMLInputElement).disabled = false;
+  pane.searchResults = null;
+  pane.searchMeta = null;
+  updateSearchBanner(p);
+  renderBreadcrumbs(p);
+  closeInfoPanel(p);
+  const loader = showLoadingRow(p);
   try {
-    const params = new URLSearchParams({ prefix: State.prefix });
-    if (State.showDeleted) params.set('showDeleted', '1');
-    const data = await api<ListingResponse>(`/api/objects/${encodeURIComponent(State.activeBucket)}?${params}`);
-    State.prefixes = data.prefixes;
-    State.objects = data.objects;
-    State.listingTruncated = !!data.isTruncated;
-    State.listingPages = data.pages || 1;
-    State.selected.clear();
-    renderGrid();
+    const params = new URLSearchParams({ prefix: pane.prefix });
+    if (pane.showDeleted) params.set('showDeleted', '1');
+    const data = await api<ListingResponse>(`/api/objects/${encodeURIComponent(pane.activeBucket)}?${params}`);
+    pane.prefixes = data.prefixes;
+    pane.objects = data.objects;
+    pane.listingTruncated = !!data.isTruncated;
+    pane.listingPages = data.pages || 1;
+    pane.selected.clear();
+    renderGrid(p);
   } catch (e) {
     toast('Error: ' + (e as Error).message, 'error', errorIdOpts(e));
   } finally {
@@ -392,17 +432,19 @@ export async function loadObjects(): Promise<void> {
   }
 }
 
-export function initBatchBar(): void {
-  $('btn-batch-delete').onclick = async (): Promise<void> => {
-    if (!confirm(`Eliminar ${State.selected.size} archivo(s)?`)) return;
+export function initBatchBar(paneId: PaneId): void {
+  paneEl('btn-batch-delete', paneId).onclick = async (): Promise<void> => {
+    setActivePane(paneId);
+    const pane = getPane(paneId);
+    if (!confirm(`Eliminar ${pane.selected.size} archivo(s)?`)) return;
     try {
-      await api(`/api/object/${encodeURIComponent(State.activeBucket || '')}/delete-batch`, {
+      await api(`/api/object/${encodeURIComponent(pane.activeBucket || '')}/delete-batch`, {
         method: 'POST',
-        body: { keys: [...State.selected] },
+        body: { keys: [...pane.selected] },
       });
       toast('Archivos eliminados', 'success');
-      State.selected.clear();
-      await loadObjects();
+      pane.selected.clear();
+      await loadObjects(paneId);
     } catch (e) {
       toast((e as Error).message, 'error', errorIdOpts(e));
     }

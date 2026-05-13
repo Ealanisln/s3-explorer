@@ -1,9 +1,14 @@
 // Sidebar bucket list + per-bucket menu + open/versioning.
+//
+// The sidebar shows one bucket list at a time. Clicking a bucket opens it
+// in the currently-active pane. The "active" highlight reflects the bucket
+// open in the active pane.
 
-import { State } from '../state.js';
+import { State, getPane } from '../state.js';
+import type { PaneId } from '../state.js';
 import { api } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
-import { $, escapeHtml } from '../util/dom.js';
+import { $, paneEl, paneElMaybe, escapeHtml } from '../util/dom.js';
 import { loadObjects } from '../objects/grid.js';
 
 interface BucketRow { Name: string; CreationDate: string | null }
@@ -40,9 +45,10 @@ function showBucketMenu(e: MouseEvent, b: BucketRow): void {
 export function renderBuckets(): void {
   const ul = $('buckets');
   ul.innerHTML = '';
+  const active = getPane().activeBucket;
   for (const b of State.buckets) {
     const li = document.createElement('li');
-    li.className = b.Name === State.activeBucket ? 'active' : '';
+    li.className = b.Name === active ? 'active' : '';
     li.innerHTML = `
       <span class="icon-file icon-folder" style="width:22px;height:22px;font-size:10px">📦</span>
       <span class="name">${escapeHtml(b.Name)}</span>
@@ -57,34 +63,38 @@ export function renderBuckets(): void {
   }
 }
 
-let onBucketOpened: () => void = () => undefined;
+let onBucketOpened: (paneId: PaneId) => void = () => undefined;
 
-export function configureBuckets(deps: { onBucketOpened: () => void }): void {
+export function configureBuckets(deps: { onBucketOpened: (paneId: PaneId) => void }): void {
   onBucketOpened = deps.onBucketOpened;
 }
 
-export async function openBucket(name: string): Promise<void> {
-  State.activeBucket = name;
-  State.prefix = '';
+export async function openBucket(name: string, paneId?: PaneId): Promise<void> {
+  const p: PaneId = paneId || State.activePane;
+  const pane = getPane(p);
+  pane.activeBucket = name;
+  pane.prefix = '';
   renderBuckets();
-  await loadVersioning();
-  await loadObjects();
-  onBucketOpened();
+  await loadVersioning(p);
+  await loadObjects(p);
+  onBucketOpened(p);
 }
 
-export async function loadVersioning(): Promise<void> {
+export async function loadVersioning(paneId?: PaneId): Promise<void> {
+  const p: PaneId = paneId || State.activePane;
+  const pane = getPane(p);
   try {
     const { status } = await api<{ status: 'Enabled' | 'Suspended' | 'Disabled' }>(
-      `/api/buckets/${encodeURIComponent(State.activeBucket || '')}/versioning`,
+      `/api/buckets/${encodeURIComponent(pane.activeBucket || '')}/versioning`,
     );
-    State.versioning = status;
-    const btn = $('btn-versioning') as HTMLButtonElement;
+    pane.versioning = status;
+    const btn = paneEl('btn-versioning', p) as HTMLButtonElement;
     btn.style.display = 'inline-block';
-    const tog = document.querySelector<HTMLElement>('.toggle-deleted');
+    const tog = paneElMaybe('toggle-deleted', p);
     if (tog) tog.style.display = status === 'Enabled' ? 'inline-flex' : 'none';
-    if (status !== 'Enabled' && State.showDeleted) {
-      State.showDeleted = false;
-      ($('chk-deleted') as HTMLInputElement).checked = false;
+    if (status !== 'Enabled' && pane.showDeleted) {
+      pane.showDeleted = false;
+      (paneEl('chk-deleted', p) as HTMLInputElement).checked = false;
     }
     if (status === 'Enabled') {
       btn.textContent = 'Versionado: ON 🔒';
@@ -97,24 +107,24 @@ export async function loadVersioning(): Promise<void> {
       btn.disabled = false;
       btn.onclick = async (): Promise<void> => {
         if (!confirm(
-          `Activar versionado en "${State.activeBucket}"?\n\n`
+          `Activar versionado en "${pane.activeBucket}"?\n\n`
           + 'IMPORTANTE: una vez activado, NO podrás desactivarlo desde esta app. '
           + 'Si necesitas suspenderlo, deberás usar awscli o la consola del proveedor.\n\n'
           + '¿Continuar?',
         )) return;
         try {
-          await api(`/api/buckets/${encodeURIComponent(State.activeBucket || '')}/versioning`, {
+          await api(`/api/buckets/${encodeURIComponent(pane.activeBucket || '')}/versioning`, {
             method: 'PUT',
             body: { enabled: true },
           });
           toast('Versionado activado', 'success');
-          await loadVersioning();
+          await loadVersioning(p);
         } catch (e) {
           toast((e as Error).message, 'error', errorIdOpts(e));
         }
       };
     }
   } catch {
-    State.versioning = 'Disabled';
+    pane.versioning = 'Disabled';
   }
 }

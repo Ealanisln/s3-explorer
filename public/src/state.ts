@@ -139,3 +139,20 @@ export function paneConn(id?: PaneId): Connection | undefined {
   const pane = getPane(id);
   return State.connections.find((c) => c.id === pane.activeConnId);
 }
+
+// Run `fn` with `activePane` temporarily set to `id`, so that any code
+// reading `State.activeBucket`, `State.prefix`, etc. resolves against the
+// requested pane. Always restores the prior active pane on exit, even if
+// `fn` throws. Used by render functions that need to paint a specific pane
+// regardless of which one currently has focus.
+export function withPane<T>(id: PaneId, fn: () => T): T {
+  const prev = raw.activePane;
+  raw.activePane = id;
+  try { return fn(); } finally { raw.activePane = prev; }
+}
+
+export function setActivePane(id: PaneId): void {
+  if (raw.activePane === id) return;
+  raw.activePane = id;
+  emit('activePane');
+}

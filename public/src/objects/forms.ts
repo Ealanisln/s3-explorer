@@ -1,17 +1,23 @@
 // Small form modals: bucket create, folder create, rename, refresh button.
 // Grouped here because each is one event handler — wouldn't justify its own file.
+//
+// Bucket-create is global (not pane-scoped). Folder, rename, and refresh act
+// on the currently-active pane; they read State (which proxies to the active
+// pane) and target paneEl(...) for the toolbar refresh icon.
 
-import { State } from '../state.js';
+import { State, getPane, setActivePane } from '../state.js';
+import type { PaneId } from '../state.js';
 import { api } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
-import { $, openModal, closeModal } from '../util/dom.js';
+import { $, paneEl, openModal, closeModal } from '../util/dom.js';
 import { loadObjects } from './grid.js';
 import { renderBuckets } from '../buckets/list.js';
 import { selectConnection } from '../connections/list.js';
 import type { Connection } from '../types.js';
 
-export function initSmallForms(): void {
-  // Bucket create
+// Bucket create + global rename submit (modals are app-global). Run once.
+export function initGlobalForms(): void {
+  // Bucket create lives in the sidebar — global.
   $('btn-create-bucket').onclick = (): void => openModal('modal-bucket');
   ($('form-bucket') as HTMLFormElement).onsubmit = async (e: Event): Promise<void> => {
     e.preventDefault();
@@ -29,34 +35,16 @@ export function initSmallForms(): void {
     }
   };
 
-  // Folder create
-  $('btn-new-folder').onclick = (): void => openModal('modal-folder');
-  ($('form-folder') as HTMLFormElement).onsubmit = async (e: Event): Promise<void> => {
-    e.preventDefault();
-    const f = e.target as HTMLFormElement;
-    const name = (f.elements.namedItem('name') as HTMLInputElement).value.trim();
-    try {
-      await api(`/api/object/${encodeURIComponent(State.activeBucket || '')}/folder`, {
-        method: 'POST',
-        body: { prefix: State.prefix, name },
-      });
-      toast('Carpeta creada', 'success');
-      closeModal('modal-folder');
-      await loadObjects();
-    } catch (e2) {
-      toast((e2 as Error).message, 'error', errorIdOpts(e2));
-    }
-  };
-
-  // Rename
+  // Rename submits against the active pane's bucket/prefix.
   ($('form-rename') as HTMLFormElement).onsubmit = async (e: Event): Promise<void> => {
     e.preventDefault();
     const f = e.target as HTMLFormElement;
     const src = (f.elements.namedItem('sourceKey') as HTMLInputElement).value;
     const newName = (f.elements.namedItem('newName') as HTMLInputElement).value.trim();
-    const dest = State.prefix + newName;
+    const pane = getPane();
+    const dest = pane.prefix + newName;
     try {
-      await api(`/api/object/${encodeURIComponent(State.activeBucket || '')}/rename`, {
+      await api(`/api/object/${encodeURIComponent(pane.activeBucket || '')}/rename`, {
         method: 'POST',
         body: { sourceKey: src, destKey: dest },
       });
@@ -68,14 +56,41 @@ export function initSmallForms(): void {
     }
   };
 
-  // Refresh
-  $('btn-refresh').onclick = (): void => {
-    if (State.activeBucket) void loadObjects();
-    else if (State.activeConnId) void selectConnection(State.activeConnId);
+  // Folder create submits against the active pane's bucket/prefix.
+  ($('form-folder') as HTMLFormElement).onsubmit = async (e: Event): Promise<void> => {
+    e.preventDefault();
+    const f = e.target as HTMLFormElement;
+    const name = (f.elements.namedItem('name') as HTMLInputElement).value.trim();
+    const pane = getPane();
+    try {
+      await api(`/api/object/${encodeURIComponent(pane.activeBucket || '')}/folder`, {
+        method: 'POST',
+        body: { prefix: pane.prefix, name },
+      });
+      toast('Carpeta creada', 'success');
+      closeModal('modal-folder');
+      await loadObjects();
+    } catch (e2) {
+      toast((e2 as Error).message, 'error', errorIdOpts(e2));
+    }
   };
 }
 
-// Generic backdrop + Escape key wiring (moved from the legacy app.js inline block).
+// Per-pane wiring: new-folder + refresh buttons in each toolbar.
+export function initPaneForms(paneId: PaneId): void {
+  paneEl('btn-new-folder', paneId).onclick = (): void => {
+    setActivePane(paneId);
+    openModal('modal-folder');
+  };
+
+  paneEl('btn-refresh', paneId).onclick = (): void => {
+    setActivePane(paneId);
+    const pane = getPane(paneId);
+    if (pane.activeBucket) void loadObjects(paneId);
+    else if (pane.activeConnId) void selectConnection(pane.activeConnId);
+  };
+}
+
 const FORM_MODALS = new Set([
   'modal-passphrase', 'modal-conn', 'modal-bucket', 'modal-folder',
   'modal-rename', 'modal-account', 'modal-users',
@@ -89,8 +104,6 @@ export function initModalDismiss(): void {
     };
   });
 
-  // Click outside → close. Only for non-form modals; form modals require an
-  // explicit close/submit so a stray click doesn't drop the user's data.
   document.querySelectorAll<HTMLElement>('.modal-backdrop').forEach((b) => {
     if (FORM_MODALS.has(b.id)) return;
     let downOnBackdrop = false;
@@ -103,8 +116,6 @@ export function initModalDismiss(): void {
     });
   });
 
-  // Esc closes any visible modal except the passphrase (that one needs an
-  // explicit action — the vault must be unlocked or created).
   document.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key !== 'Escape') return;
     const open = [...document.querySelectorAll<HTMLElement>('.modal-backdrop')]
@@ -113,8 +124,6 @@ export function initModalDismiss(): void {
   });
 }
 
-// Lock button — closes the vault. Imported here because the button lives in
-// the sidebar alongside the small form triggers.
 let onLock: () => void = () => undefined;
 
 export function configureLock(deps: { onLock: () => void }): void {
@@ -127,5 +136,4 @@ export function initLockButton(): void {
   };
 }
 
-// Unused helper kept for symmetry with the old API.
 export type _ConnRef = Connection;
