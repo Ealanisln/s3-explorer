@@ -19,8 +19,13 @@ import {
 import {
   getVault, readLegacyConnections, setPendingMigration, setVaultKey,
 } from './vault/persistence.js';
-import { State, getPane } from './state.js';
+import { State, getPane, subscribe } from './state.js';
 import type { PaneId } from './state.js';
+import {
+  parseLocation, navigateTo, onRouteChange, setRouterSuppress, type Route,
+} from './router/index.js';
+import { selectConnection } from './connections/list.js';
+import { openBucket } from './buckets/list.js';
 import { toast } from './util/toast.js';
 import { paneEl } from './util/dom.js';
 import { confirmDialog } from './util/dialog.js';
@@ -160,7 +165,75 @@ async function onVaultUnlocked(): Promise<void> {
     if (btn) btn.onclick = (): void => openConnModal(null);
   }
   paintRightPanePlaceholder();
+  // Try to restore the location from the URL (e.g. user reloaded, or pasted
+  // a shared link). Routing applies only to the active (left) pane.
+  await tryRestoreFromUrl();
 }
+
+// Apply a parsed Route to the active pane, going through the normal
+// selectConnection / openBucket / loadObjects paths. Each of those normally
+// calls navigateTo() to update the URL, so we suppress that during apply
+// (the URL is already where we want it) and emit a single replaceState at
+// the end to make sure it's exact.
+async function applyRoute(r: Route): Promise<void> {
+  if (!r.connId) return;
+  const conn = State.connections.find((c) => c.id === r.connId);
+  if (!conn) {
+    toast(`Conexión "${r.connId.slice(0, 8)}…" no encontrada en tu bóveda local.`, 'info', 6000);
+    navigateTo({}, { replace: true });
+    return;
+  }
+  setRouterSuppress(true);
+  try {
+    await selectConnection(conn.id, 'left', { autoExpand: true, skipPaint: !!r.bucket });
+    if (r.bucket) {
+      // Verify the bucket exists in the freshly loaded list (or in the manual
+      // bucket list of the connection) — opening one that isn't accessible
+      // would just toast an error in loadObjects, which is fine.
+      await openBucket(r.bucket, 'left');
+      if (r.prefix) {
+        // Navigate into the saved prefix via a single loadObjects call.
+        getPane('left').prefix = r.prefix;
+        await loadObjects('left');
+      }
+    }
+  } finally {
+    setRouterSuppress(false);
+  }
+  // Replace the URL with the exact route so any normalization (trailing
+  // slashes, etc.) is reflected. No new history entry.
+  const pane = getPane('left');
+  navigateTo({
+    connId: pane.activeConnId || undefined,
+    bucket: pane.activeBucket || undefined,
+    prefix: pane.prefix,
+  }, { replace: true });
+}
+
+async function tryRestoreFromUrl(): Promise<void> {
+  const r = parseLocation();
+  if (!r.connId) return;
+  await applyRoute(r);
+}
+
+// Browser back/forward — popstate gives us a new URL to apply. Same path
+// as restore-from-URL.
+onRouteChange((r) => { void applyRoute(r); });
+
+// When the user clicks the right pane, the URL should reflect IT. Use
+// replaceState so we don't pile up history entries every time focus moves.
+subscribe('activePane', () => {
+  const pane = getPane();
+  if (!pane.activeConnId) {
+    navigateTo({}, { replace: true });
+    return;
+  }
+  navigateTo({
+    connId: pane.activeConnId,
+    bucket: pane.activeBucket || undefined,
+    prefix: pane.prefix,
+  }, { replace: true });
+});
 
 (async (): Promise<void> => {
   const ok = await authInit();

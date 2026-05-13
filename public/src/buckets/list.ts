@@ -14,6 +14,7 @@ import { toast, errorIdOpts } from '../util/toast.js';
 import { paneEl, paneElMaybe } from '../util/dom.js';
 import { confirmDialog } from '../util/dialog.js';
 import { loadObjects } from '../objects/grid.js';
+import { navigateTo } from '../router/index.js';
 
 interface BucketRow { Name: string; CreationDate: string | null }
 
@@ -39,6 +40,10 @@ export async function openBucket(name: string, paneId?: PaneId): Promise<void> {
   pane.activeBucket = name;
   pane.prefix = '';
   renderTree();
+  // Sync URL when this happens on the active pane.
+  if (p === State.activePane && pane.activeConnId) {
+    navigateTo({ connId: pane.activeConnId, bucket: name, prefix: '' });
+  }
   await loadVersioning(p);
   await loadObjects(p);
   onBucketOpened(p);

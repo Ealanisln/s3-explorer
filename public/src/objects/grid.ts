@@ -20,6 +20,7 @@ import {
   openObjectInNewTab, copyObjectLink,
 } from './actions.js';
 import { runRecursiveSearchForLink, updateSearchBanner, restoreFilterForContext } from './search.js';
+import { navigateTo } from '../router/index.js';
 import { runTransfer } from '../panes/transfer.js';
 import type { S3Object, SearchFolderInfo } from '../types.js';
 
@@ -650,6 +651,16 @@ export async function loadObjects(paneId?: PaneId): Promise<void> {
   updateSearchBanner(p);
   renderBreadcrumbs(p);
   closeInfoPanel(p);
+  // Sync URL when this load is for the active pane. Covers folder-click,
+  // breadcrumb-click, search-folder-click, openBucket — every navigation
+  // ends up here. No-op when the URL already matches (navigateTo guards it).
+  if (p === State.activePane && pane.activeConnId && pane.activeBucket) {
+    navigateTo({
+      connId: pane.activeConnId,
+      bucket: pane.activeBucket,
+      prefix: pane.prefix,
+    });
+  }
   const loader = showLoadingRow(p);
   try {
     const params = new URLSearchParams({ prefix: pane.prefix });
