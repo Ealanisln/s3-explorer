@@ -48,6 +48,7 @@ import {
 import { initReindex, onBucketOpened as reindexOnBucketOpened } from './index/reindex.js';
 import { initThemeToggle, applyTheme, loadTheme } from './util/theme.js';
 import { initDrawer } from './util/drawer.js';
+import { initResizers } from './util/resizers.js';
 import { mountIcons } from './util/icons.js';
 import { initModalTabs, initExpandButtons } from './util/modal-ux.js';
 import {
@@ -114,6 +115,7 @@ initModalDismiss();
 initLockButton();
 initThemeToggle();
 initDrawer();
+initResizers();
 initActivation();
 initDualToggle();
 initModalTabs();

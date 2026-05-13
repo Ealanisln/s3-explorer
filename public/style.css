@@ -193,12 +193,57 @@ code, .mono { font-family: var(--font-mono); }
    Sidebar
    ============================================================ */
 .sidebar {
+  position: relative;
   background: var(--surface-2);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   min-height: 0;
   font-size: 13.5px;
+}
+
+/* ── Drag handles for resizable sidebar + info panel ─────────────────── */
+.resize-handle {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  user-select: none;
+  background: transparent;
+  z-index: 10;
+  transition: background var(--t-fast);
+}
+.resize-handle::after {
+  /* Visible bar drawn inside the wider hit area so the cursor target is
+     forgiving (6px) but the visual line is crisp (1px). */
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: transparent;
+  transition: background var(--t-fast), width var(--t-fast);
+}
+.resize-handle:hover::after,
+.resize-handle.dragging::after {
+  background: var(--accent);
+  width: 2px;
+}
+.resize-handle-sidebar {
+  right: -3px;  /* straddle the border so the hit area is centered */
+}
+.resize-handle-info {
+  left: -3px;
+}
+/* Hide the info-panel handle when the panel is closed (translated off-screen)
+   — otherwise the handle's hit area still catches clicks at the edge. */
+.info-panel:not(.open) .resize-handle-info { display: none; }
+/* While dragging, suppress text selection across the page. */
+body.is-resizing { cursor: col-resize !important; user-select: none; }
+body.is-resizing * { user-select: none !important; }
+@media (max-width: 768px) {
+  /* Drawer mode — no resizing on mobile. */
+  .resize-handle { display: none; }
 }
 .brand {
   display: flex;
