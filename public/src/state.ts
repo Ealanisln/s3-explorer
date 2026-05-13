@@ -2,15 +2,29 @@
 // — just a plain object, written from feature modules, read from render modules.
 // The `subscribe` helper is a thin EventTarget wrapper for cross-cutting fields
 // (active connection, active bucket) where multiple panels need to react.
+//
+// Pane model (introduced with the two-pane explorer):
+//   - Fields that are tied to a specific viewport (active bucket, prefix,
+//     listed objects, selection, etc.) live in a PaneState — there's one per
+//     pane (left, right).
+//   - Fields that span the whole app (the user's list of connections, the
+//     per-conn bucket caches) stay flat at the top.
+//   - The exported `State` is a Proxy that transparently forwards pane-field
+//     reads/writes to `panes[activePane]`. This keeps the existing flat-shape
+//     API for the single-pane code path while letting new drag-and-drop /
+//     transfer code address either pane directly via `State.panes.left` /
+//     `State.panes.right`.
 
 import type {
   Connection, S3Object, SortField, SortDir, SearchMeta, SearchFolderInfo,
 } from './types.js';
 
-export interface AppState {
-  connections: Connection[];
+export type PaneId = 'left' | 'right';
+
+export interface BucketRow { Name: string; CreationDate: string | null }
+
+export interface PaneState {
   activeConnId: string | null;
-  buckets: { Name: string; CreationDate: string | null }[];
   activeBucket: string | null;
   prefix: string;
   objects: S3Object[];
@@ -27,23 +41,74 @@ export interface AppState {
   listingPages?: number;
 }
 
-export const State: AppState = {
+// The flat shape that consumers see. The pane-fields are virtual — at runtime
+// they're served by the Proxy below from `panes[activePane]`.
+export interface AppState extends PaneState {
+  connections: Connection[];
+  buckets: BucketRow[];
+  panes: { left: PaneState; right: PaneState };
+  activePane: PaneId;
+  dualMode: boolean;
+}
+
+function newPane(): PaneState {
+  return {
+    activeConnId: null,
+    activeBucket: null,
+    prefix: '',
+    objects: [],
+    prefixes: [],
+    selected: new Set<string>(),
+    versioning: 'Disabled',
+    filterTerm: '',
+    searchResults: null,
+    searchFolderHits: null,
+    searchMeta: null,
+    showDeleted: false,
+    sort: { field: 'name', dir: 'asc' },
+  };
+}
+
+// The set of keys that should be redirected to the active pane. Anything not
+// here is read/written directly on the raw object.
+const PANE_KEYS = new Set<keyof PaneState>([
+  'activeConnId', 'activeBucket', 'prefix', 'objects', 'prefixes', 'selected',
+  'versioning', 'filterTerm', 'searchResults', 'searchFolderHits', 'searchMeta',
+  'showDeleted', 'sort', 'listingTruncated', 'listingPages',
+]);
+
+interface RawState {
+  connections: Connection[];
+  buckets: BucketRow[];
+  panes: { left: PaneState; right: PaneState };
+  activePane: PaneId;
+  dualMode: boolean;
+}
+
+const raw: RawState = {
   connections: [],
-  activeConnId: null,
   buckets: [],
-  activeBucket: null,
-  prefix: '',
-  objects: [],
-  prefixes: [],
-  selected: new Set<string>(),
-  versioning: 'Disabled',
-  filterTerm: '',
-  searchResults: null,
-  searchFolderHits: null,
-  searchMeta: null,
-  showDeleted: false,
-  sort: { field: 'name', dir: 'asc' },
+  panes: { left: newPane(), right: newPane() },
+  activePane: 'left',
+  dualMode: false,
 };
+
+export const State: AppState = new Proxy(raw, {
+  get(target, prop: string | symbol): unknown {
+    if (typeof prop === 'string' && PANE_KEYS.has(prop as keyof PaneState)) {
+      return target.panes[target.activePane][prop as keyof PaneState];
+    }
+    return (target as unknown as Record<string | symbol, unknown>)[prop];
+  },
+  set(target, prop: string | symbol, value: unknown): boolean {
+    if (typeof prop === 'string' && PANE_KEYS.has(prop as keyof PaneState)) {
+      (target.panes[target.activePane] as unknown as Record<string, unknown>)[prop] = value;
+      return true;
+    }
+    (target as unknown as Record<string | symbol, unknown>)[prop] = value;
+    return true;
+  },
+}) as unknown as AppState;
 
 // Tiny event bus for fields that have multiple readers. Use sparingly —
 // direct read is fine for one-off lookups; subscribe is for staying in sync.
@@ -61,4 +126,16 @@ export function subscribe(key: string, fn: () => void): () => void {
 
 export function activeConn(): Connection | undefined {
   return State.connections.find((c) => c.id === State.activeConnId);
+}
+
+// Pane-aware accessor. Defaults to active pane. Useful for the drag-and-drop
+// path which needs to read both sides simultaneously.
+export function getPane(id?: PaneId): PaneState {
+  return raw.panes[id || raw.activePane];
+}
+
+// Returns the connection object for a specific pane (defaults to active).
+export function paneConn(id?: PaneId): Connection | undefined {
+  const pane = getPane(id);
+  return State.connections.find((c) => c.id === pane.activeConnId);
 }
