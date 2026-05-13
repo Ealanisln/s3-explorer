@@ -674,6 +674,58 @@ tr.deleted .badge-deleted {
   .pane.with-info, .main.with-info { padding-right: 0; }
 }
 
+/* TRANSFER PROGRESS MODAL */
+.transfer-progress-bar {
+  height: 8px;
+  background: var(--bg-3);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+.transfer-progress-bar > div {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width .12s linear;
+}
+.transfer-item-list {
+  max-height: 320px;
+  overflow-y: auto;
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.transfer-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.transfer-item:last-child { border-bottom: 0; }
+.transfer-item .status { width: 18px; text-align: center; flex-shrink: 0; font-size: 14px; }
+.transfer-item .key { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'Consolas', monospace; font-size: 12px; }
+.transfer-item.done { color: var(--green); }
+.transfer-item.error { color: var(--red); }
+.transfer-item.error .key { color: var(--red); }
+.transfer-item.active .status::after { content: '⏳'; }
+.transfer-item.done .status::after { content: '✓'; }
+.transfer-item.error .status::after { content: '✕'; }
+.transfer-item.pending .status::after { content: '·'; color: var(--text-dim); }
+.transfer-item .err-msg { font-size: 11px; color: var(--text-dim); margin-left: 6px; }
+
+/* Drop target highlight on the receiving pane */
+.pane.drop-target::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 3px dashed var(--accent);
+  background: rgba(82, 156, 255, 0.08);
+  z-index: 6;
+}
+
 /* AUTH OVERLAY */
 .auth-overlay {
   position: fixed; inset: 0;

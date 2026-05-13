@@ -30,8 +30,9 @@ import { initConnModal, openConnModal } from './connections/modal.js';
 import { initImport } from './connections/import.js';
 import { configureBuckets } from './buckets/list.js';
 import {
-  loadObjects, renderGrid, initBatchBar, toggleEmpty,
+  loadObjects, renderGrid, initBatchBar, toggleEmpty, initDragDrop,
 } from './objects/grid.js';
+import { initTransferModalDismiss } from './panes/transfer.js';
 import {
   initPreview, configurePreview,
 } from './objects/preview.js';
@@ -109,7 +110,9 @@ for (const p of PANES) {
   initPaneForms(p);
   initReindex(p);
   initBatchBar(p);
+  initDragDrop(p);
 }
+initTransferModalDismiss();
 
 // ─── Boot ───────────────────────────────────────────────────────────────────
 
