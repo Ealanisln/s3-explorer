@@ -185,11 +185,9 @@ code, .mono { font-family: var(--font-mono); }
   z-index: 1;
 }
 
-/* When the info panel is open, expand the right gutter (was a fixed sidebar
-   layout in the old design; now it slides over). The class is kept so TS
-   doesn't break, but the visual is a no-op — info-panel is absolutely
-   positioned over the pane. */
-.pane.with-info, .main.with-info {}
+/* `.pane.with-info` is set by info-panel.ts when the slide-over is open.
+   Visual is a no-op now (the .info-panel is absolutely positioned), but
+   the class is observable from TS for layout-aware features. */
 
 /* ============================================================
    Sidebar
@@ -209,9 +207,7 @@ code, .mono { font-family: var(--font-mono); }
   padding: 16px 18px 14px;
   border-bottom: 1px solid var(--divider);
 }
-/* `.logo` is the legacy class; `.brand-mark` is the handoff name. Both
-   render as the small terracota badge on the brand row. */
-.logo, .brand-mark {
+.brand-mark {
   width: 36px; height: 36px;
   border-radius: 8px;
   background: var(--accent);
@@ -348,9 +344,6 @@ code, .mono { font-family: var(--font-mono); }
 /* ============================================================
    Toolbar
    ============================================================ */
-.main, .pane {
-  /* Both selectors kept for legacy `.main` references. */
-}
 .toolbar {
   display: flex; align-items: center; gap: 8px;
   padding: 12px 20px;
@@ -589,14 +582,14 @@ code, .mono { font-family: var(--font-mono); }
   overflow: auto;
   position: relative;
 }
-.empty-state, .empty {
+.empty {
   flex: 1;
   display: flex; align-items: center; justify-content: center;
   padding: 48px 32px;
   text-align: center;
 }
-.empty-state > *, .empty > * { max-width: 540px; }
-.empty-state h2, .empty h1, .empty h2 {
+.empty > * { max-width: 540px; }
+.empty h1, .empty h2 {
   font-family: var(--font-serif);
   font-weight: 400;
   font-size: 36px;
@@ -605,7 +598,7 @@ code, .mono { font-family: var(--font-mono); }
   color: var(--text);
   margin: 0 0 14px;
 }
-.empty-state p, .empty p {
+.empty p {
   font-size: 15px;
   line-height: 1.55;
   color: var(--text-dim);
@@ -735,9 +728,8 @@ tr.deleted .badge-deleted {
   margin-left: 8px;
 }
 
-/* File-type badges. Legacy markup uses .icon-file/.icon-folder/.icon-img/
-   .icon-doc; the new pattern is .ft-badge.pdf etc. Both render identically. */
-.ft-badge, .icon-file, .icon-folder, .icon-img, .icon-doc {
+/* File-type badges */
+.ft-badge {
   width: 32px; height: 22px;
   border-radius: 3px;
   display: grid; place-items: center;
@@ -748,16 +740,16 @@ tr.deleted .badge-deleted {
   color: #fff;
   flex-shrink: 0;
 }
-.ft-badge.folder, .icon-folder {
+.ft-badge.folder {
   background: transparent;
   border: 1px solid var(--border-strong);
   color: var(--text-dim);
 }
 .ft-badge.pdf { background: var(--ft-pdf); }
-.ft-badge.doc, .icon-doc { background: var(--ft-doc); }
-.ft-badge.img, .icon-img { background: var(--ft-img); }
+.ft-badge.doc { background: var(--ft-doc); }
+.ft-badge.img { background: var(--ft-img); }
 .ft-badge.zip { background: var(--ft-zip); }
-.ft-badge.def, .icon-file { background: var(--ft-default); }
+.ft-badge.def { background: var(--ft-default); }
 
 /* Row action button (the per-row menu trigger that shows on hover) */
 .menu-btn, .row-menu, .row-action-btn {
@@ -1209,7 +1201,6 @@ tr.deleted .badge-deleted {
   align-items: flex-start;
 }
 .info-title { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
-.info-title .icon-file,
 .info-title [data-el="info-icon"] {
   width: 36px; height: 36px;
   border-radius: 5px;
@@ -1376,7 +1367,7 @@ tr.deleted .badge-deleted {
   padding-bottom: 18px;
   border-bottom: 1px solid var(--divider);
 }
-.auth-brand .logo, .auth-brand .brand-mark {
+.auth-brand .brand-mark {
   width: 40px; height: 40px;
   font-size: 17px;
 }
