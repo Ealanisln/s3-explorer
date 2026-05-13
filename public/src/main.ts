@@ -28,7 +28,7 @@ import {
 } from './connections/list.js';
 import { initConnModal, openConnModal } from './connections/modal.js';
 import { initImport } from './connections/import.js';
-import { configureBuckets } from './buckets/list.js';
+import { configureBuckets, setTreeRenderer } from './buckets/list.js';
 import {
   loadObjects, renderGrid, initBatchBar, toggleEmpty, initDragDrop,
 } from './objects/grid.js';
@@ -74,6 +74,7 @@ configureUpload({ onUploadComplete: (paneId) => loadObjects(paneId) });
 configureSearch({ onRenderGrid: (paneId) => renderGrid(paneId), onLoadObjects: (paneId) => loadObjects(paneId) });
 configureConnections({ openEditModal: (c) => openConnModal(c) });
 configureBuckets({ onBucketOpened: (paneId) => reindexOnBucketOpened(paneId) });
+setTreeRenderer(() => renderConnections());
 configureLock({
   onLock: () => {
     if (!confirm('Bloquear la bóveda? Tendrás que ingresar la contraseña de nuevo.')) return;

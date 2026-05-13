@@ -97,6 +97,23 @@ export function renderBreadcrumbs(paneId?: PaneId): void {
   withPane(p, () => {
     const el = paneEl('breadcrumbs', p);
     el.innerHTML = '';
+
+    // Connection name (non-navigable label — clicking does nothing useful)
+    // shown so the user knows which S3 endpoint they're looking at, especially
+    // when both panes are visible and may be browsing different connections.
+    const conn = State.connections.find((c) => c.id === State.activeConnId);
+    if (conn) {
+      const connSpan = document.createElement('span');
+      connSpan.className = 'crumb-conn';
+      connSpan.textContent = conn.name;
+      connSpan.title = conn.endpoint || 'AWS S3';
+      el.appendChild(connSpan);
+      const sep = document.createElement('span');
+      sep.className = 'sep';
+      sep.textContent = '/';
+      el.appendChild(sep);
+    }
+
     const parts: { name: string; prefix: string }[] = [];
     parts.push({ name: State.activeBucket || '', prefix: '' });
     const segs = State.prefix.split('/').filter(Boolean);
