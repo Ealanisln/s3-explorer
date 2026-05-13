@@ -84,6 +84,37 @@ lint:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 # -----------------------------------------------------------------------------
+# Test — Vitest unit + integration suite
+#
+# Unlike `audit` and `lint`, this job DOES need better-sqlite3's native
+# binding (the auth tests boot the real src/db with DB_PATH=:memory:), so
+# we install python3/g++/make and run npm ci WITHOUT --ignore-scripts.
+# Slower install path (~30s extra) is the cost of running the suite that
+# protects the security invariants.
+# -----------------------------------------------------------------------------
+test:
+  stage: quality
+  image: node:20-alpine
+  variables:
+    NODE_ENV: test
+  script:
+    - apk add --no-cache python3 make g++
+    - npm ci --no-audit --no-fund
+    - npx vitest run --reporter=default --reporter=junit --outputFile=test-results.xml
+  artifacts:
+    when: always
+    reports:
+      junit: test-results.xml
+    expire_in: 1 week
+  cache:
+    key: $CI_COMMIT_REF_SLUG
+    paths:
+      - node_modules/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# -----------------------------------------------------------------------------
 # Caddyfile validation — must run separately because needs caddy image
 # -----------------------------------------------------------------------------
 caddyfile:
@@ -148,6 +179,7 @@ ci-gate:
     - echo "✓ secrets passed"
     - echo "✓ audit passed"
     - echo "✓ lint passed"
+    - echo "✓ test passed"
     - echo "✓ caddyfile passed"
     - echo "✓ image-scan passed"
     - echo "All CI checks green."
@@ -155,6 +187,7 @@ ci-gate:
     - secrets
     - audit
     - lint
+    - test
     - caddyfile
     - image-scan
   rules:
