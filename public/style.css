@@ -485,6 +485,16 @@ body.is-resizing * { user-select: none !important; }
 .crumbs .sep { color: var(--text-faint); padding: 0 2px; user-select: none; }
 .crumbs .current { color: var(--text); font-weight: 500; }
 
+/* Breadcrumb segments are also drop targets: dropping a row onto a parent
+   segment moves/copies it UP the hierarchy. Highlight mirrors the folder-row
+   drop-target style so the gesture feels consistent. */
+.crumbs a.drop-target-crumb {
+  background: var(--accent-soft);
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+  font-weight: 600;
+}
+
 .actions {
   display: flex; align-items: center; gap: 6px;
   flex-wrap: wrap; row-gap: 6px;

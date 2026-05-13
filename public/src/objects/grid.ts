@@ -128,17 +128,80 @@ export function renderBreadcrumbs(paneId?: PaneId): void {
       const link = document.createElement('a');
       link.textContent = part.name;
       link.className = last ? 'current' : '';
-      if (!last) link.onclick = (): void => {
-        setActivePane(p);
-        getPane(p).prefix = part.prefix;
-        void loadObjects(p);
-      };
+      if (!last) {
+        link.onclick = (): void => {
+          setActivePane(p);
+          getPane(p).prefix = part.prefix;
+          void loadObjects(p);
+        };
+        // Each non-current breadcrumb is also a drop target so the user can
+        // drag a row UP the hierarchy. The last segment (current folder) is
+        // skipped — dropping into "where you already are" is a no-op anyway.
+        attachBreadcrumbDropHandlers(link, part.prefix, p);
+      }
       el.appendChild(link);
       if (!last) {
         const s = document.createElement('span'); s.className = 'sep'; s.textContent = '/';
         el.appendChild(s);
       }
     });
+  });
+}
+
+// Allow dragging a row onto a breadcrumb segment to move/copy UP the
+// hierarchy (parent folder, grandparent, all the way to bucket root). Same
+// validation as the folder-row drop handler — the destination is the
+// breadcrumb's accumulated prefix.
+function attachBreadcrumbDropHandlers(link: HTMLAnchorElement, destPrefix: string, paneId: PaneId): void {
+  let hovering = false;
+  link.addEventListener('dragenter', (e: DragEvent) => {
+    if (!e.dataTransfer?.types.includes(DND_MIME)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!hovering) { hovering = true; link.classList.add('drop-target-crumb'); }
+  });
+  link.addEventListener('dragover', (e: DragEvent) => {
+    if (!e.dataTransfer?.types.includes(DND_MIME)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  });
+  link.addEventListener('dragleave', (e: DragEvent) => {
+    if (!e.dataTransfer?.types.includes(DND_MIME)) return;
+    if (link.contains(e.relatedTarget as Node)) return;
+    hovering = false;
+    link.classList.remove('drop-target-crumb');
+  });
+  link.addEventListener('drop', (e: DragEvent) => {
+    if (!e.dataTransfer?.types.includes(DND_MIME)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    hovering = false;
+    link.classList.remove('drop-target-crumb');
+    const raw = e.dataTransfer.getData(DND_MIME);
+    if (!raw) return;
+    let payload: DndPayload;
+    try { payload = JSON.parse(raw) as DndPayload; } catch { return; }
+
+    const samePane = payload.sourcePaneId === paneId;
+    const err = validateFolderDrop(payload, destPrefix, samePane);
+    if (err) { toast(err, 'info', 4000); return; }
+
+    if (payload.kind === 'folder') {
+      void runTransfer({
+        sourcePaneId: payload.sourcePaneId,
+        destPaneId: paneId,
+        folder: { sourcePrefix: payload.prefix },
+        destPrefixOverride: destPrefix,
+      });
+    } else {
+      void runTransfer({
+        sourcePaneId: payload.sourcePaneId,
+        destPaneId: paneId,
+        keys: payload.keys,
+        destPrefixOverride: destPrefix,
+      });
+    }
   });
 }
 
