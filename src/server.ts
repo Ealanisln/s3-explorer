@@ -12,6 +12,7 @@ import { searchRouter } from './s3/routes/search';
 import { presignRouter } from './s3/routes/presign';
 import { uploadRouter } from './s3/routes/upload';
 import { indexRouter } from './index/routes';
+import { transferRouter } from './transfer/routes';
 
 const app = express();
 
@@ -73,6 +74,7 @@ app.use('/api', searchRouter(buildClient));
 app.use('/api', presignRouter(buildClient));
 app.use('/api', uploadRouter(buildClient));
 app.use('/api', indexRouter(buildClient));
+app.use('/api', transferRouter());
 
 // 404 + final error handler. Never leak stack traces.
 app.use((_req: Request, res: Response) => res.status(404).json({ message: 'Not found' }));
