@@ -18,7 +18,7 @@ import { openInfoPanel, closeInfoPanel } from './info-panel.js';
 import {
   downloadObject, shareObject, deleteObject, restoreDeleteMarker, openRename,
 } from './actions.js';
-import { runRecursiveSearchForLink, updateSearchBanner } from './search.js';
+import { runRecursiveSearchForLink, updateSearchBanner, restoreFilterForContext } from './search.js';
 import { runTransfer } from '../panes/transfer.js';
 import type { S3Object, SearchFolderInfo } from '../types.js';
 
@@ -609,6 +609,9 @@ export async function loadObjects(paneId?: PaneId): Promise<void> {
   (paneEl('search-input', p) as HTMLInputElement).disabled = false;
   pane.searchResults = null;
   pane.searchMeta = null;
+  // Restore any persisted local filter for this (conn, bucket, prefix) combo
+  // BEFORE rendering, so the grid paint already applies the filter.
+  restoreFilterForContext(p);
   updateSearchBanner(p);
   renderBreadcrumbs(p);
   closeInfoPanel(p);

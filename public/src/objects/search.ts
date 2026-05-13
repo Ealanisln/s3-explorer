@@ -17,6 +17,7 @@ import { State, getPane, setActivePane, withPane } from '../state.js';
 import type { PaneId } from '../state.js';
 import { api, authHeaders } from '../api/client.js';
 import { paneEl, paneRoot, escapeHtml } from '../util/dom.js';
+import { saveFilter, loadFilter } from '../util/filter-persist.js';
 import type { S3Object, SearchFolderInfo } from '../types.js';
 
 let onRenderGrid: (paneId: PaneId) => void = () => undefined;
@@ -52,8 +53,31 @@ export function clearSearch(paneId: PaneId): void {
   pane.searchFolderHits = null;
   pane.searchMeta = null;
   paneEl('btn-search-clear', paneId).style.display = 'none';
+  // Drop the persisted entry for the current context so this folder no longer
+  // restores a filter on next visit (matches user intent of "clear").
+  if (pane.activeConnId && pane.activeBucket) {
+    saveFilter(pane.activeConnId, pane.activeBucket, pane.prefix, '');
+  }
   updateSearchBanner(paneId);
   onRenderGrid(paneId);
+}
+
+// Pull the persisted filter (if any) for the pane's current context and
+// reflect it into both the pane state and the visible search input. Called
+// from loadObjects() whenever a navigation lands on a new prefix/bucket.
+export function restoreFilterForContext(paneId: PaneId): void {
+  const pane = getPane(paneId);
+  if (!pane.activeConnId || !pane.activeBucket) {
+    pane.filterTerm = '';
+    (paneEl('search-input', paneId) as HTMLInputElement).value = '';
+    paneEl('btn-search-clear', paneId).style.display = 'none';
+    return;
+  }
+  const stored = loadFilter(pane.activeConnId, pane.activeBucket, pane.prefix);
+  pane.filterTerm = stored;
+  const input = paneEl('search-input', paneId) as HTMLInputElement;
+  input.value = stored;
+  paneEl('btn-search-clear', paneId).style.display = stored ? 'block' : 'none';
 }
 
 interface IndexStatus {
@@ -297,6 +321,12 @@ export function initSearch(paneId: PaneId): void {
       pane.searchResults = null;
       pane.searchMeta = null;
       updateSearchBanner(paneId);
+    }
+    // Persist the local filter for this connection+bucket+prefix combo so
+    // navigating away and coming back keeps the term. Recursive search
+    // (Enter) is intentionally NOT persisted — it's a one-shot action.
+    if (pane.activeConnId && pane.activeBucket) {
+      saveFilter(pane.activeConnId, pane.activeBucket, pane.prefix, pane.filterTerm);
     }
     if (searchDebounce[paneId]) clearTimeout(searchDebounce[paneId]!);
     searchDebounce[paneId] = setTimeout(() => onRenderGrid(paneId), 80);
