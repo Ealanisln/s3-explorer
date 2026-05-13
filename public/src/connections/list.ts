@@ -1,6 +1,6 @@
 // Sidebar connection list + per-row menu + selectConnection.
 
-import { State, activeConn, getPane, subscribe } from '../state.js';
+import { State, getPane, subscribe } from '../state.js';
 import type { PaneId } from '../state.js';
 import { api } from '../api/client.js';
 import { saveConnections } from '../vault/persistence.js';
@@ -52,6 +52,7 @@ function showConnMenu(e: MouseEvent, c: Connection): void {
           if (pane.activeConnId === c.id) {
             pane.activeConnId = null;
             pane.activeBucket = null;
+            pane.buckets = [];
           }
         }
         clearMain();
@@ -88,15 +89,18 @@ export async function selectConnection(id: string, paneId?: PaneId): Promise<voi
   pane.activeConnId = id;
   pane.activeBucket = null;
   pane.prefix = '';
+  pane.buckets = [];
   renderConnections();
   const statusEl = $('conn-status');
   statusEl.classList.remove('online');
   statusEl.textContent = 'Conectando...';
-  const conn = activeConn();
+  // Resolve the connection directly from the pane, not via the proxied
+  // active-pane reader — `paneId` may be the non-active side.
+  const conn = State.connections.find((c) => c.id === pane.activeConnId);
   if (!conn) return;
   try {
     if (conn.buckets && conn.buckets.length) {
-      State.buckets = conn.buckets.map((name) => ({ Name: name, CreationDate: null }));
+      pane.buckets = conn.buckets.map((name) => ({ Name: name, CreationDate: null }));
       renderBuckets();
       $('buckets-section').style.display = 'block';
       statusEl.classList.add('online');
@@ -105,8 +109,15 @@ export async function selectConnection(id: string, paneId?: PaneId): Promise<voi
       paneEl('empty', p).innerHTML = '<h2>Selecciona un bucket</h2><p>Elige un bucket en la barra lateral para navegar tus archivos.</p>';
       return;
     }
-    const { buckets } = await api<{ buckets: { Name: string; CreationDate: string | null }[] }>('/api/buckets');
-    State.buckets = buckets;
+    // Fetch /api/buckets with this pane's connection headers. The default
+    // `authHeaders()` only reads the active pane — if the user clicked the
+    // sidebar while focused on the other side, the wrong creds would go out.
+    // Build the headers explicitly from the pane we're connecting on.
+    const { buckets } = await api<{ buckets: { Name: string; CreationDate: string | null }[] }>(
+      '/api/buckets',
+      { headers: connHeaders(conn) },
+    );
+    pane.buckets = buckets;
     renderBuckets();
     $('buckets-section').style.display = 'block';
     statusEl.classList.add('online');
@@ -131,11 +142,29 @@ export async function selectConnection(id: string, paneId?: PaneId): Promise<voi
   }
 }
 
+// Same shape as api/client.ts authHeaders() but parameterized on a Connection,
+// so we can issue requests on behalf of a non-active pane (e.g. when the user
+// clicks the sidebar while focused on the other side).
+function connHeaders(c: Connection): Record<string, string> {
+  return {
+    'x-s3-endpoint': c.endpoint || '',
+    'x-s3-region': c.region || 'us-east-1',
+    'x-s3-access-key': c.accessKey,
+    'x-s3-secret-key': c.secretKey,
+    'x-s3-session-token': c.sessionToken || '',
+    'x-s3-path-style': c.pathStyle ? 'true' : 'false',
+    'x-s3-conn-id': c.id,
+  };
+}
+
 // When the active pane changes (user clicks the other side), refresh the
-// sidebar so its highlight reflects whichever pane is now focused.
+// sidebar so its highlight + bucket list reflect whichever pane is now focused.
 subscribe('activePane', () => {
   renderConnections();
   renderBuckets();
+  // Hide the buckets section when the active pane has no connection yet.
+  const hasBuckets = getPane().buckets.length > 0;
+  $('buckets-section').style.display = hasBuckets ? 'block' : 'none';
 });
 
 export function clearMain(): void {
