@@ -26,6 +26,12 @@ export interface BucketRow { Name: string; CreationDate: string | null }
 export interface PaneState {
   activeConnId: string | null;
   activeBucket: string | null;
+  // Per-pane bucket cache. Filled when the user selects a connection for
+  // this pane; the sidebar displays whichever pane is active. Pane-scoped
+  // (not global) so the two panes can browse independent connections with
+  // independent bucket lists — and so a bucket click can always reach the
+  // connection that loaded the displayed list.
+  buckets: BucketRow[];
   prefix: string;
   objects: S3Object[];
   prefixes: string[];
@@ -45,7 +51,6 @@ export interface PaneState {
 // they're served by the Proxy below from `panes[activePane]`.
 export interface AppState extends PaneState {
   connections: Connection[];
-  buckets: BucketRow[];
   panes: { left: PaneState; right: PaneState };
   activePane: PaneId;
   dualMode: boolean;
@@ -55,6 +60,7 @@ function newPane(): PaneState {
   return {
     activeConnId: null,
     activeBucket: null,
+    buckets: [],
     prefix: '',
     objects: [],
     prefixes: [],
@@ -72,14 +78,13 @@ function newPane(): PaneState {
 // The set of keys that should be redirected to the active pane. Anything not
 // here is read/written directly on the raw object.
 const PANE_KEYS = new Set<keyof PaneState>([
-  'activeConnId', 'activeBucket', 'prefix', 'objects', 'prefixes', 'selected',
+  'activeConnId', 'activeBucket', 'buckets', 'prefix', 'objects', 'prefixes', 'selected',
   'versioning', 'filterTerm', 'searchResults', 'searchFolderHits', 'searchMeta',
   'showDeleted', 'sort', 'listingTruncated', 'listingPages',
 ]);
 
 interface RawState {
   connections: Connection[];
-  buckets: BucketRow[];
   panes: { left: PaneState; right: PaneState };
   activePane: PaneId;
   dualMode: boolean;
@@ -87,7 +92,6 @@ interface RawState {
 
 const raw: RawState = {
   connections: [],
-  buckets: [],
   panes: { left: newPane(), right: newPane() },
   activePane: 'left',
   dualMode: false,

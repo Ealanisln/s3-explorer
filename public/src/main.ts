@@ -75,6 +75,7 @@ configureLock({
     for (const p of PANES) {
       getPane(p).activeConnId = null;
       getPane(p).activeBucket = null;
+      getPane(p).buckets = [];
     }
     renderConnections();
     toggleEmpty(true, 'left');
