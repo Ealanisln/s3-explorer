@@ -5,8 +5,26 @@ import { sanitizeError } from '../s3/errors';
 import { buildSideClient, isSameConnection } from '../s3/dual-client';
 import { validateBody } from '../http/validate';
 import { transferSchema, type TransferRequest } from './schemas';
-import { transferSameConn, transferCrossConn, type ProgressEvent } from './transfer';
+import {
+  transferSameConn, transferCrossConn, transferRecursive,
+  type ProgressEvent,
+} from './transfer';
 import { audit } from '../auth/audit';
+
+// Defaults for prefix-based (recursive) transfers. Read once at module load.
+const TRANSFER_CONCURRENCY = Math.max(
+  1, Math.min(16, parseInt(process.env.TRANSFER_CONCURRENCY || '4', 10) || 4),
+);
+const TRANSFER_MAX_PREFIX_ITEMS = Math.max(
+  1, parseInt(process.env.TRANSFER_MAX_PREFIX_ITEMS || '100000', 10) || 100000,
+);
+
+// Normalize a "prefix" string to end with '/' UNLESS it's empty (bucket root).
+// Empty prefix means "entire bucket" — leave as-is.
+function normalizePrefix(p: string): string {
+  if (p === '') return '';
+  return p.endsWith('/') ? p : p + '/';
+}
 
 export function transferRouter(): Router {
   const r = Router();
@@ -46,12 +64,15 @@ export function transferRouter(): Router {
     }
 
     const sameConn = isSameConnection(req);
+    const isPrefixMode = body.prefix !== undefined;
     if (!sameConn) {
       audit('transfer_cross_connection', {
         username: req.user?.username,
         sourceBucket: body.sourceBucket,
         destBucket: body.destBucket,
-        count: body.items.length,
+        count: body.items?.length,
+        prefixSource: body.prefix?.source,
+        prefixDest: body.prefix?.dest,
         mode: body.mode,
         sourceEndpoint: req.header('x-s3-source-endpoint'),
         destEndpoint: req.header('x-s3-dest-endpoint'),
@@ -63,26 +84,55 @@ export function transferRouter(): Router {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
+    // SSE writes — track last activity so the keepalive can decide whether
+    // to emit. Calling `send()` resets the idle timer.
+    let lastEmit = Date.now();
     const send = (e: ProgressEvent): void => {
-      try { res.write(`data: ${JSON.stringify(e)}\n\n`); } catch { /* client disconnected */ }
+      try { res.write(`data: ${JSON.stringify(e)}\n\n`); lastEmit = Date.now(); }
+      catch { /* client disconnected */ }
     };
+
+    // Keepalive: emit an SSE comment every 30 s if nothing else has been
+    // sent. Prevents reverse proxies (Caddy, Cloudflare) from killing the
+    // connection during a slow single-file upload. Comments are ignored by
+    // EventSource clients and our manual SSE reader skips them naturally
+    // (no `data:` prefix).
+    const keepalive = setInterval(() => {
+      if (Date.now() - lastEmit < 30_000) return;
+      try { res.write(`: keepalive ${Date.now()}\n\n`); } catch { /* ignore */ }
+    }, 15_000);
 
     const abortCtl = new AbortController();
     req.on('close', () => { abortCtl.abort(); });
 
     try {
-      const opts = {
-        sourceBucket: body.sourceBucket,
-        destBucket: body.destBucket,
-        items: body.items,
-        mode: body.mode,
-        onEvent: send,
-        abort: abortCtl.signal,
-      };
-      if (sameConn) {
-        await transferSameConn(sourceS3, opts);
+      if (isPrefixMode) {
+        await transferRecursive(sourceS3, destS3, {
+          sourceBucket: body.sourceBucket,
+          destBucket: body.destBucket,
+          sourcePrefix: normalizePrefix(body.prefix!.source),
+          destPrefix: normalizePrefix(body.prefix!.dest),
+          mode: body.mode,
+          sameConn,
+          concurrency: TRANSFER_CONCURRENCY,
+          maxItems: TRANSFER_MAX_PREFIX_ITEMS,
+          onEvent: send,
+          abort: abortCtl.signal,
+        });
       } else {
-        await transferCrossConn(sourceS3, destS3, opts);
+        const opts = {
+          sourceBucket: body.sourceBucket,
+          destBucket: body.destBucket,
+          items: body.items!,
+          mode: body.mode,
+          onEvent: send,
+          abort: abortCtl.signal,
+        };
+        if (sameConn) {
+          await transferSameConn(sourceS3, opts);
+        } else {
+          await transferCrossConn(sourceS3, destS3, opts);
+        }
       }
     } catch (e) {
       const errorId = newErrorId();
@@ -92,6 +142,8 @@ export function transferRouter(): Router {
       });
       const { body: errBody } = sanitizeError(e as Parameters<typeof sanitizeError>[0], errorId);
       try { res.write(`data: ${JSON.stringify({ t: 'fatal', ...errBody })}\n\n`); } catch { /* ignore */ }
+    } finally {
+      clearInterval(keepalive);
     }
     res.end();
   });

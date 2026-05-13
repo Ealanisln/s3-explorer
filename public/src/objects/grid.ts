@@ -205,10 +205,14 @@ function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
 // regular file drops (which are handled by upload.ts).
 const DND_MIME = 'application/x-s3-explorer-keys';
 
-interface DndPayload {
-  sourcePaneId: PaneId;
-  keys: string[];
-}
+// Two payload shapes:
+//   - "keys": one or more explicit files (existing behaviour)
+//   - "folder": a single prefix (key ending in /) — the server will expand it
+//
+// The receiver (transfer.ts) dispatches based on `kind`.
+type DndPayload =
+  | { kind: 'keys'; sourcePaneId: PaneId; keys: string[] }
+  | { kind: 'folder'; sourcePaneId: PaneId; prefix: string };
 
 function bindRowEvents(tr: HTMLTableRowElement, o: S3Object, paneId: PaneId): void {
   // Rows are draggable when they're real files (not delete markers). The
@@ -218,14 +222,12 @@ function bindRowEvents(tr: HTMLTableRowElement, o: S3Object, paneId: PaneId): vo
     tr.draggable = true;
     tr.addEventListener('dragstart', (e: DragEvent) => {
       setActivePane(paneId);
-      const payload: DndPayload = {
-        sourcePaneId: paneId,
-        keys: dragKeysFor(o, paneId),
-      };
+      const keys = dragKeysFor(o, paneId);
+      const payload: DndPayload = { kind: 'keys', sourcePaneId: paneId, keys };
       e.dataTransfer?.setData(DND_MIME, JSON.stringify(payload));
       // Plain-text fallback in case the receiver doesn't speak our MIME
       // (debugging, devtools paste, etc.).
-      e.dataTransfer?.setData('text/plain', payload.keys.join('\n'));
+      e.dataTransfer?.setData('text/plain', keys.join('\n'));
       if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copyMove';
     });
   }
@@ -319,6 +321,8 @@ function renderGridInner(paneId: PaneId): void {
   for (const pp of visiblePrefixes) {
     const name = pp.replace(State.prefix, '').replace('/', '');
     const tr = document.createElement('tr');
+    tr.draggable = true;        // folders are draggable for recursive transfer
+    tr.dataset.folderPrefix = pp;
     tr.innerHTML = `
       <td class="col-check"></td>
       <td class="cell-name"><span class="ft-badge folder"><i data-icon="folder" data-icon-size="12"></i></span>${escapeHtml(name)}/</td>
@@ -326,6 +330,13 @@ function renderGridInner(paneId: PaneId): void {
       <td class="col-date">—</td>
       <td class="col-act"></td>
     `;
+    tr.addEventListener('dragstart', (e: DragEvent) => {
+      setActivePane(paneId);
+      const payload: DndPayload = { kind: 'folder', sourcePaneId: paneId, prefix: pp };
+      e.dataTransfer?.setData(DND_MIME, JSON.stringify(payload));
+      e.dataTransfer?.setData('text/plain', pp);
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copyMove';
+    });
     tr.onclick = (): void => {
       setActivePane(paneId);
       const pane = getPane(paneId);
@@ -536,11 +547,19 @@ export function initDragDrop(paneId: PaneId): void {
     let payload: DndPayload;
     try { payload = JSON.parse(raw) as DndPayload; } catch { return; }
     if (payload.sourcePaneId === paneId) return; // drop on same pane is a no-op
-    void runTransfer({
-      sourcePaneId: payload.sourcePaneId,
-      destPaneId: paneId,
-      keys: payload.keys,
-    });
+    if (payload.kind === 'folder') {
+      void runTransfer({
+        sourcePaneId: payload.sourcePaneId,
+        destPaneId: paneId,
+        folder: { sourcePrefix: payload.prefix },
+      });
+    } else {
+      void runTransfer({
+        sourcePaneId: payload.sourcePaneId,
+        destPaneId: paneId,
+        keys: payload.keys,
+      });
+    }
   });
 }
 
