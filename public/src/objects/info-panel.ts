@@ -31,7 +31,7 @@ export function openInfoPanel(o: S3Object, paneId?: PaneId): void {
   const folder = o.Key.slice(0, o.Key.length - name.length);
   const ico = fileIcon(name);
   const iconEl = paneEl('info-icon', p);
-  iconEl.className = 'icon-file ' + ico.cls;
+  iconEl.className = 'ft-badge ' + ico.cls;
   iconEl.textContent = ico.label;
   paneEl('info-name', p).textContent = name;
   paneEl('info-path', p).textContent = folder || '(raíz)';

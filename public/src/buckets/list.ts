@@ -10,6 +10,7 @@ import { api } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
 import { $, paneEl, paneElMaybe, escapeHtml } from '../util/dom.js';
 import { loadObjects } from '../objects/grid.js';
+import { mountIcons } from '../util/icons.js';
 
 interface BucketRow { Name: string; CreationDate: string | null }
 
@@ -50,17 +51,18 @@ export function renderBuckets(): void {
     const li = document.createElement('li');
     li.className = b.Name === active ? 'active' : '';
     li.innerHTML = `
-      <span class="icon-file icon-folder" style="width:22px;height:22px;font-size:10px">📦</span>
+      <span class="ft-badge folder" style="width:22px;height:22px"><i data-icon="bucket" data-icon-size="12"></i></span>
       <span class="name">${escapeHtml(b.Name)}</span>
-      <span class="menu" data-bucket="${escapeHtml(b.Name)}">⋯</span>
+      <span class="menu" data-bucket="${escapeHtml(b.Name)}" aria-label="Menú"><i data-icon="dots_h" data-icon-size="14"></i></span>
     `;
     li.onclick = (e: MouseEvent): void => {
       const target = e.target as HTMLElement;
-      if (target.classList.contains('menu')) showBucketMenu(e, b);
+      if (target.classList.contains('menu') || target.closest('.menu')) showBucketMenu(e, b);
       else void openBucket(b.Name);
     };
     ul.appendChild(li);
   }
+  mountIcons(ul);
 }
 
 let onBucketOpened: (paneId: PaneId) => void = () => undefined;

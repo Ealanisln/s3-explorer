@@ -17,6 +17,7 @@
 import { State, setActivePane, getPane, emit } from '../state.js';
 import type { PaneId } from '../state.js';
 import { $, paneRoot } from '../util/dom.js';
+import { mountIcons } from '../util/icons.js';
 
 const MOBILE_MAX = 900;
 
@@ -42,6 +43,10 @@ export function mountRightPane(): void {
   // Reset transient UI state on the clone so it starts clean.
   right.querySelectorAll<HTMLElement>('.info-panel').forEach((p) => p.classList.remove('open'));
   right.classList.remove('with-info');
+  // Safety: if main.ts hadn't run mountIcons yet (or the left pane has stale
+  // <i data-icon> from dynamic injection), hydrate the clone too. No-op when
+  // the clone already contains <svg> from the left.
+  mountIcons(right);
   wrap.appendChild(right);
 }
 

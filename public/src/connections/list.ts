@@ -5,6 +5,7 @@ import type { PaneId } from '../state.js';
 import { api } from '../api/client.js';
 import { saveConnections } from '../vault/persistence.js';
 import { toast, errorIdOpts } from '../util/toast.js';
+import { mountIcons } from '../util/icons.js';
 import { $, paneEl, escapeHtml } from '../util/dom.js';
 import { renderBuckets } from '../buckets/list.js';
 import { toggleEmpty } from '../objects/grid.js';
@@ -70,17 +71,18 @@ export function renderConnections(): void {
     const li = document.createElement('li');
     li.className = c.id === active ? 'active' : '';
     li.innerHTML = `
-      <span class="icon-file" style="width:22px;height:22px;font-size:10px">S3</span>
+      <span class="ft-badge def" style="width:22px;height:22px;font-size:9px">S3</span>
       <span class="name" title="${escapeHtml(c.endpoint || 'AWS')}">${escapeHtml(c.name)}</span>
-      <span class="menu" data-conn-id="${escapeHtml(c.id)}">⋯</span>
+      <span class="menu" data-conn-id="${escapeHtml(c.id)}" aria-label="Menú"><i data-icon="dots_h" data-icon-size="14"></i></span>
     `;
     li.onclick = (e: MouseEvent): void => {
       const target = e.target as HTMLElement;
-      if (target.classList.contains('menu')) showConnMenu(e, c);
+      if (target.classList.contains('menu') || target.closest('.menu')) showConnMenu(e, c);
       else void selectConnection(c.id);
     };
     ul.appendChild(li);
   }
+  mountIcons(ul);
 }
 
 export async function selectConnection(id: string, paneId?: PaneId): Promise<void> {

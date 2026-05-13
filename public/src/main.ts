@@ -47,11 +47,18 @@ import {
 import { initReindex, onBucketOpened as reindexOnBucketOpened } from './index/reindex.js';
 import { initThemeToggle, applyTheme, loadTheme } from './util/theme.js';
 import { initDrawer } from './util/drawer.js';
+import { mountIcons } from './util/icons.js';
+import { initModalTabs, initExpandButtons } from './util/modal-ux.js';
 import {
   mountRightPane, initActivation, initDualToggle, paintRightPanePlaceholder,
 } from './panes/init.js';
 
 applyTheme(loadTheme());
+
+// Hydrate <i data-icon="..."> → <svg> across the static HTML (auth overlay,
+// sidebar, toolbar, info panel, modals). Must run BEFORE mountRightPane()
+// so the clone inherits the already-resolved <svg> nodes.
+mountIcons(document);
 
 // ─── Right pane cloned BEFORE init*() runs so listener wiring covers both ──
 mountRightPane();
@@ -102,6 +109,8 @@ initThemeToggle();
 initDrawer();
 initActivation();
 initDualToggle();
+initModalTabs();
+initExpandButtons();
 
 // Pane-scoped wiring for both left and right.
 for (const p of PANES) {

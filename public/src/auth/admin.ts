@@ -7,6 +7,7 @@
 import { $, openModal, escapeHtml } from '../util/dom.js';
 import { toast, errorIdOpts } from '../util/toast.js';
 import { formatDate } from '../util/format.js';
+import { mountIcons } from '../util/icons.js';
 import { getCurrentUser } from './bootstrap.js';
 
 interface AdminUserRow {
@@ -33,23 +34,26 @@ async function loadUsersAdmin(): Promise<void> {
       tr.innerHTML = `
         <td>${escapeHtml(u.username)}</td>
         <td><span class="user-role ${u.role === 'admin' ? 'admin' : ''}">${u.role.toUpperCase()}</span></td>
-        <td>${u.totpEnrolled ? `✓ <span style="color:var(--text-dim);font-size:11px">${u.recoveryRemaining} cód.</span>` : '<span style="color:var(--yellow)">⚠ pendiente</span>'}</td>
+        <td>${u.totpEnrolled
+          ? `<span class="pill ok"><span class="dot"></span>activado</span> <span style="color:var(--text-dim);font-size:11px;margin-left:6px">${u.recoveryRemaining} cód.</span>`
+          : '<span class="pill warn"><span class="dot"></span>pendiente</span>'}</td>
         <td style="font-size:12px;color:var(--text-dim)">${u.lastLoginAt ? escapeHtml(formatDate(u.lastLoginAt)) : 'nunca'}</td>
-        <td>${u.disabled ? '<span style="color:var(--red)">deshabilitado</span>' : 'activo'}</td>
+        <td>${u.disabled ? '<span style="color:var(--danger)">deshabilitado</span>' : 'activo'}</td>
         <td style="text-align:right">
           ${isMe ? '<span style="color:var(--text-dim);font-size:11px">(tú)</span>' :
-            `<button class="btn-icon" data-act="reset-totp" data-user="${escapeHtml(u.username)}" title="Resetear TOTP">🔑</button>
-             <button class="btn-icon" data-act="reset-pw" data-user="${escapeHtml(u.username)}" title="Resetear contraseña">🔒</button>
-             <button class="btn-icon" data-act="${u.disabled ? 'enable' : 'disable'}" data-user="${escapeHtml(u.username)}" title="${u.disabled ? 'Habilitar' : 'Deshabilitar'}">${u.disabled ? '▶' : '⏸'}</button>`}
+            `<button class="btn-icon" data-act="reset-totp" data-user="${escapeHtml(u.username)}" title="Resetear TOTP" aria-label="Resetear TOTP"><i data-icon="key"></i></button>
+             <button class="btn-icon" data-act="reset-pw" data-user="${escapeHtml(u.username)}" title="Resetear contraseña" aria-label="Resetear contraseña"><i data-icon="lock"></i></button>
+             <button class="btn-icon" data-act="${u.disabled ? 'enable' : 'disable'}" data-user="${escapeHtml(u.username)}" title="${u.disabled ? 'Habilitar' : 'Deshabilitar'}" aria-label="${u.disabled ? 'Habilitar' : 'Deshabilitar'}"><i data-icon="${u.disabled ? 'power' : 'lock'}"></i></button>`}
         </td>
       `;
       tbody.appendChild(tr);
     }
+    mountIcons(tbody);
     tbody.querySelectorAll<HTMLButtonElement>('button[data-act]').forEach((b) => {
       b.onclick = (): Promise<void> => handleUserAction(b.dataset.act || '', b.dataset.user || '');
     });
   } catch (ex) {
-    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--red);padding:20px">${escapeHtml((ex as Error).message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger);padding:20px">${escapeHtml((ex as Error).message)}</td></tr>`;
   }
 }
 

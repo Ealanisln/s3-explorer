@@ -16,5 +16,5 @@
       ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
       : pref;
     document.documentElement.dataset.theme = effective;
-  } catch (e) { /* localStorage blocked or no matchMedia — default dark */ }
+  } catch (e) { /* localStorage blocked or no matchMedia — falls through to CSS default (light). */ }
 })();

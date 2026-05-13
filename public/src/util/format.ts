@@ -13,20 +13,30 @@ export function formatDate(d: string | Date | null | undefined): string {
 }
 
 export interface FileIcon {
+  /** FT-badge variant: 'pdf' | 'doc' | 'img' | 'zip' | 'def' */
   cls: string;
+  /** Short uppercase mnemonic shown inside the badge (3 chars max). */
   label: string;
 }
 
 export function fileIcon(name: string): FileIcon {
   const ext = (name.split('.').pop() || '').toLowerCase();
-  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) {
-    return { cls: 'icon-img', label: '🖼' };
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif', 'heic'].includes(ext)) {
+    return { cls: 'img', label: 'IMG' };
   }
-  if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md', 'csv', 'json', 'xml', 'log'].includes(ext)) {
-    return { cls: 'icon-doc', label: ext.slice(0, 3).toUpperCase() };
+  if (['mp4', 'mov', 'avi', 'webm', 'mkv', 'm4v'].includes(ext)) {
+    return { cls: 'img', label: 'VID' };
   }
-  if (['mp3', 'wav', 'ogg', 'flac'].includes(ext)) return { cls: 'icon-doc', label: '♪' };
-  if (['mp4', 'mov', 'avi', 'webm', 'mkv'].includes(ext)) return { cls: 'icon-img', label: '▶' };
-  if (['zip', 'tar', 'gz', 'rar', '7z'].includes(ext)) return { cls: '', label: '📦' };
-  return { cls: '', label: ext.slice(0, 3).toUpperCase() || '·' };
+  if (ext === 'pdf') return { cls: 'pdf', label: 'PDF' };
+  if (['doc', 'docx', 'odt', 'rtf'].includes(ext)) return { cls: 'doc', label: 'DOC' };
+  if (['xls', 'xlsx', 'ods', 'csv'].includes(ext)) return { cls: 'doc', label: 'XLS' };
+  if (['ppt', 'pptx', 'odp', 'key'].includes(ext)) return { cls: 'doc', label: 'PPT' };
+  if (['txt', 'md', 'log'].includes(ext)) return { cls: 'doc', label: 'TXT' };
+  if (['json', 'xml', 'yml', 'yaml', 'toml'].includes(ext)) return { cls: 'doc', label: 'JSN' };
+  if (['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'].includes(ext)) return { cls: 'def', label: 'WAV' };
+  if (['zip', 'tar', 'gz', 'rar', '7z', 'bz2', 'xz'].includes(ext)) return { cls: 'zip', label: 'ZIP' };
+  if (['js', 'ts', 'jsx', 'tsx', 'py', 'rb', 'go', 'rs', 'java', 'sh', 'php'].includes(ext)) {
+    return { cls: 'doc', label: ext.slice(0, 3).toUpperCase() };
+  }
+  return { cls: 'def', label: ext.slice(0, 3).toUpperCase() || 'FILE' };
 }

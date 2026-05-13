@@ -253,15 +253,15 @@ export function updateSearchBanner(paneId?: PaneId): void {
 
     let statusLabel = '';
     if (status === 'scanning') {
-      statusLabel = '<span style="color:var(--primary-2)">⏳ escaneando...</span>';
+      statusLabel = '<span style="color:var(--accent)">escaneando…</span>';
     } else if (status === 'done') {
-      if (reason === 'limit') statusLabel = '<span class="truncated">⚠ tope de resultados (refina la búsqueda)</span>';
-      else if (reason === 'fts') statusLabel = '<span style="color:var(--green)">⚡ índice FTS5</span>';
-      else statusLabel = '<span style="color:var(--green)">✓ completo</span>';
+      if (reason === 'limit') statusLabel = '<span class="truncated">tope de resultados (refina la búsqueda)</span>';
+      else if (reason === 'fts') statusLabel = '<span style="color:var(--success)">índice FTS5</span>';
+      else statusLabel = '<span style="color:var(--success)">completo</span>';
     } else if (status === 'cancelled') {
-      statusLabel = '<span class="truncated">⛔ cancelado</span>';
+      statusLabel = '<span class="truncated">cancelado</span>';
     } else if (status === 'error') {
-      statusLabel = `<span style="color:var(--red)">error: ${escapeHtml(error || '')}</span>`;
+      statusLabel = `<span style="color:var(--danger)">error: ${escapeHtml(error || '')}</span>`;
     }
 
     banner.style.display = 'flex';

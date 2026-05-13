@@ -6,6 +6,7 @@ import { api, authHeaders } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
 import { $, openModal, escapeHtml } from '../util/dom.js';
 import { formatSize, formatDate } from '../util/format.js';
+import { mountIcons } from '../util/icons.js';
 import { downloadObject, shareObject } from './actions.js';
 import type { S3Object } from '../types.js';
 
@@ -38,7 +39,7 @@ export async function renderPreviewBody(obj: S3Object, versionInfo: VersionInfo 
   const sizeForPreview = versionInfo ? (versionInfo.Size ?? 0) : obj.Size;
   const dateForPreview = versionInfo ? versionInfo.LastModified : obj.LastModified;
   const versionLabel = versionId
-    ? `<span style="color:var(--yellow); margin-left:8px">· versión ${versionId.slice(0, 8)}…${versionInfo!.IsLatest ? ' (LATEST)' : ''}</span>`
+    ? `<span style="color:var(--warn); margin-left:8px">· versión ${versionId.slice(0, 8)}…${versionInfo!.IsLatest ? ' (LATEST)' : ''}</span>`
     : '';
   info.innerHTML = `${formatSize(sizeForPreview)} · ${formatDate(dateForPreview)}${versionLabel}`;
 
@@ -71,7 +72,7 @@ export async function renderPreviewBody(obj: S3Object, versionInfo: VersionInfo 
       </div>`;
     }
   } catch (e) {
-    body.innerHTML = `<div style="padding:40px;color:var(--red)">${escapeHtml((e as Error).message)}</div>`;
+    body.innerHTML = `<div style="padding:40px;color:var(--danger)">${escapeHtml((e as Error).message)}</div>`;
   }
 }
 
@@ -112,11 +113,11 @@ export function initPreview(): void {
           <div>${escapeHtml(formatDate(v.LastModified))}</div>
           <div>${isDel ? '<span class="delete-marker">DELETE</span>' : formatSize(v.Size ?? 0)} ${v.IsLatest ? '<span class="latest">LATEST</span>' : ''}</div>
           <div class="actions">
-            ${isDel ? '' : `<button class="btn" data-act="view" title="Vista previa de esta versión">👁</button>
-            <button class="btn" data-act="download" title="Descargar">↓</button>
-            <button class="btn" data-act="share" title="Enlace temporal">link</button>
-            <button class="btn" data-act="restore" title="Restaurar como versión actual">restaurar</button>`}
-            <button class="btn btn-danger" data-act="delete" title="Eliminar permanente">✕</button>
+            ${isDel ? '' : `<button class="btn xs" data-act="view" title="Vista previa de esta versión" aria-label="Ver"><i data-icon="eye" data-icon-size="12"></i></button>
+            <button class="btn xs" data-act="download" title="Descargar" aria-label="Descargar"><i data-icon="download" data-icon-size="12"></i></button>
+            <button class="btn xs" data-act="share" title="Enlace temporal" aria-label="Enlace"><i data-icon="link" data-icon-size="12"></i></button>
+            <button class="btn xs" data-act="restore" title="Restaurar como versión actual"><i data-icon="reindex" data-icon-size="12"></i> Restaurar</button>`}
+            <button class="btn xs btn-danger" data-act="delete" title="Eliminar permanente" aria-label="Eliminar"><i data-icon="trash" data-icon-size="12"></i></button>
           </div>
         `;
         row.querySelectorAll<HTMLButtonElement>('button').forEach((b) => {
@@ -161,8 +162,9 @@ export function initPreview(): void {
         });
         panel.appendChild(row);
       }
+      mountIcons(panel);
     } catch (e) {
-      panel.innerHTML = `<div style="color:var(--red)">${escapeHtml((e as Error).message)}</div>`;
+      panel.innerHTML = `<div style="color:var(--danger)">${escapeHtml((e as Error).message)}</div>`;
     }
   };
 }
