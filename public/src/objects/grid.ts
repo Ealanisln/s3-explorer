@@ -410,18 +410,6 @@ function bindRowEvents(tr: HTMLTableRowElement, o: S3Object, paneId: PaneId): vo
     if (t.closest('input,button')) return;
     if (!o.IsDeleteMarker) void openPreview(o);
   });
-  // Right-click on a file row opens the same action menu we have on the
-  // three-dots button. Replaces the browser's default menu (which would only
-  // offer "Inspect" / "Reload" inside a SPA without real <a href>s).
-  tr.addEventListener('contextmenu', (e: MouseEvent) => {
-    const t = e.target as HTMLElement;
-    // Let the browser's native menu through if the user right-clicked on a
-    // form control (input / button) — useful for "paste" in the checkbox row.
-    if (t.closest('input, button')) return;
-    e.preventDefault();
-    setActivePane(paneId);
-    showRowMenu(e, o, paneId);
-  });
 }
 
 export function renderGrid(paneId?: PaneId): void {
@@ -818,4 +806,25 @@ export function initBatchBar(paneId: PaneId): void {
       toast((e as Error).message, 'error', errorIdOpts(e));
     }
   };
+
+  // Delegated contextmenu (right-click) on the table body. Wired once per
+  // pane at boot — survives re-renders that replace rows. Looking up the
+  // S3Object from the current pane state by data-key is more robust than
+  // capturing it in a per-row closure.
+  const tbody = paneEl('grid-body', paneId);
+  tbody.addEventListener('contextmenu', (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const tr = target.closest<HTMLTableRowElement>('tr[data-key]');
+    if (!tr) return;  // header, folder row, or anywhere else → native menu
+    const key = tr.dataset.key;
+    if (!key) return;
+    // Find the S3Object in the pane state (normal mode OR search results).
+    const pane = getPane(paneId);
+    const obj = (pane.searchResults?.find((o) => o.Key === key))
+      ?? pane.objects.find((o) => o.Key === key);
+    if (!obj) return;
+    e.preventDefault();
+    setActivePane(paneId);
+    showRowMenu(e, obj, paneId);
+  });
 }
