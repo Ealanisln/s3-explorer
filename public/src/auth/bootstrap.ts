@@ -36,7 +36,7 @@ export function configureAuthDeps(d: AuthBootstrapDeps): void {
 type ScreenName = 'login' | 'totp' | 'enroll' | 'recovery' | null;
 
 export function showAuthScreen(name: ScreenName): void {
-  $('auth-overlay').style.display = 'flex';
+  $('auth-overlay').style.display = 'grid';
   for (const id of ['auth-login-form', 'auth-totp-form', 'auth-enroll', 'auth-recovery']) {
     const el = $(id);
     const visible = id === `auth-${name}` ||
