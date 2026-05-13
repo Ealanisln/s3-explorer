@@ -102,8 +102,20 @@ export function transferRouter(): Router {
       try { res.write(`: keepalive ${Date.now()}\n\n`); } catch { /* ignore */ }
     }, 15_000);
 
+    // Abort the transfer if the client truly disconnects mid-stream. We listen
+    // on RESPONSE.close (fires when the socket actually closes after writes)
+    // instead of REQUEST.close — the latter can fire spuriously once Express's
+    // body-parser finishes consuming the request body, even though the response
+    // socket is still open and the client is still listening. That was the cause
+    // of recursive transfers immediately aborting after a single ListObjectsV2.
+    //
+    // We also guard against double-aborting AFTER the transfer completes
+    // (response naturally ends → res.on('close') fires; harmless but noisy).
     const abortCtl = new AbortController();
-    req.on('close', () => { abortCtl.abort(); });
+    let transferFinished = false;
+    res.on('close', () => {
+      if (!transferFinished) abortCtl.abort();
+    });
 
     try {
       if (isPrefixMode) {
@@ -144,6 +156,7 @@ export function transferRouter(): Router {
       try { res.write(`data: ${JSON.stringify({ t: 'fatal', ...errBody })}\n\n`); } catch { /* ignore */ }
     } finally {
       clearInterval(keepalive);
+      transferFinished = true;
     }
     res.end();
   });

@@ -1277,12 +1277,35 @@ tr.deleted .badge-deleted {
   border-radius: 999px;
   overflow: hidden;
   margin-bottom: 12px;
+  position: relative;
 }
 .transfer-progress-bar > div {
   height: 100%;
   background: var(--accent);
   border-radius: 999px;
   transition: width 240ms ease;
+  position: relative;
+  z-index: 1;
+}
+/* Sweep stripe across the whole track while transfer is active. Visible
+ * regardless of fill width (vs `> div::after` which has 0 width at 0%).
+ * Toggled from JS via `.in-progress` on the outer bar.
+ */
+.transfer-progress-bar.in-progress::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  left: -30%;
+  width: 30%;
+  background: linear-gradient(90deg, transparent 0%, var(--accent) 50%, transparent 100%);
+  opacity: 0.55;
+  animation: transfer-sweep 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+@keyframes transfer-sweep {
+  0%   { left: -30%; }
+  100% { left: 100%; }
 }
 .transfer-item-list {
   list-style: none;
@@ -1298,10 +1321,20 @@ tr.deleted .badge-deleted {
   border-bottom: 1px solid var(--divider);
 }
 .transfer-item:last-child { border-bottom: 0; }
+/* Status badge: plain-text colored pill per row state. Text content is set
+ * from JS in setRowStatus(); CSS handles the per-state color scheme.
+ */
 .transfer-item .status {
-  width: 18px; flex-shrink: 0;
+  flex-shrink: 0;
+  min-width: 84px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
   text-align: center;
-  font-size: 13px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 .transfer-item .key {
   flex: 1;
@@ -1312,10 +1345,27 @@ tr.deleted .badge-deleted {
 }
 .transfer-item.done .key   { color: var(--success); }
 .transfer-item.error .key  { color: var(--danger); }
-.transfer-item.active .status::after  { content: '⏳'; }
-.transfer-item.done .status::after    { content: '✓'; color: var(--success); }
-.transfer-item.error .status::after   { content: '✕'; color: var(--danger); }
-.transfer-item.pending .status::after { content: '·'; color: var(--text-mute); }
+.transfer-item.pending .status {
+  background: var(--surface-3);
+  color: var(--text-mute);
+}
+.transfer-item.active .status {
+  background: var(--accent-soft);
+  color: var(--accent);
+  animation: transfer-state-pulse 1.6s ease-in-out infinite;
+}
+.transfer-item.done .status {
+  background: rgba(79, 122, 76, 0.15);
+  color: var(--success);
+}
+.transfer-item.error .status {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+@keyframes transfer-state-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.6; }
+}
 .transfer-item .err-msg {
   font-size: 11px;
   color: var(--text-dim);

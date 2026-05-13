@@ -223,11 +223,22 @@ export async function transferRecursive(
   let ok = 0; let failed = 0;
   let consecutiveErrors = 0;
 
+  // The LAST path segment of sourcePrefix is preserved in the destination so
+  // that dragging "foo/" onto a dest pane at "x/" yields "x/foo/..." (like
+  // every desktop file manager). For an empty sourcePrefix (whole bucket),
+  // this resolves to "" and contents merge directly into destPrefix.
+  //   "zell/logs/2026/02/" → folderName = "02/"
+  //   "02/"                → folderName = "02/"
+  //   ""                   → folderName = ""
+  const folderNameMatch = sourcePrefix.match(/([^/]+\/)$/);
+  const folderName = folderNameMatch ? folderNameMatch[1] : '';
+
   // ── Producer: list pages and push to queue ───────────────────────────────
   const producer = (async (): Promise<void> => {
     try {
       let scanned = 0;
-      let lastEmit = 0;
+      let lastEmittedAt = 0;
+      let lastEmittedScanned = 0;
       for await (const { key } of listAllKeys(sourceS3, sourceBucket, sourcePrefix, signal)) {
         if (signal.aborted) break;
         if (scanned >= maxItems) {
@@ -243,16 +254,20 @@ export async function transferRecursive(
           await sleepAbortable(50, signal);
         }
         if (signal.aborted) break;
-        // Compute dest key by replacing the source-prefix portion.
+        // Compute destKey preserving the source folder name + the path
+        // relative to sourcePrefix.
         const rel = key.slice(sourcePrefix.length);
-        const destKey = destPrefix + rel;
+        const destKey = destPrefix + folderName + rel;
         queue.push({ key, destKey });
         scanned++;
-        // Throttle discovery events: emit every 100 items or after 250 ms.
+        // Throttle discovery events: emit every 100 items or every 250 ms.
         const now = Date.now();
-        if (scanned - lastEmit >= 100 || (now - lastEmit > 250 && scanned > lastEmit)) {
+        const enoughItems = scanned - lastEmittedScanned >= 100;
+        const enoughTime  = now - lastEmittedAt > 250 && scanned > lastEmittedScanned;
+        if (enoughItems || enoughTime) {
           onEvent({ t: 'discovering', scanned });
-          lastEmit = scanned;
+          lastEmittedAt = now;
+          lastEmittedScanned = scanned;
         }
       }
       totalDiscovered = scanned;

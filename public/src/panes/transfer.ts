@@ -45,6 +45,30 @@ function basename(key: string): string {
   return key.split('/').pop() || key;
 }
 
+// Status labels as plain-text badges. (Earlier iterations used SVG icons,
+// but they rendered inconsistently in some browsers — text labels are
+// bullet-proof and screen-reader-friendly out of the box.)
+type StatusKey = 'pending' | 'active' | 'done' | 'error';
+const STATUS_TEXT_COPY: Record<StatusKey, string> = {
+  pending: 'Pendiente',
+  active: 'Copiando…',
+  done: 'Copiado',
+  error: 'Error',
+};
+const STATUS_TEXT_MOVE: Record<StatusKey, string> = {
+  pending: 'Pendiente',
+  active: 'Moviendo…',
+  done: 'Movido',
+  error: 'Error',
+};
+
+function setRowStatus(row: HTMLElement, status: StatusKey, mode: 'copy' | 'move'): void {
+  const cell = row.querySelector('.status');
+  if (!cell) return;
+  const map = mode === 'move' ? STATUS_TEXT_MOVE : STATUS_TEXT_COPY;
+  cell.textContent = map[status];
+}
+
 function buildItems(req: TransferRequest): { key: string; destKey: string }[] {
   const destPane = getPane(req.destPaneId);
   const destPrefix = destPane.prefix;
@@ -138,6 +162,9 @@ function openProgressModal(opts: {
   ($('btn-transfer-abort') as HTMLButtonElement).textContent = 'Cancelar';
   ($('btn-transfer-abort') as HTMLButtonElement).disabled = false;
   ($('transfer-progress-fill') as HTMLElement).style.width = '0%';
+  // Sweep animation while transfer is active. CSS toggles via the
+  // `.in-progress` class on the outer bar.
+  ($('transfer-progress-fill').parentElement as HTMLElement | null)?.classList.add('in-progress');
 
   const list = $('transfer-item-list');
   list.innerHTML = '';
@@ -148,7 +175,8 @@ function openProgressModal(opts: {
     : `0 / ${total ?? '?'}`;
   if (opts.knownItems) {
     for (const it of opts.knownItems) {
-      addRow(byKey, list, it.key, 'pending');
+      const row = addRow(byKey, list, it.key, 'pending');
+      setRowStatus(row, 'pending', opts.mode);
     }
   }
   openModal('modal-transfer-progress');
@@ -201,6 +229,8 @@ function evictIfNeeded(state: ProgressState, list: HTMLElement): void {
 function finishProgressModal(state: ProgressState, aborted: boolean): void {
   ($('btn-transfer-abort') as HTMLButtonElement).style.display = 'none';
   ($('btn-transfer-close') as HTMLButtonElement).style.display = 'inline-flex';
+  // Stop the sweep animation; bar stays at its final width.
+  ($('transfer-progress-fill').parentElement as HTMLElement | null)?.classList.remove('in-progress');
   const verb = state.mode === 'move' ? 'movidos' : 'copiados';
   const tail = aborted ? ' (cancelado)' : '';
   const totalSuffix = state.total !== null && state.total !== state.ok + state.failed
@@ -241,6 +271,7 @@ function applyFrame(state: ProgressState, ev: SseFrame): void {
     if (ev.currentKey === '__OVERFLOW__' || ev.currentKey === '__CIRCUIT_BREAKER__') return;
     // Lazily create the row if we're in folder mode (no pre-population).
     const row = addRow(state.byKey, list, ev.currentKey, 'pending');
+    setRowStatus(row, 'pending', state.mode);
     // Mark previously-active rows as best-effort done (defensive: backend
     // always emits item-done before next progress, but if a frame is lost or
     // we evicted the row, this prevents an orphan-active state).
@@ -248,10 +279,12 @@ function applyFrame(state: ProgressState, ev: SseFrame): void {
       if (r !== row && r.classList.contains('active')) {
         r.classList.remove('active');
         r.classList.add('done');
+        setRowStatus(r, 'done', state.mode);
       }
     });
     row.classList.remove('pending');
     row.classList.add('active');
+    setRowStatus(row, 'active', state.mode);
     evictIfNeeded(state, list);
     // Bar percent: known total → real %, else 0% with text indication.
     const total = state.total ?? ev.total ?? 0;
@@ -268,7 +301,11 @@ function applyFrame(state: ProgressState, ev: SseFrame): void {
     return;
   } else if (ev.t === 'item-done') {
     const row = state.byKey.get(ev.key);
-    if (row) { row.classList.remove('active', 'pending'); row.classList.add('done'); }
+    if (row) {
+      row.classList.remove('active', 'pending');
+      row.classList.add('done');
+      setRowStatus(row, 'done', state.mode);
+    }
     // Don't evict here — eviction happens when the NEXT row is added, so the
     // user gets to see the row briefly transition to "done".
   } else if (ev.t === 'item-error') {
@@ -285,6 +322,7 @@ function applyFrame(state: ProgressState, ev: SseFrame): void {
     const row = addRow(state.byKey, list, ev.key, 'pending');
     row.classList.remove('active', 'pending');
     row.classList.add('error');
+    setRowStatus(row, 'error', state.mode);
     const em = row.querySelector('.err-msg');
     if (em) em.textContent = ev.message;
   } else if (ev.t === 'done') {
