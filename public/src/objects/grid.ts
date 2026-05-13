@@ -217,9 +217,9 @@ export function updateBatchBar(paneId?: PaneId): void {
 }
 
 function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
-  document.querySelectorAll('.dropdown.row-menu').forEach((d) => d.remove());
+  document.querySelectorAll('.dropdown.row-actions-menu').forEach((d) => d.remove());
   const dd = document.createElement('div');
-  dd.className = 'dropdown row-menu';
+  dd.className = 'dropdown row-actions-menu';
   dd.style.position = 'fixed';
   // Position initially at the cursor — we'll clamp into the viewport once
   // we know the dropdown's real size (after it's in the DOM).
