@@ -17,6 +17,7 @@ import { openPreview } from './preview.js';
 import { openInfoPanel, closeInfoPanel } from './info-panel.js';
 import {
   downloadObject, shareObject, deleteObject, restoreDeleteMarker, openRename,
+  openObjectInNewTab, copyObjectLink,
 } from './actions.js';
 import { runRecursiveSearchForLink, updateSearchBanner, restoreFilterForContext } from './search.js';
 import { runTransfer } from '../panes/transfer.js';
@@ -219,8 +220,11 @@ function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
   const dd = document.createElement('div');
   dd.className = 'dropdown row-menu';
   dd.style.position = 'fixed';
-  dd.style.left = (e.clientX - 140) + 'px';
-  dd.style.top = (e.clientY) + 'px';
+  // Position initially at the cursor — we'll clamp into the viewport once
+  // we know the dropdown's real size (after it's in the DOM).
+  dd.style.left = e.clientX + 'px';
+  dd.style.top = e.clientY + 'px';
+  dd.style.visibility = 'hidden';
   const dualEntries = !o.IsDeleteMarker && otherPaneReady(paneId) ? `
     <button data-act="copy-other">Copiar al otro panel →</button>
     <button data-act="move-other">Mover al otro panel →</button>
@@ -231,14 +235,31 @@ function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
     <button data-act="purge" class="danger">Borrar marker</button>
   ` : `
     <button data-act="preview">Vista previa</button>
+    <button data-act="open-new-tab">Abrir en pestaña nueva</button>
     <button data-act="download">Descargar</button>
-    <button data-act="share">Enlace temporal</button>
+    <button data-act="copy-url">Copiar enlace</button>
+    <button data-act="share">Enlace temporal…</button>
     <button data-act="versions">Ver versiones</button>
     <button data-act="rename">Renombrar</button>
     ${dualEntries}
     <button data-act="delete" class="danger">Eliminar</button>
   `;
   document.body.appendChild(dd);
+  // Clamp into the viewport: if the dropdown would overflow the right edge,
+  // flip to the left side of the cursor; same logic for the bottom edge.
+  // We need the real size, which is only available after appendChild.
+  const rect = dd.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const margin = 8;
+  let left = e.clientX;
+  let top = e.clientY;
+  if (left + rect.width + margin > vw) left = Math.max(margin, vw - rect.width - margin);
+  if (top + rect.height + margin > vh) top = Math.max(margin, vh - rect.height - margin);
+  dd.style.left = left + 'px';
+  dd.style.top = top + 'px';
+  dd.style.visibility = '';
+
   const close = (): void => { dd.remove(); document.removeEventListener('click', close); };
   setTimeout(() => document.addEventListener('click', close), 10);
   dd.onclick = async (ev: Event): Promise<void> => {
@@ -268,7 +289,9 @@ function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
       }
     }
     if (act === 'preview') void openPreview(o);
+    if (act === 'open-new-tab') void openObjectInNewTab(o.Key);
     if (act === 'download') downloadObject(o.Key);
+    if (act === 'copy-url') void copyObjectLink(o.Key);
     if (act === 'share') await shareObject(o.Key);
     if (act === 'versions') {
       void openPreview(o);
@@ -385,6 +408,18 @@ function bindRowEvents(tr: HTMLTableRowElement, o: S3Object, paneId: PaneId): vo
     const t = e.target as HTMLElement;
     if (t.closest('input,button')) return;
     if (!o.IsDeleteMarker) void openPreview(o);
+  });
+  // Right-click on a file row opens the same action menu we have on the
+  // three-dots button. Replaces the browser's default menu (which would only
+  // offer "Inspect" / "Reload" inside a SPA without real <a href>s).
+  tr.addEventListener('contextmenu', (e: MouseEvent) => {
+    const t = e.target as HTMLElement;
+    // Let the browser's native menu through if the user right-clicked on a
+    // form control (input / button) — useful for "paste" in the checkbox row.
+    if (t.closest('input, button')) return;
+    e.preventDefault();
+    setActivePane(paneId);
+    showRowMenu(e, o, paneId);
   });
 }
 

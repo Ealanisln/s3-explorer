@@ -25,6 +25,57 @@ export async function fetchAsBlob(url: string, filename: string): Promise<void> 
   }
 }
 
+// Helper: generate a presigned URL for `key` with a short validity. Used by
+// "open in new tab" and "copy link" — both want a single round-trip with a
+// fixed default duration, not the choice picker that shareObject() shows.
+async function presignShort(key: string, versionId?: string): Promise<string> {
+  if (!State.activeBucket) throw new Error('Bucket no activo');
+  const params = new URLSearchParams({ key, expires: '300' });
+  if (versionId) params.set('versionId', versionId);
+  const { url } = await api<{ url: string; expires: number; capped: boolean }>(
+    `/api/object/${encodeURIComponent(State.activeBucket)}/presign?${params}`,
+  );
+  return url;
+}
+
+export async function openObjectInNewTab(key: string, versionId?: string): Promise<void> {
+  try {
+    const url = await presignShort(key, versionId);
+    // noopener,noreferrer: presigned URL goes straight to the S3 endpoint —
+    // we don't want the opened tab to retain a window.opener handle back to
+    // the SPA, and we don't want to leak the s3-explorer Referer to S3.
+    window.open(url, '_blank', 'noopener,noreferrer');
+  } catch (e) {
+    toast((e as Error).message, 'error', errorIdOpts(e));
+  }
+}
+
+export async function copyObjectLink(key: string, versionId?: string): Promise<void> {
+  try {
+    const url = await presignShort(key, versionId);
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+      toast('Enlace copiado (expira en 5 min)', 'success', 5000);
+      return;
+    }
+    // Fallback for older browsers / non-HTTPS contexts where the Clipboard
+    // API isn't available. document.execCommand('copy') is deprecated but
+    // still widely supported as a last-resort path.
+    const ta = document.createElement('textarea');
+    ta.value = url;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    if (ok) toast('Enlace copiado (expira en 5 min)', 'success', 5000);
+    else toast('No se pudo copiar — selecciónalo manualmente: ' + url, 'info', 10000);
+  } catch (e) {
+    toast((e as Error).message, 'error', errorIdOpts(e));
+  }
+}
+
 export function downloadObject(key: string, versionId?: string): void {
   if (!State.activeBucket) return;
   const params = new URLSearchParams({ key });
