@@ -1187,9 +1187,12 @@ tr.deleted .badge-deleted {
 }
 .version-row {
   display: grid;
-  grid-template-columns: 32px 1fr auto auto;
-  gap: 12px;
-  padding: 8px 0;
+  /* vid stretches, the rest hug their content. minmax(0, 1fr) is required
+     so the long version-id can shrink + ellipsis instead of overflowing
+     into the date column. */
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 14px;
+  padding: 8px 4px;
   border-bottom: 1px solid var(--divider);
   align-items: center;
   font-family: var(--font-mono);
@@ -1198,7 +1201,13 @@ tr.deleted .badge-deleted {
 .version-row:last-child { border-bottom: 0; }
 .version-row.viewing { background: var(--accent-soft); border-radius: 4px; padding: 8px 6px; }
 .version-row.viewing .vid::before { content: '▶ '; color: var(--accent); }
-.version-row .vid { color: var(--text); }
+.version-row .vid {
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .version-row .latest { color: var(--success); font-weight: 600; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; }
 .version-row .delete-marker { color: var(--danger); font-weight: 600; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; }
 .version-row .actions { display: flex; gap: 6px; }
