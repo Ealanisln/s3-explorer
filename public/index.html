@@ -61,13 +61,13 @@
         <label>Código de verificación <input name="code" required autocomplete="one-time-code" inputmode="numeric" pattern="\d{6}" placeholder="123456"/></label>
         <p class="test-result err" id="auth-enroll-error"></p>
         <button type="submit" class="btn btn-primary auth-submit">Confirmar y activar</button>
-        <button type="button" class="btn auth-back" id="btn-regen-qr">↻ Generar QR nuevo (si ya escaneaste mal)</button>
+        <button type="button" class="btn auth-back" id="btn-regen-qr"><i data-icon="refresh"></i> Generar QR nuevo (si ya escaneaste mal)</button>
       </form>
     </div>
 
     <!-- Recovery codes shown after enrollment -->
     <div id="auth-recovery" class="auth-form" style="display:none">
-      <h3 style="margin: 0 0 8px">✅ TOTP activado</h3>
+      <h3 style="margin: 0 0 8px"><i data-icon="shield_check" data-icon-size="18" style="color:var(--success); vertical-align:middle; margin-right:6px"></i>TOTP activado</h3>
       <p class="hint" style="margin-top:0">
         <strong>Guarda estos códigos de recuperación en un lugar seguro</strong> (1Password, papel impreso).
         Cada uno se puede usar una sola vez si pierdes el acceso a tu app de autenticación.
@@ -112,16 +112,16 @@
 
     <div class="sidebar-foot">
       <span id="conn-status" class="status">Sin conexión</span>
-      <button class="btn-icon" id="btn-theme" title="Tema: automático (sigue al sistema)" style="margin-left:auto">🌓</button>
-      <button class="btn-icon" id="btn-lock" title="Bloquear bóveda">🔒</button>
+      <button class="btn-icon" id="btn-theme" title="Tema: automático (sigue al sistema)" style="margin-left:auto"><i data-icon="sun"></i></button>
+      <button class="btn-icon" id="btn-lock" title="Bloquear bóveda"><i data-icon="lock"></i></button>
     </div>
     <div class="sidebar-user" id="sidebar-user" style="display:none">
       <span class="user-name" id="user-name"></span>
       <span class="user-role" id="user-role"></span>
       <div class="user-actions">
-        <button class="btn-icon" id="btn-my-account" title="Mi cuenta">⚙</button>
-        <button class="btn-icon" id="btn-admin-users" title="Usuarios" style="display:none">👥</button>
-        <button class="btn-icon" id="btn-logout" title="Cerrar sesión">⏻</button>
+        <button class="btn-icon" id="btn-my-account" title="Mi cuenta"><i data-icon="sliders"></i></button>
+        <button class="btn-icon" id="btn-admin-users" title="Usuarios" style="display:none"><i data-icon="users"></i></button>
+        <button class="btn-icon" id="btn-logout" title="Cerrar sesión"><i data-icon="logout"></i></button>
       </div>
     </div>
   </aside>
@@ -131,24 +131,24 @@
   <div class="panes-wrap" id="panes-wrap">
     <section class="pane active" data-pane="left">
       <header class="toolbar">
-        <button class="btn-icon mobile-only" id="btn-menu" title="Menú" aria-label="Abrir menú">☰</button>
+        <button class="btn-icon mobile-only" id="btn-menu" title="Menú" aria-label="Abrir menú"><i data-icon="menu"></i></button>
         <div class="crumbs" data-el="breadcrumbs"></div>
         <div class="search-box">
           <input type="text" data-el="search-input" placeholder="Buscar... (Enter = todo el bucket)" disabled />
-          <button data-el="btn-search-clear" class="btn-icon" title="Limpiar" style="display:none">✕</button>
+          <button data-el="btn-search-clear" class="btn-icon" title="Limpiar" style="display:none"><i data-icon="close"></i></button>
         </div>
         <div class="actions">
           <label class="toggle-deleted" data-el="toggle-deleted" style="display:none">
-            <input type="checkbox" data-el="chk-deleted"/> Mostrar eliminados
+            <input type="checkbox" class="chk" data-el="chk-deleted"/> Mostrar eliminados
           </label>
-          <button data-el="btn-versioning" class="btn" style="display:none">Versionado: ?</button>
-          <span data-el="index-status-badge" class="index-status-badge" style="display:none;font-size:11px;color:var(--text-dim);padding:0 8px"></span>
-          <button data-el="btn-reindex" class="btn" title="Reconstruir el índice de búsqueda FTS5 para este bucket">🔄 Reindexar</button>
-          <button data-el="btn-new-folder" class="btn" disabled>Nueva carpeta</button>
-          <button data-el="btn-upload" class="btn btn-primary" disabled>Subir archivos</button>
+          <button data-el="btn-versioning" class="btn" style="display:none"><i data-icon="lock"></i> Versionado: ?</button>
+          <span data-el="index-status-badge" class="index-status-badge" style="display:none"></span>
+          <button data-el="btn-reindex" class="btn" title="Reconstruir el índice de búsqueda FTS5 para este bucket"><i data-icon="reindex"></i> Reindexar</button>
+          <button data-el="btn-new-folder" class="btn" disabled><i data-icon="folder_plus"></i> Nueva carpeta</button>
+          <button data-el="btn-upload" class="btn btn-primary" disabled><i data-icon="upload"></i> Subir archivos</button>
           <input type="file" data-el="file-input" multiple hidden />
-          <button data-el="btn-refresh" class="btn-icon" title="Refrescar">⟳</button>
-          <button id="btn-toggle-dual" class="btn-icon dual-only-trigger" title="Vista de dos paneles" aria-label="Vista de dos paneles">⫴</button>
+          <button data-el="btn-refresh" class="btn-icon" title="Refrescar"><i data-icon="refresh"></i></button>
+          <button id="btn-toggle-dual" class="btn-icon dual-only-trigger" title="Vista de dos paneles" aria-label="Vista de dos paneles"><i data-icon="split"></i></button>
         </div>
       </header>
       <div data-el="search-banner" class="search-banner" style="display:none"></div>
@@ -157,13 +157,13 @@
         <div class="empty-state" data-el="empty">
           <h2>Bienvenido a S3 Explorer</h2>
           <p>Crea una conexión para empezar a navegar tus archivos en cualquier almacenamiento compatible con S3 (AWS S3, MinIO, Wasabi, Backblaze B2, Cloudflare R2, etc.).</p>
-          <button class="btn btn-primary" id="btn-first-conn">Agregar conexión</button>
+          <button class="btn btn-primary" id="btn-first-conn"><i data-icon="plus"></i> Agregar conexión</button>
         </div>
         <div class="dropzone" data-el="dropzone"></div>
         <table class="grid" data-el="grid" style="display:none">
           <thead>
             <tr>
-              <th class="col-check"><input type="checkbox" data-el="check-all"/></th>
+              <th class="col-check"><input type="checkbox" class="chk" data-el="check-all"/></th>
               <th class="sortable" data-sort="name">Nombre <span class="sort-indicator"></span></th>
               <th class="col-size sortable" data-sort="size">Tamaño <span class="sort-indicator"></span></th>
               <th class="col-date sortable" data-sort="modified">Modificado <span class="sort-indicator"></span></th>
@@ -174,7 +174,7 @@
         </table>
         <div class="batch-bar" data-el="batch-bar" style="display:none">
           <span data-el="batch-info"></span>
-          <button class="btn btn-danger" data-el="btn-batch-delete">Eliminar seleccionados</button>
+          <button class="btn btn-danger" data-el="btn-batch-delete"><i data-icon="trash"></i> Eliminar seleccionados</button>
         </div>
       </div>
 
@@ -188,16 +188,16 @@
               <div class="info-path" data-el="info-path"></div>
             </div>
           </div>
-          <button class="btn-icon" data-el="info-close" title="Cerrar">✕</button>
+          <button class="btn-icon" data-el="info-close" title="Cerrar"><i data-icon="close"></i></button>
         </header>
 
         <div class="info-actions">
-          <button class="btn btn-primary" data-el="info-preview">Vista previa</button>
-          <button class="btn" data-el="info-download">Descargar</button>
-          <button class="btn" data-el="info-share">Enlace temporal</button>
-          <button class="btn" data-el="info-versions">Versiones</button>
-          <button class="btn" data-el="info-rename">Renombrar</button>
-          <button class="btn btn-danger" data-el="info-delete">Eliminar</button>
+          <button class="btn btn-primary" data-el="info-preview"><i data-icon="eye"></i> Vista previa</button>
+          <button class="btn" data-el="info-download"><i data-icon="download"></i> Descargar</button>
+          <button class="btn" data-el="info-share"><i data-icon="link"></i> Enlace temporal</button>
+          <button class="btn" data-el="info-versions"><i data-icon="history"></i> Versiones</button>
+          <button class="btn" data-el="info-rename"><i data-icon="rename"></i> Renombrar</button>
+          <button class="btn btn-danger" data-el="info-delete"><i data-icon="trash"></i> Eliminar</button>
         </div>
 
         <div class="info-section">
@@ -244,11 +244,11 @@
 <!-- Modal: Connection -->
 <div class="modal-backdrop" id="modal-conn" style="display:none">
   <div class="modal">
-    <header><h3 id="conn-modal-title">Nueva conexión S3</h3><button class="btn-icon" data-close>✕</button></header>
+    <header><h3 id="conn-modal-title">Nueva conexión S3</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
     <form id="form-conn">
       <input type="hidden" name="id" />
       <div class="import-row">
-        <button type="button" class="btn" id="btn-import-conn">📥 Importar desde archivo (.cfg / .env)</button>
+        <button type="button" class="btn" id="btn-import-conn"><i data-icon="upload"></i> Importar desde archivo (.cfg / .env)</button>
         <input type="file" id="import-conn-file" accept=".cfg,.env,.vultrcfg,.awscfg,.miniocfg,.r2cfg,.txt,*" hidden />
         <span class="test-result" id="import-result"></span>
       </div>
@@ -278,7 +278,7 @@
 <!-- Modal: Bucket create -->
 <div class="modal-backdrop" id="modal-bucket" style="display:none">
   <div class="modal">
-    <header><h3>Crear bucket</h3><button class="btn-icon" data-close>✕</button></header>
+    <header><h3>Crear bucket</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
     <form id="form-bucket">
       <label>Nombre <input name="name" required pattern="[a-z0-9.\-]{3,63}" placeholder="mi-bucket"/></label>
       <p class="hint">Solo minúsculas, números, puntos y guiones (3-63 caracteres).</p>
@@ -290,7 +290,7 @@
 <!-- Modal: Folder -->
 <div class="modal-backdrop" id="modal-folder" style="display:none">
   <div class="modal">
-    <header><h3>Nueva carpeta</h3><button class="btn-icon" data-close>✕</button></header>
+    <header><h3>Nueva carpeta</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
     <form id="form-folder">
       <label>Nombre <input name="name" required placeholder="documentos"/></label>
       <footer><button type="submit" class="btn btn-primary">Crear</button></footer>
@@ -301,7 +301,7 @@
 <!-- Modal: Rename -->
 <div class="modal-backdrop" id="modal-rename" style="display:none">
   <div class="modal">
-    <header><h3>Renombrar</h3><button class="btn-icon" data-close>✕</button></header>
+    <header><h3>Renombrar</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
     <form id="form-rename">
       <input type="hidden" name="sourceKey"/>
       <label>Nuevo nombre <input name="newName" required/></label>
@@ -313,22 +313,25 @@
 <!-- Modal: Overwrite confirmation (versioning OFF) -->
 <div class="modal-backdrop" id="modal-overwrite" style="display:none">
   <div class="modal">
-    <header><h3>⚠ Conflicto de archivos</h3></header>
-    <div style="padding:18px">
-      <p class="hint" style="margin-top:0">
-        <strong id="overwrite-conflict-count">N</strong> archivo(s) ya existen en
-        <code id="overwrite-dest"></code> y el versionado de este bucket está
-        <strong style="color:var(--red)">desactivado</strong>.
-        Sobrescribir es <strong>irreversible</strong>.
-      </p>
+    <header><h3>Conflicto de archivos</h3></header>
+    <div class="modal-body">
+      <div class="warn-block">
+        <i data-icon="warn" data-icon-size="18" style="color:var(--warn); flex-shrink:0; margin-top:1px"></i>
+        <div style="flex:1">
+          <strong id="overwrite-conflict-count">N</strong> archivo(s) ya existen en
+          <code id="overwrite-dest"></code> y el versionado de este bucket está
+          <strong style="color:var(--danger)">desactivado</strong>.
+          Sobrescribir es <strong>irreversible</strong>.
+        </div>
+      </div>
       <div class="overwrite-list" id="overwrite-list"></div>
       <p class="hint" id="overwrite-new-info" style="margin:12px 0 4px"></p>
-      <footer style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; margin-top:16px">
-        <button type="button" class="btn" id="btn-overwrite-cancel">Cancelar todo</button>
-        <button type="button" class="btn" id="btn-overwrite-skip">Subir solo los nuevos</button>
-        <button type="button" class="btn btn-danger" id="btn-overwrite-all">Sobrescribir todos</button>
-      </footer>
     </div>
+    <footer>
+      <button type="button" class="btn" id="btn-overwrite-cancel">Cancelar todo</button>
+      <button type="button" class="btn" id="btn-overwrite-skip">Subir solo los nuevos</button>
+      <button type="button" class="btn btn-danger-solid" id="btn-overwrite-all">Sobrescribir todos</button>
+    </footer>
   </div>
 </div>
 
@@ -340,7 +343,7 @@
       <div class="header-actions">
         <button class="btn" id="btn-share">Enlace</button>
         <button class="btn btn-primary" id="btn-download">Descargar</button>
-        <button class="btn-icon" data-close>✕</button>
+        <button class="btn-icon" data-close><i data-icon="close"></i></button>
       </div>
     </header>
     <div id="preview-body" class="preview-body"></div>
@@ -359,7 +362,7 @@
 <!-- Modal: Transfer confirm — picks copy / move before kicking off the SSE run -->
 <div class="modal-backdrop" id="modal-transfer-confirm" style="display:none">
   <div class="modal">
-    <header><h3 id="transfer-confirm-title">Transferir archivos</h3><button class="btn-icon" data-close>✕</button></header>
+    <header><h3 id="transfer-confirm-title">Transferir archivos</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
     <div style="padding:18px">
       <p class="hint" style="margin-top:0">
         <span id="transfer-confirm-count">0</span> elemento(s) desde
@@ -367,8 +370,8 @@
         hacia
         <code id="transfer-confirm-dest"></code>.
       </p>
-      <p class="hint" id="transfer-confirm-cross" style="display:none; color:var(--yellow)">
-        ⚠ Transferencia entre conexiones distintas — los bytes pasan por el servidor.
+      <p class="hint" id="transfer-confirm-cross" style="display:none; color:var(--warn)">
+        <i data-icon="warn" style="vertical-align:middle; margin-right:4px"></i>Transferencia entre conexiones distintas — los bytes pasan por el servidor.
       </p>
       <footer style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; margin-top:16px">
         <button type="button" class="btn" id="btn-transfer-cancel">Cancelar</button>
@@ -386,7 +389,7 @@
       <h3 id="transfer-progress-title">Transferencia en curso</h3>
       <div class="header-actions">
         <button class="btn" id="btn-transfer-abort">Cancelar</button>
-        <button class="btn-icon" id="btn-transfer-close" style="display:none" data-close>✕</button>
+        <button class="btn-icon" id="btn-transfer-close" style="display:none" data-close><i data-icon="close"></i></button>
       </div>
     </header>
     <div style="padding:18px">
@@ -400,23 +403,36 @@
 <!-- Modal: My account -->
 <div class="modal-backdrop" id="modal-account" style="display:none">
   <div class="modal">
-    <header><h3>Mi cuenta</h3><button class="btn-icon" data-close>✕</button></header>
-    <div style="padding:18px">
-      <div class="account-section">
-        <h4>Cambiar contraseña</h4>
-        <form id="form-change-password">
-          <label>Contraseña actual <input name="current" type="password" required autocomplete="current-password"/></label>
-          <label>Nueva contraseña <input name="next" type="password" required minlength="8" autocomplete="new-password"/></label>
-          <p class="test-result" id="account-pw-msg"></p>
-          <button type="submit" class="btn btn-primary">Actualizar contraseña</button>
-        </form>
-      </div>
-      <div class="account-section">
-        <h4>Códigos de recuperación</h4>
-        <p class="hint">Regenerar invalida los anteriores. Asegúrate de guardar los nuevos.</p>
-        <button type="button" class="btn" id="btn-regen-recovery">Regenerar códigos</button>
-        <div id="new-recovery-codes" class="recovery-codes" style="margin-top:12px"></div>
-      </div>
+    <header><h3>Mi cuenta</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
+    <nav class="modal-tabs" data-tabs="account">
+      <button type="button" class="modal-tab active" data-tab="password">Contraseña</button>
+      <button type="button" class="modal-tab" data-tab="totp">Segundo factor</button>
+      <button type="button" class="modal-tab" data-tab="recovery">Recuperación</button>
+    </nav>
+    <div class="modal-tab-content" data-tab-panel="password">
+      <form id="form-change-password">
+        <label>Contraseña actual <input name="current" type="password" required autocomplete="current-password"/></label>
+        <label>Nueva contraseña <input name="next" type="password" required minlength="8" autocomplete="new-password"/></label>
+        <p class="test-result" id="account-pw-msg"></p>
+        <button type="submit" class="btn btn-primary">Actualizar contraseña</button>
+      </form>
+    </div>
+    <div class="modal-tab-content" data-tab-panel="totp" hidden>
+      <p style="display:flex; align-items:center; gap:10px; margin:0 0 12px">
+        <i data-icon="shield_check" data-icon-size="18" style="color:var(--success)"></i>
+        <strong style="color:var(--text)">TOTP activado</strong>
+      </p>
+      <p class="hint" style="margin-top:0">
+        Tu cuenta está protegida con autenticación de dos factores. Si pierdes el acceso a tu app de autenticación, usa un código de recuperación (pestaña "Recuperación").
+      </p>
+      <p class="hint">
+        Para cambiar la app o el dispositivo, contacta a un administrador para reiniciar tu enrollment.
+      </p>
+    </div>
+    <div class="modal-tab-content" data-tab-panel="recovery" hidden>
+      <p class="hint" style="margin-top:0">Regenerar invalida los anteriores. Asegúrate de guardar los nuevos.</p>
+      <button type="button" class="btn" id="btn-regen-recovery"><i data-icon="refresh"></i> Regenerar códigos</button>
+      <div id="new-recovery-codes" class="recovery-codes" style="margin-top:12px"></div>
     </div>
   </div>
 </div>
@@ -424,27 +440,27 @@
 <!-- Modal: Users admin -->
 <div class="modal-backdrop" id="modal-users" style="display:none">
   <div class="modal modal-lg">
-    <header><h3>Usuarios</h3><button class="btn-icon" data-close>✕</button></header>
-    <div style="padding:18px; max-height:60vh; overflow:auto">
+    <header><h3>Usuarios</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
+    <div class="modal-body">
       <table class="grid" style="margin-bottom:16px">
         <thead><tr><th>Usuario</th><th>Rol</th><th>TOTP</th><th>Último login</th><th>Estado</th><th></th></tr></thead>
         <tbody id="users-tbody"></tbody>
       </table>
-    </div>
-    <div style="padding:0 18px 18px">
-      <h4 style="font-size:12px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:10px">Crear usuario</h4>
-      <form id="form-create-user" style="display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:8px; align-items:end">
-        <label>Usuario <input name="username" required pattern="[a-zA-Z0-9_.\-]{2,32}"/></label>
-        <label>Contraseña inicial <input name="password" type="password" required minlength="8"/></label>
-        <label>Rol
-          <select name="role">
-            <option value="user">Usuario</option>
-            <option value="admin">Admin</option>
-          </select>
-        </label>
-        <button type="submit" class="btn btn-primary">Crear</button>
-      </form>
-      <p class="test-result" id="create-user-msg"></p>
+      <div style="margin-top:12px">
+        <button type="button" class="btn" id="btn-toggle-create-user" data-expand="form-create-user"><i data-icon="plus"></i> Nuevo usuario</button>
+        <form id="form-create-user" hidden style="display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:8px; align-items:end; margin-top:14px; padding:14px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px">
+          <label>Usuario <input name="username" required pattern="[a-zA-Z0-9_.\-]{2,32}"/></label>
+          <label>Contraseña inicial <input name="password" type="password" required minlength="8"/></label>
+          <label>Rol
+            <select name="role">
+              <option value="user">Usuario</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+          <button type="submit" class="btn btn-primary">Crear</button>
+        </form>
+        <p class="test-result" id="create-user-msg"></p>
+      </div>
     </div>
   </div>
 </div>

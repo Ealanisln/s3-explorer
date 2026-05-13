@@ -48,6 +48,7 @@ import { initReindex, onBucketOpened as reindexOnBucketOpened } from './index/re
 import { initThemeToggle, applyTheme, loadTheme } from './util/theme.js';
 import { initDrawer } from './util/drawer.js';
 import { mountIcons } from './util/icons.js';
+import { initModalTabs, initExpandButtons } from './util/modal-ux.js';
 import {
   mountRightPane, initActivation, initDualToggle, paintRightPanePlaceholder,
 } from './panes/init.js';
@@ -107,6 +108,8 @@ initThemeToggle();
 initDrawer();
 initActivation();
 initDualToggle();
+initModalTabs();
+initExpandButtons();
 
 // Pane-scoped wiring for both left and right.
 for (const p of PANES) {
