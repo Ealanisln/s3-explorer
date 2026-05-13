@@ -356,6 +356,47 @@
 
 <!-- (Info panel moved inside each pane — see <section data-pane="..."> above.) -->
 
+<!-- Modal: Transfer confirm — picks copy / move before kicking off the SSE run -->
+<div class="modal-backdrop" id="modal-transfer-confirm" style="display:none">
+  <div class="modal">
+    <header><h3 id="transfer-confirm-title">Transferir archivos</h3><button class="btn-icon" data-close>✕</button></header>
+    <div style="padding:18px">
+      <p class="hint" style="margin-top:0">
+        <span id="transfer-confirm-count">0</span> elemento(s) desde
+        <code id="transfer-confirm-source"></code>
+        hacia
+        <code id="transfer-confirm-dest"></code>.
+      </p>
+      <p class="hint" id="transfer-confirm-cross" style="display:none; color:var(--yellow)">
+        ⚠ Transferencia entre conexiones distintas — los bytes pasan por el servidor.
+      </p>
+      <footer style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; margin-top:16px">
+        <button type="button" class="btn" id="btn-transfer-cancel">Cancelar</button>
+        <button type="button" class="btn" id="btn-transfer-do-copy">Copiar</button>
+        <button type="button" class="btn btn-primary" id="btn-transfer-do-move">Mover</button>
+      </footer>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Transfer progress — consumes the POST /api/transfer SSE stream -->
+<div class="modal-backdrop" id="modal-transfer-progress" style="display:none">
+  <div class="modal modal-lg">
+    <header>
+      <h3 id="transfer-progress-title">Transferencia en curso</h3>
+      <div class="header-actions">
+        <button class="btn" id="btn-transfer-abort">Cancelar</button>
+        <button class="btn-icon" id="btn-transfer-close" style="display:none" data-close>✕</button>
+      </div>
+    </header>
+    <div style="padding:18px">
+      <div class="transfer-progress-bar"><div id="transfer-progress-fill"></div></div>
+      <p class="hint" id="transfer-progress-summary" style="margin:8px 0 4px">Preparando…</p>
+      <div class="transfer-item-list" id="transfer-item-list"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: My account -->
 <div class="modal-backdrop" id="modal-account" style="display:none">
   <div class="modal">

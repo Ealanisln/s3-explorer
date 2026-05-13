@@ -17,7 +17,30 @@ import {
   downloadObject, shareObject, deleteObject, restoreDeleteMarker, openRename,
 } from './actions.js';
 import { runRecursiveSearchForLink, updateSearchBanner } from './search.js';
+import { runTransfer } from '../panes/transfer.js';
 import type { S3Object, SearchFolderInfo } from '../types.js';
+
+// The "other" pane id — used by drag-and-drop / context menu to figure out
+// where a transfer should land.
+function otherPane(paneId: PaneId): PaneId {
+  return paneId === 'left' ? 'right' : 'left';
+}
+
+// Returns the keys to transfer when the user drags row `o`: if it's part of
+// the current selection, take the whole selection; otherwise just this row.
+function dragKeysFor(o: S3Object, paneId: PaneId): string[] {
+  const sel = getPane(paneId).selected;
+  if (sel.has(o.Key) && sel.size > 1) return [...sel];
+  return [o.Key];
+}
+
+// True when the OTHER pane is mounted, visible (dualMode), and has both an
+// active connection and bucket — i.e. a valid transfer destination.
+function otherPaneReady(paneId: PaneId): boolean {
+  if (!State.dualMode) return false;
+  const other = getPane(otherPane(paneId));
+  return Boolean(other.activeConnId && other.activeBucket);
+}
 
 export function toggleEmpty(show: boolean, paneId?: PaneId): void {
   const p: PaneId = paneId || State.activePane;
@@ -116,6 +139,10 @@ function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
   dd.style.position = 'fixed';
   dd.style.left = (e.clientX - 140) + 'px';
   dd.style.top = (e.clientY) + 'px';
+  const dualEntries = !o.IsDeleteMarker && otherPaneReady(paneId) ? `
+    <button data-act="copy-other">Copiar al otro panel →</button>
+    <button data-act="move-other">Mover al otro panel →</button>
+  ` : '';
   dd.innerHTML = o.IsDeleteMarker ? `
     <button data-act="restore">Restaurar</button>
     <button data-act="versions">Ver versiones</button>
@@ -126,6 +153,7 @@ function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
     <button data-act="share">Enlace temporal</button>
     <button data-act="versions">Ver versiones</button>
     <button data-act="rename">Renombrar</button>
+    ${dualEntries}
     <button data-act="delete" class="danger">Eliminar</button>
   `;
   document.body.appendChild(dd);
@@ -159,11 +187,48 @@ function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
       setTimeout(() => (document.getElementById('btn-show-versions') as HTMLButtonElement)?.click(), 200);
     }
     if (act === 'rename') openRename(o.Key);
+    if (act === 'copy-other' || act === 'move-other') {
+      await runTransfer({
+        sourcePaneId: paneId,
+        destPaneId: otherPane(paneId),
+        keys: dragKeysFor(o, paneId),
+        preselectMode: act === 'move-other' ? 'move' : 'copy',
+      });
+    }
     if (act === 'delete') await deleteObject(o.Key, reload);
   };
 }
 
+// Drag-and-drop payload carried in DataTransfer for cross-pane transfers.
+// MIME `application/x-s3-explorer-keys` is unique enough to disambiguate from
+// regular file drops (which are handled by upload.ts).
+const DND_MIME = 'application/x-s3-explorer-keys';
+
+interface DndPayload {
+  sourcePaneId: PaneId;
+  keys: string[];
+}
+
 function bindRowEvents(tr: HTMLTableRowElement, o: S3Object, paneId: PaneId): void {
+  // Rows are draggable when they're real files (not delete markers). The
+  // payload contains either the single key or the current selection if the
+  // dragged row is part of it.
+  if (!o.IsDeleteMarker) {
+    tr.draggable = true;
+    tr.addEventListener('dragstart', (e: DragEvent) => {
+      setActivePane(paneId);
+      const payload: DndPayload = {
+        sourcePaneId: paneId,
+        keys: dragKeysFor(o, paneId),
+      };
+      e.dataTransfer?.setData(DND_MIME, JSON.stringify(payload));
+      // Plain-text fallback in case the receiver doesn't speak our MIME
+      // (debugging, devtools paste, etc.).
+      e.dataTransfer?.setData('text/plain', payload.keys.join('\n'));
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copyMove';
+    });
+  }
+
   const cb = tr.querySelector<HTMLInputElement>('input[type=checkbox]');
   if (cb) {
     cb.onclick = (e: Event): void => {
@@ -430,6 +495,50 @@ export async function loadObjects(paneId?: PaneId): Promise<void> {
   } finally {
     loader.remove();
   }
+}
+
+// Cross-pane drag-and-drop drop target. Wired per-pane so each pane acts as
+// both source (rows) and dest (content area). File-drop from the OS still
+// goes through upload.ts via a different code path; this handler matches
+// the application MIME and bails on plain file drops.
+export function initDragDrop(paneId: PaneId): void {
+  const root = paneEl('content', paneId).closest('.pane') as HTMLElement | null;
+  if (!root) return;
+  const content = paneEl('content', paneId);
+  let depth = 0;
+
+  content.addEventListener('dragenter', (e: DragEvent) => {
+    if (!e.dataTransfer?.types.includes(DND_MIME)) return;
+    e.preventDefault();
+    depth++;
+    root.classList.add('drop-target');
+  });
+  content.addEventListener('dragleave', (e: DragEvent) => {
+    if (!e.dataTransfer?.types.includes(DND_MIME)) return;
+    depth--;
+    if (depth <= 0) { depth = 0; root.classList.remove('drop-target'); }
+  });
+  content.addEventListener('dragover', (e: DragEvent) => {
+    if (!e.dataTransfer?.types.includes(DND_MIME)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  });
+  content.addEventListener('drop', (e: DragEvent) => {
+    if (!e.dataTransfer?.types.includes(DND_MIME)) return;
+    e.preventDefault();
+    depth = 0;
+    root.classList.remove('drop-target');
+    const raw = e.dataTransfer.getData(DND_MIME);
+    if (!raw) return;
+    let payload: DndPayload;
+    try { payload = JSON.parse(raw) as DndPayload; } catch { return; }
+    if (payload.sourcePaneId === paneId) return; // drop on same pane is a no-op
+    void runTransfer({
+      sourcePaneId: payload.sourcePaneId,
+      destPaneId: paneId,
+      keys: payload.keys,
+    });
+  });
 }
 
 export function initBatchBar(paneId: PaneId): void {
