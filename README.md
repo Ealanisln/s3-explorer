@@ -117,6 +117,33 @@ S3 Explorer listening on http://0.0.0.0:4569
   - Max upload: 500 MB
 ```
 
+### 5. Deploy en Coolify (alternativa a docker compose)
+
+Coolify v4 por defecto despliega aplicaciones en modo **"Dockerfile-only application"** y **NO interpreta el `docker-compose.yml`** del repo (ignora `volumes:`, `environment:`, el contenedor de Caddy y la red). Si esa es la ruta que vas a usar, hay que configurar dos cosas en el UI antes del primer redeploy o perderás los TOTP enrolados cada vez:
+
+1. **Environment Variables → Add:**
+   - `DATA_DIR=/data` — sin esto la app cae al fallback `__dirname/../../data` que resuelve a `/app/data` (dentro de la imagen, se rehace en cada build).
+   - El resto de variables del `.env` (`ADMIN_USER`, `ADMIN_PASS`, `SESSION_SECRET`, `TOTP_ENCRYPTION_KEY`, `DOMAIN`, `ALLOWED_HOSTS`, `ALLOWED_ORIGINS`, etc.) — Coolify NO las lee del `.env` del repo.
+
+2. **Persistent Storage → + Add → Volume Mount:**
+   - **Volume Name:** `s3-explorer-data`
+   - **Destination Path in container:** `/data`
+   - **Source Path:** vacío (managed volume)
+
+Verificación post-deploy:
+
+```bash
+# El mount debe ser un named volume, NO un hash random
+docker inspect <coolify-container> --format '{{json .Mounts}}'
+# Esperado: "Name": "s3-explorer-data", no "Name": "9a73c926f..."
+
+# /data debe contener la DB SQLite tras el primer login
+docker exec <coolify-container> ls /data
+# Esperado: app.db  app.db-shm  app.db-wal
+```
+
+Si quieres usar el stack completo de `docker-compose.yml` (con Caddy + healthcheck + cap_drop + read-only FS), cambia el deploy type en Coolify a **"Docker Compose"** en lugar de "Dockerfile". En ese caso el bloque `volumes:` y `environment:` del compose sí surten efecto y este paso 5 no aplica.
+
 ---
 
 ## Primer login (admin)
@@ -217,7 +244,7 @@ En MinIO/Vultr/etc. usa la política equivalente del proveedor.
 | `ALLOWED_ORIGINS` | `https://${DOMAIN}` | Origins aceptados |
 | `MAX_PRESIGN_SECONDS` | `86400` (24h) | Tope máximo del TTL de enlaces firmados |
 | `DEFAULT_PRESIGN_SECONDS` | `300` (5min) | TTL default si el cliente no especifica |
-| `DATA_DIR` | `/data` | Donde se guarda `users.json` (Docker volume) |
+| `DATA_DIR` | `/data` | Donde se guarda la DB SQLite (`app.db`) y el índice de archivos. Debe apuntar a un volumen persistente. |
 | `SECURE_COOKIE` | `1` | Pone `Secure` flag en cookies (requiere HTTPS) |
 | `TRUST_PROXY` | `1` | Confía en headers X-Forwarded-* del reverse proxy |
 
