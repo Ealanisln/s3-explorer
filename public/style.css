@@ -810,13 +810,11 @@ body.is-resizing * { user-select: none !important; }
      with '—' next to a row with '12.34 GB'). */
   table-layout: fixed;
 }
-/* When a fixed-layout cell's content can't fit (rare — sizes are sized for
-   the worst case), clip cleanly with an ellipsis instead of overflowing. */
-.grid td.col-size, .grid td.col-date,
-.grid th.col-size, .grid th.col-date {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* Note: we intentionally do NOT set `overflow: hidden` on table cells.
+   See the comment on `.cell-name` below — cell-level overflow clips the
+   cell's own bottom border on some browsers, breaking the row divider.
+   Column widths (col-size 96px, col-date 152px) are sized for the worst
+   realistic case so content always fits without needing an overflow clip. */
 .grid thead th {
   position: sticky; top: 0;
   background: var(--bg);
@@ -904,10 +902,12 @@ body.is-resizing * { user-select: none !important; }
 .cell-name {
   display: flex; align-items: center; gap: 12px;
   min-width: 0;
-  /* When the row sits inside a fixed-layout table, the cell needs to clip
-     long filenames; otherwise they push the icon left and visually break
-     the column boundary. */
-  overflow: hidden;
+  /* IMPORTANT: do NOT set `overflow: hidden` on the <td> itself.
+     Combined with `border-collapse: collapse`, some browsers clip the
+     cell's own bottom border at the overflow boundary, producing a
+     visibly truncated divider line between rows. The inner .name-text /
+     .name-stack already handle text overflow with ellipsis, so the cell
+     never needs its own overflow clip. */
 }
 .cell-name .name-text {
   flex: 1; min-width: 0;
