@@ -802,6 +802,20 @@ body.is-resizing * { user-select: none !important; }
   width: 100%;
   border-collapse: collapse;
   font-size: 13.5px;
+  /* table-layout: fixed locks column widths to what the first row / explicit
+     `width` on <th>/<td> says, regardless of subsequent row content. Without
+     this, browsers use auto layout which recalculates widths on re-render and
+     can produce subtle column shifts when a row has slightly wider content
+     (e.g. one row's date wrapping when others don't, or a delete-marker row
+     with '—' next to a row with '12.34 GB'). */
+  table-layout: fixed;
+}
+/* When a fixed-layout cell's content can't fit (rare — sizes are sized for
+   the worst case), clip cleanly with an ellipsis instead of overflowing. */
+.grid td.col-size, .grid td.col-date,
+.grid th.col-size, .grid th.col-date {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .grid thead th {
   position: sticky; top: 0;
@@ -870,9 +884,24 @@ body.is-resizing * { user-select: none !important; }
 .cell-name {
   display: flex; align-items: center; gap: 12px;
   min-width: 0;
+  /* When the row sits inside a fixed-layout table, the cell needs to clip
+     long filenames; otherwise they push the icon left and visually break
+     the column boundary. */
+  overflow: hidden;
 }
 .cell-name .name-text {
+  flex: 1; min-width: 0;
   color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Search mode: the cell-name contains a 2-row stack (filename + parent
+   path). Both rows ellipsis-clip independently. */
+.cell-name .name-stack {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column;
+  gap: 2px;
+}
+.cell-name .name-stack > div {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
