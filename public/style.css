@@ -193,12 +193,57 @@ code, .mono { font-family: var(--font-mono); }
    Sidebar
    ============================================================ */
 .sidebar {
+  position: relative;
   background: var(--surface-2);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   min-height: 0;
   font-size: 13.5px;
+}
+
+/* ── Drag handles for resizable sidebar + info panel ─────────────────── */
+.resize-handle {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  user-select: none;
+  background: transparent;
+  z-index: 10;
+  transition: background var(--t-fast);
+}
+.resize-handle::after {
+  /* Visible bar drawn inside the wider hit area so the cursor target is
+     forgiving (6px) but the visual line is crisp (1px). */
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: transparent;
+  transition: background var(--t-fast), width var(--t-fast);
+}
+.resize-handle:hover::after,
+.resize-handle.dragging::after {
+  background: var(--accent);
+  width: 2px;
+}
+.resize-handle-sidebar {
+  right: -3px;  /* straddle the border so the hit area is centered */
+}
+.resize-handle-info {
+  left: -3px;
+}
+/* Hide the info-panel handle when the panel is closed (translated off-screen)
+   — otherwise the handle's hit area still catches clicks at the edge. */
+.info-panel:not(.open) .resize-handle-info { display: none; }
+/* While dragging, suppress text selection across the page. */
+body.is-resizing { cursor: col-resize !important; user-select: none; }
+body.is-resizing * { user-select: none !important; }
+@media (max-width: 768px) {
+  /* Drawer mode — no resizing on mobile. */
+  .resize-handle { display: none; }
 }
 .brand {
   display: flex;
@@ -243,28 +288,37 @@ code, .mono { font-family: var(--font-mono); }
   color: var(--text-mute);
 }
 
-.conn-list, .bucket-list {
+/* ─── Sidebar tree (connections → buckets) ──────────────────────────────── */
+
+.conn-tree {
   list-style: none;
   padding: 0; margin: 0;
   display: flex; flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
-.conn-list li, .bucket-list li {
+.conn-tree .conn-node { list-style: none; padding: 0; }
+
+.conn-tree .conn-row,
+.conn-tree .bucket-node {
   position: relative;
-  display: flex; align-items: center; gap: 10px;
-  padding: 7px 10px 7px 14px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 8px 7px 4px;
   border-radius: 5px;
   color: var(--text-2);
   cursor: pointer;
   transition: background var(--t-fast), color var(--t-fast);
 }
-.conn-list li:hover, .bucket-list li:hover {
+.conn-tree .conn-row:hover,
+.conn-tree .bucket-node:hover {
   background: var(--surface-hover); color: var(--text);
 }
-.conn-list li.active, .bucket-list li.active {
+.conn-tree .conn-node.active > .conn-row {
+  color: var(--text);
+}
+.conn-tree .bucket-node.active {
   background: var(--surface-3); color: var(--text);
 }
-.conn-list li.active::before, .bucket-list li.active::before {
+.conn-tree .bucket-node.active::before {
   content: '';
   position: absolute;
   left: 0; top: 6px; bottom: 6px;
@@ -272,20 +326,76 @@ code, .mono { font-family: var(--font-mono); }
   background: var(--accent);
   border-radius: 0 2px 2px 0;
 }
-.conn-list li .name, .bucket-list li .name {
+
+.conn-tree .chevron {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px;
+  color: var(--text-mute);
+  border-radius: 3px;
+  transition: transform var(--t-fast), background var(--t-fast), color var(--t-fast);
+  flex-shrink: 0;
+}
+.conn-tree .chevron:hover { background: var(--surface-3); color: var(--text); }
+.conn-tree .chevron.open { transform: rotate(90deg); }
+
+.conn-tree .conn-row .name,
+.conn-tree .bucket-node .name {
   flex: 1; min-width: 0;
   font-weight: 500;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.conn-list li .menu, .bucket-list li .menu {
+
+.conn-tree .act-btn {
   visibility: hidden;
+  display: inline-flex; align-items: center; justify-content: center;
   color: var(--text-mute);
-  padding: 2px 4px;
+  padding: 3px 5px;
   border-radius: 4px;
-  font-size: 14px;
+  flex-shrink: 0;
 }
-.conn-list li:hover .menu, .bucket-list li:hover .menu { visibility: visible; }
-.conn-list li .menu:hover, .bucket-list li .menu:hover { background: var(--surface-3); color: var(--text); }
+.conn-tree .conn-row:hover .act-btn,
+.conn-tree .bucket-node:hover .act-btn { visibility: visible; }
+.conn-tree .act-btn:hover { background: var(--surface-3); color: var(--text); }
+
+.conn-tree .bucket-children {
+  list-style: none;
+  margin: 2px 0 4px;
+  padding: 0;
+  /* Indent the children under the chevron + S3 badge column so buckets
+     visually align under the connection name. */
+  padding-left: 22px;
+  position: relative;
+}
+.conn-tree .bucket-children::before {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 2px; bottom: 4px;
+  width: 1px;
+  background: var(--divider);
+}
+.conn-tree .bucket-node {
+  padding: 5px 8px 5px 8px;
+  font-size: 13px;
+}
+.conn-tree .bucket-empty {
+  padding: 5px 8px 5px 8px;
+  font-size: 12px;
+  color: var(--text-mute);
+  font-style: italic;
+}
+
+/* ─── Breadcrumb connection prefix ──────────────────────────────────────── */
+.crumbs .crumb-conn {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-mute);
+  padding: 2px 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  letter-spacing: 0.01em;
+}
 
 .sidebar-foot {
   padding: 12px 16px;
@@ -374,6 +484,16 @@ code, .mono { font-family: var(--font-mono); }
 }
 .crumbs .sep { color: var(--text-faint); padding: 0 2px; user-select: none; }
 .crumbs .current { color: var(--text); font-weight: 500; }
+
+/* Breadcrumb segments are also drop targets: dropping a row onto a parent
+   segment moves/copies it UP the hierarchy. Highlight mirrors the folder-row
+   drop-target style so the gesture feels consistent. */
+.crumbs a.drop-target-crumb {
+  background: var(--accent-soft);
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+  font-weight: 600;
+}
 
 .actions {
   display: flex; align-items: center; gap: 6px;
@@ -538,16 +658,34 @@ code, .mono { font-family: var(--font-mono); }
   padding: 0;
   border: none;
   background: transparent;
-  border-radius: 5px;
+  border-radius: 6px;
   display: inline-grid; place-items: center;
   color: var(--text-dim);
   transition: background var(--t-fast), color var(--t-fast);
   cursor: pointer;
+  flex-shrink: 0;
 }
 .btn-icon:hover { background: var(--surface-3); color: var(--text); }
 .btn-icon:focus-visible { outline: none; box-shadow: var(--ring); }
 .btn-icon svg { width: 16px; height: 16px; }
 .btn-icon[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+/* Close button inside a modal header: larger hit area, perfectly round so
+   the hover/focus background matches the icon's optical center. Without
+   this override, the default 28×28 with 5px radius looked like a clipped
+   rectangle next to the title's larger line-height. */
+.modal header .btn-icon,
+.modal .modal-head .btn-icon,
+.modal .header-actions .btn-icon {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  margin-top: -2px;  /* nudge into optical alignment with serif title */
+}
+.modal header .btn-icon svg,
+.modal .modal-head .btn-icon svg,
+.modal .header-actions .btn-icon svg {
+  width: 15px; height: 15px;
+}
 
 /* The dual-pane toggle button in the toolbar actions cluster. */
 .dual-only-trigger { color: var(--text-dim); }
@@ -645,6 +783,18 @@ code, .mono { font-family: var(--font-mono); }
   z-index: 4;
 }
 
+/* Drop target highlight on a SINGLE folder row when something is being
+   dragged over it — distinguishes "drop into this sub-folder" from "drop
+   into the currently-open folder" (which is the pane-level highlight). */
+.grid tr.drop-target-row > td {
+  background: var(--accent-soft) !important;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.grid tr.drop-target-row .cell-name {
+  color: var(--text);
+  font-weight: 600;
+}
+
 /* ============================================================
    Grid (table) — selector kept as `.grid` for TS bindings
    ============================================================ */
@@ -652,7 +802,19 @@ code, .mono { font-family: var(--font-mono); }
   width: 100%;
   border-collapse: collapse;
   font-size: 13.5px;
+  /* table-layout: fixed locks column widths to what the first row / explicit
+     `width` on <th>/<td> says, regardless of subsequent row content. Without
+     this, browsers use auto layout which recalculates widths on re-render and
+     can produce subtle column shifts when a row has slightly wider content
+     (e.g. one row's date wrapping when others don't, or a delete-marker row
+     with '—' next to a row with '12.34 GB'). */
+  table-layout: fixed;
 }
+/* Note: we intentionally do NOT set `overflow: hidden` on table cells.
+   See the comment on `.cell-name` below — cell-level overflow clips the
+   cell's own bottom border on some browsers, breaking the row divider.
+   Column widths (col-size 96px, col-date 152px) are sized for the worst
+   realistic case so content always fits without needing an overflow clip. */
 .grid thead th {
   position: sticky; top: 0;
   background: var(--bg);
@@ -699,17 +861,67 @@ code, .mono { font-family: var(--font-mono); }
   vertical-align: middle;
   color: var(--text-2);
 }
-.col-check { width: 36px; padding-right: 0; }
-.col-size  { width: 110px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.col-date  { width: 156px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.col-act   { width: 56px; text-align: right; }
+/* Column-specific sizing + padding. Selectors are written as
+   `.grid td.col-X, .grid th.col-X` so they beat the generic
+   `.grid td { padding: 11px 16px }` and `.grid thead th { padding: 12px 16px }`
+   rules on specificity. Without `.grid` in front, the generic padding rule
+   wins and the column ends up with 32px of horizontal padding inside a
+   tight width — content gets clipped (e.g. "793.3 KB" → "793.3 …"). */
+.grid td.col-check, .grid th.col-check {
+  width: 38px;
+  padding-left: 14px;
+  padding-right: 4px;
+}
+.grid td.col-size, .grid th.col-size {
+  width: 96px;
+  padding-left: 8px;
+  padding-right: 8px;
+  white-space: nowrap;
+}
+.grid td.col-size {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.grid td.col-date, .grid th.col-date {
+  width: 152px;
+  padding-left: 8px;
+  padding-right: 8px;
+  white-space: nowrap;
+}
+.grid td.col-date {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.grid td.col-act, .grid th.col-act {
+  width: 44px;
+  padding-left: 4px;
+  padding-right: 10px;
+  text-align: right;
+}
 
 .cell-name {
   display: flex; align-items: center; gap: 12px;
   min-width: 0;
+  /* IMPORTANT: do NOT set `overflow: hidden` on the <td> itself.
+     Combined with `border-collapse: collapse`, some browsers clip the
+     cell's own bottom border at the overflow boundary, producing a
+     visibly truncated divider line between rows. The inner .name-text /
+     .name-stack already handle text overflow with ellipsis, so the cell
+     never needs its own overflow clip. */
 }
 .cell-name .name-text {
+  flex: 1; min-width: 0;
   color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Search mode: the cell-name contains a 2-row stack (filename + parent
+   path). Both rows ellipsis-clip independently. */
+.cell-name .name-stack {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column;
+  gap: 2px;
+}
+.cell-name .name-stack > div {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
@@ -1122,9 +1334,12 @@ tr.deleted .badge-deleted {
 }
 .version-row {
   display: grid;
-  grid-template-columns: 32px 1fr auto auto;
-  gap: 12px;
-  padding: 8px 0;
+  /* vid stretches, the rest hug their content. minmax(0, 1fr) is required
+     so the long version-id can shrink + ellipsis instead of overflowing
+     into the date column. */
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 14px;
+  padding: 8px 4px;
   border-bottom: 1px solid var(--divider);
   align-items: center;
   font-family: var(--font-mono);
@@ -1133,7 +1348,13 @@ tr.deleted .badge-deleted {
 .version-row:last-child { border-bottom: 0; }
 .version-row.viewing { background: var(--accent-soft); border-radius: 4px; padding: 8px 6px; }
 .version-row.viewing .vid::before { content: '▶ '; color: var(--accent); }
-.version-row .vid { color: var(--text); }
+.version-row .vid {
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .version-row .latest { color: var(--success); font-weight: 600; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; }
 .version-row .delete-marker { color: var(--danger); font-weight: 600; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; }
 .version-row .actions { display: flex; gap: 6px; }
@@ -1277,12 +1498,35 @@ tr.deleted .badge-deleted {
   border-radius: 999px;
   overflow: hidden;
   margin-bottom: 12px;
+  position: relative;
 }
 .transfer-progress-bar > div {
   height: 100%;
   background: var(--accent);
   border-radius: 999px;
   transition: width 240ms ease;
+  position: relative;
+  z-index: 1;
+}
+/* Sweep stripe across the whole track while transfer is active. Visible
+ * regardless of fill width (vs `> div::after` which has 0 width at 0%).
+ * Toggled from JS via `.in-progress` on the outer bar.
+ */
+.transfer-progress-bar.in-progress::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  left: -30%;
+  width: 30%;
+  background: linear-gradient(90deg, transparent 0%, var(--accent) 50%, transparent 100%);
+  opacity: 0.55;
+  animation: transfer-sweep 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+@keyframes transfer-sweep {
+  0%   { left: -30%; }
+  100% { left: 100%; }
 }
 .transfer-item-list {
   list-style: none;
@@ -1298,10 +1542,20 @@ tr.deleted .badge-deleted {
   border-bottom: 1px solid var(--divider);
 }
 .transfer-item:last-child { border-bottom: 0; }
+/* Status badge: plain-text colored pill per row state. Text content is set
+ * from JS in setRowStatus(); CSS handles the per-state color scheme.
+ */
 .transfer-item .status {
-  width: 18px; flex-shrink: 0;
+  flex-shrink: 0;
+  min-width: 84px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
   text-align: center;
-  font-size: 13px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 .transfer-item .key {
   flex: 1;
@@ -1312,10 +1566,27 @@ tr.deleted .badge-deleted {
 }
 .transfer-item.done .key   { color: var(--success); }
 .transfer-item.error .key  { color: var(--danger); }
-.transfer-item.active .status::after  { content: '⏳'; }
-.transfer-item.done .status::after    { content: '✓'; color: var(--success); }
-.transfer-item.error .status::after   { content: '✕'; color: var(--danger); }
-.transfer-item.pending .status::after { content: '·'; color: var(--text-mute); }
+.transfer-item.pending .status {
+  background: var(--surface-3);
+  color: var(--text-mute);
+}
+.transfer-item.active .status {
+  background: var(--accent-soft);
+  color: var(--accent);
+  animation: transfer-state-pulse 1.6s ease-in-out infinite;
+}
+.transfer-item.done .status {
+  background: rgba(79, 122, 76, 0.15);
+  color: var(--success);
+}
+.transfer-item.error .status {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+@keyframes transfer-state-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.6; }
+}
 .transfer-item .err-msg {
   font-size: 11px;
   color: var(--text-dim);
@@ -1593,4 +1864,121 @@ tr.deleted .badge-deleted {
 
 @media (max-width: 480px) {
   .auth-card { padding: 22px 20px; border-radius: 10px; }
+}
+
+/* ============================================================
+   In-app dialogs (confirm / prompt / choice) — replace
+   browser-native window.confirm/alert/prompt.
+   ============================================================ */
+.dialog-backdrop .modal.modal-sm {
+  width: 440px;
+  max-width: 100%;
+}
+.dialog-body {
+  padding: 18px 22px 8px;
+}
+.dialog-msg {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.dialog-msg code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--surface-2);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+.dialog-input {
+  display: block;
+  width: 100%;
+  height: 38px;
+  margin-top: 14px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.dialog-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+.dialog-error {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+.dialog-foot {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 18px 18px;
+  border-top: 1px solid var(--divider);
+  background: var(--surface-2);
+}
+.dialog-foot .btn { min-width: 90px; }
+.dialog-foot .btn:empty,
+.dialog-foot .btn[data-act="cancel"]:not(:has(*))[hidden] { display: none; }
+
+.dialog-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+.dialog-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.dialog-choice:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+.dialog-choice:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+.dialog-choice.recommended {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.dialog-choice-label {
+  font-size: 14px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.dialog-choice-label .recommended-tag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+.dialog-choice-hint {
+  font-size: 12.5px;
+  color: var(--text-dim);
 }

@@ -11,14 +11,14 @@ import { api } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
 import { $, paneEl, openModal, closeModal } from '../util/dom.js';
 import { loadObjects } from './grid.js';
-import { renderBuckets } from '../buckets/list.js';
-import { selectConnection } from '../connections/list.js';
+import { selectConnection, refreshActiveConnBuckets } from '../connections/list.js';
 import type { Connection } from '../types.js';
 
 // Bucket create + global rename submit (modals are app-global). Run once.
 export function initGlobalForms(): void {
-  // Bucket create lives in the sidebar — global.
-  $('btn-create-bucket').onclick = (): void => openModal('modal-bucket');
+  // Bucket create modal is opened from each connection row's "+" button in the
+  // sidebar tree (see connections/list.ts). The submit handler here just runs
+  // POST /api/buckets against whatever connection is active for the focused pane.
   ($('form-bucket') as HTMLFormElement).onsubmit = async (e: Event): Promise<void> => {
     e.preventDefault();
     const f = e.target as HTMLFormElement;
@@ -27,9 +27,8 @@ export function initGlobalForms(): void {
       await api('/api/buckets', { method: 'POST', body: { name } });
       toast('Bucket creado', 'success');
       closeModal('modal-bucket');
-      const { buckets } = await api<{ buckets: { Name: string; CreationDate: string | null }[] }>('/api/buckets');
-      State.buckets = buckets;
-      renderBuckets();
+      await refreshActiveConnBuckets();
+      State.buckets = getPane().buckets;
     } catch (e2) {
       toast((e2 as Error).message, 'error', errorIdOpts(e2));
     }

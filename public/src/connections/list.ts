@@ -1,14 +1,21 @@
-// Sidebar connection list + per-row menu + selectConnection.
+// Sidebar connection tree + per-row menu + selectConnection.
+//
+// The sidebar is one tree: each connection is a parent node, its buckets are
+// nested children. Connections are collapsed by default. Clicking a connection
+// row both selects it (loads buckets into the active pane) and expands it.
+// Clicking the chevron toggles expansion without changing the active selection.
 
 import { State, getPane, subscribe } from '../state.js';
-import type { PaneId } from '../state.js';
+import type { PaneId, BucketRow } from '../state.js';
 import { api } from '../api/client.js';
 import { saveConnections } from '../vault/persistence.js';
 import { toast, errorIdOpts } from '../util/toast.js';
 import { mountIcons } from '../util/icons.js';
-import { $, paneEl, escapeHtml } from '../util/dom.js';
-import { renderBuckets } from '../buckets/list.js';
+import { $, paneEl, escapeHtml, openModal } from '../util/dom.js';
+import { confirmDialog } from '../util/dialog.js';
+import { openBucket, loadVersioning } from '../buckets/list.js';
 import { toggleEmpty } from '../objects/grid.js';
+import { navigateTo } from '../router/index.js';
 import type { Connection } from '../types.js';
 
 let openEditModal: (c: Connection | null) => void = () => undefined;
@@ -16,6 +23,12 @@ let openEditModal: (c: Connection | null) => void = () => undefined;
 export function configureConnections(deps: { openEditModal: (c: Connection | null) => void }): void {
   openEditModal = deps.openEditModal;
 }
+
+// Per-conn tree UI state. Cache survives re-renders so toggling a node doesn't
+// refetch /api/buckets. Cleared on logout / vault re-lock by clearMain().
+const expanded = new Set<string>();
+const bucketCache = new Map<string, BucketRow[]>();
+const inflight = new Map<string, Promise<BucketRow[] | null>>();
 
 function showConnMenu(e: MouseEvent, c: Connection): void {
   e.stopPropagation();
@@ -33,7 +46,7 @@ function showConnMenu(e: MouseEvent, c: Connection): void {
   document.body.appendChild(dd);
   const close = (): void => { dd.remove(); document.removeEventListener('click', close); };
   setTimeout(() => document.addEventListener('click', close), 10);
-  dd.onclick = (ev: Event): void => {
+  dd.onclick = async (ev: Event): Promise<void> => {
     const target = ev.target as HTMLElement;
     const act = target.dataset.act;
     if (act === 'edit') openEditModal(c);
@@ -44,9 +57,17 @@ function showConnMenu(e: MouseEvent, c: Connection): void {
       renderConnections();
     }
     if (act === 'delete') {
-      if (confirm(`¿Eliminar conexión "${c.name}"?`)) {
+      const ok = await confirmDialog({
+        title: 'Eliminar conexión',
+        message: `Se eliminará la conexión "${c.name}" de tu bóveda local. Los datos en S3 no se tocan.`,
+        confirmLabel: 'Eliminar',
+        danger: true,
+      });
+      if (ok) {
         State.connections = State.connections.filter((x) => x.id !== c.id);
         void saveConnections();
+        bucketCache.delete(c.id);
+        expanded.delete(c.id);
         // Clear out of every pane that was pointing at this connection.
         for (const p of ['left', 'right'] as PaneId[]) {
           const pane = getPane(p);
@@ -63,69 +84,223 @@ function showConnMenu(e: MouseEvent, c: Connection): void {
   };
 }
 
+function showBucketMenu(e: MouseEvent, conn: Connection, b: BucketRow): void {
+  e.stopPropagation();
+  document.querySelectorAll('.dropdown.bucket-menu').forEach((d) => d.remove());
+  const dd = document.createElement('div');
+  dd.className = 'dropdown bucket-menu';
+  dd.style.position = 'fixed';
+  dd.style.left = e.clientX + 'px';
+  dd.style.top = e.clientY + 'px';
+  dd.innerHTML = '<button data-act="delete" class="danger">Eliminar bucket</button>';
+  document.body.appendChild(dd);
+  const close = (): void => { dd.remove(); document.removeEventListener('click', close); };
+  setTimeout(() => document.addEventListener('click', close), 10);
+  dd.onclick = async (ev: Event): Promise<void> => {
+    const target = ev.target as HTMLElement;
+    if (target.dataset.act === 'delete') {
+      const ok = await confirmDialog({
+        title: 'Eliminar bucket',
+        message: `Se eliminará el bucket "${b.Name}". Debe estar vacío para que S3 lo acepte.`,
+        confirmLabel: 'Eliminar',
+        danger: true,
+      });
+      if (!ok) return;
+      try {
+        await api(`/api/buckets/${encodeURIComponent(b.Name)}`, {
+          method: 'DELETE',
+          headers: connHeaders(conn),
+        });
+        toast('Bucket eliminado', 'success');
+        // Refresh this conn's bucket cache and tree.
+        await refreshConnBuckets(conn);
+        renderConnections();
+      } catch (e2) {
+        toast((e2 as Error).message, 'error', errorIdOpts(e2));
+      }
+    }
+  };
+}
+
 export function renderConnections(): void {
   const ul = $('connections');
   ul.innerHTML = '';
-  const active = getPane().activeConnId;
+  const activeConnId = getPane().activeConnId;
+  const activeBucket = getPane().activeBucket;
+
   for (const c of State.connections) {
+    const isActive = c.id === activeConnId;
+    const isOpen = expanded.has(c.id);
+    const buckets = bucketCache.get(c.id);
+    const isLoading = inflight.has(c.id);
+
     const li = document.createElement('li');
-    li.className = c.id === active ? 'active' : '';
+    li.className = 'conn-node' + (isActive ? ' active' : '');
+    li.dataset.connId = c.id;
     li.innerHTML = `
-      <span class="ft-badge def" style="width:22px;height:22px;font-size:9px">S3</span>
-      <span class="name" title="${escapeHtml(c.endpoint || 'AWS')}">${escapeHtml(c.name)}</span>
-      <span class="menu" data-conn-id="${escapeHtml(c.id)}" aria-label="Menú"><i data-icon="dots_h" data-icon-size="14"></i></span>
+      <div class="conn-row">
+        <span class="chevron${isOpen ? ' open' : ''}" aria-label="Expandir">
+          <i data-icon="chevron_right" data-icon-size="12"></i>
+        </span>
+        <span class="ft-badge def" style="width:22px;height:22px;font-size:9px">S3</span>
+        <span class="name" title="${escapeHtml(c.endpoint || 'AWS')}">${escapeHtml(c.name)}</span>
+        <span class="act-btn add-bucket" title="Crear bucket" aria-label="Crear bucket">
+          <i data-icon="plus" data-icon-size="13"></i>
+        </span>
+        <span class="act-btn menu" aria-label="Menú">
+          <i data-icon="dots_h" data-icon-size="14"></i>
+        </span>
+      </div>
+      ${isOpen ? `
+        <ul class="bucket-children">
+          ${buckets
+            ? (buckets.length
+              ? buckets.map((b) => `
+                  <li class="bucket-node${(isActive && b.Name === activeBucket) ? ' active' : ''}" data-bucket="${escapeHtml(b.Name)}">
+                    <span class="ft-badge folder" style="width:18px;height:18px"><i data-icon="bucket" data-icon-size="10"></i></span>
+                    <span class="name">${escapeHtml(b.Name)}</span>
+                    <span class="act-btn menu" aria-label="Menú">
+                      <i data-icon="dots_h" data-icon-size="13"></i>
+                    </span>
+                  </li>`).join('')
+              : '<li class="bucket-empty">Sin buckets</li>')
+            : (isLoading
+              ? '<li class="bucket-empty">Cargando…</li>'
+              : '<li class="bucket-empty">—</li>')}
+        </ul>
+      ` : ''}
     `;
-    li.onclick = (e: MouseEvent): void => {
-      const target = e.target as HTMLElement;
-      if (target.classList.contains('menu') || target.closest('.menu')) showConnMenu(e, c);
-      else void selectConnection(c.id);
-    };
     ul.appendChild(li);
+
+    // Wire the connection row.
+    const row = li.querySelector<HTMLElement>('.conn-row')!;
+    row.onclick = (e: MouseEvent): void => {
+      const target = e.target as HTMLElement;
+      if (target.closest('.menu')) { showConnMenu(e, c); return; }
+      if (target.closest('.add-bucket')) {
+        e.stopPropagation();
+        void selectConnection(c.id).then(() => openModal('modal-bucket'));
+        return;
+      }
+      if (target.closest('.chevron')) {
+        e.stopPropagation();
+        toggleExpand(c);
+        return;
+      }
+      // Default: select + auto-expand.
+      void selectConnection(c.id, undefined, { autoExpand: true });
+    };
+
+    // Wire each bucket row inside.
+    if (isOpen && buckets) {
+      li.querySelectorAll<HTMLElement>('.bucket-node').forEach((bn) => {
+        const bname = bn.dataset.bucket || '';
+        const bucket = buckets.find((bb) => bb.Name === bname);
+        if (!bucket) return;
+        bn.onclick = async (e: MouseEvent): Promise<void> => {
+          const t = e.target as HTMLElement;
+          if (t.closest('.menu')) { showBucketMenu(e, c, bucket); return; }
+          // Switch the active pane onto this connection if needed, then open.
+          if (getPane().activeConnId !== c.id) {
+            await selectConnection(c.id, undefined, { skipPaint: true });
+          }
+          await openBucket(bucket.Name);
+        };
+      });
+    }
   }
   mountIcons(ul);
 }
 
-export async function selectConnection(id: string, paneId?: PaneId): Promise<void> {
+function toggleExpand(c: Connection): void {
+  if (expanded.has(c.id)) {
+    expanded.delete(c.id);
+    renderConnections();
+    return;
+  }
+  expanded.add(c.id);
+  // Fire the fetch if we don't have buckets cached yet.
+  if (!bucketCache.has(c.id) && !inflight.has(c.id)) {
+    void fetchConnBuckets(c).then(() => renderConnections());
+  }
+  renderConnections();
+}
+
+async function fetchConnBuckets(conn: Connection): Promise<BucketRow[] | null> {
+  const existing = inflight.get(conn.id);
+  if (existing) return existing;
+  const p = (async (): Promise<BucketRow[] | null> => {
+    try {
+      if (conn.buckets && conn.buckets.length) {
+        const rows: BucketRow[] = conn.buckets.map((name) => ({ Name: name, CreationDate: null }));
+        bucketCache.set(conn.id, rows);
+        return rows;
+      }
+      const { buckets } = await api<{ buckets: BucketRow[] }>(
+        '/api/buckets',
+        { headers: connHeaders(conn) },
+      );
+      bucketCache.set(conn.id, buckets);
+      return buckets;
+    } catch (e) {
+      const err = e as Error;
+      if (!/ListAllMyBuckets|not authorized|AccessDenied/i.test(err.message)) {
+        toast('Error al cargar buckets: ' + err.message, 'error', errorIdOpts(err));
+      }
+      return null;
+    } finally {
+      inflight.delete(conn.id);
+    }
+  })();
+  inflight.set(conn.id, p);
+  return p;
+}
+
+async function refreshConnBuckets(conn: Connection): Promise<void> {
+  bucketCache.delete(conn.id);
+  await fetchConnBuckets(conn);
+  // Keep per-pane bucket arrays in sync where applicable.
+  for (const p of ['left', 'right'] as PaneId[]) {
+    const pane = getPane(p);
+    if (pane.activeConnId === conn.id) {
+      pane.buckets = bucketCache.get(conn.id) || [];
+    }
+  }
+}
+
+interface SelectOpts {
+  autoExpand?: boolean;
+  skipPaint?: boolean;  // when called from inside a bucket click — caller will paint
+}
+
+export async function selectConnection(id: string, paneId?: PaneId, opts: SelectOpts = {}): Promise<void> {
   const p: PaneId = paneId || State.activePane;
   const pane = getPane(p);
   pane.activeConnId = id;
   pane.activeBucket = null;
   pane.prefix = '';
   pane.buckets = [];
+  if (opts.autoExpand) expanded.add(id);
   renderConnections();
+  // Sync URL when this happens on the active pane (URL reflects active pane).
+  if (p === State.activePane) navigateTo({ connId: id });
   const statusEl = $('conn-status');
   statusEl.classList.remove('online');
   statusEl.textContent = 'Conectando...';
-  // Resolve the connection directly from the pane, not via the proxied
-  // active-pane reader — `paneId` may be the non-active side.
   const conn = State.connections.find((c) => c.id === pane.activeConnId);
   if (!conn) return;
   try {
-    if (conn.buckets && conn.buckets.length) {
-      pane.buckets = conn.buckets.map((name) => ({ Name: name, CreationDate: null }));
-      renderBuckets();
-      $('buckets-section').style.display = 'block';
-      statusEl.classList.add('online');
-      statusEl.textContent = `Conectado · ${conn.buckets.length} buckets (manuales)`;
+    let buckets = bucketCache.get(conn.id);
+    if (!buckets) buckets = (await fetchConnBuckets(conn)) || [];
+    pane.buckets = buckets;
+    renderConnections();
+    statusEl.classList.add('online');
+    const manualTag = (conn.buckets && conn.buckets.length) ? ' (manuales)' : '';
+    statusEl.textContent = `Conectado · ${buckets.length} buckets${manualTag}`;
+    if (!opts.skipPaint) {
       toggleEmpty(true, p);
       paneEl('empty', p).innerHTML = '<h2>Selecciona un bucket</h2><p>Elige un bucket en la barra lateral para navegar tus archivos.</p>';
-      return;
     }
-    // Fetch /api/buckets with this pane's connection headers. The default
-    // `authHeaders()` only reads the active pane — if the user clicked the
-    // sidebar while focused on the other side, the wrong creds would go out.
-    // Build the headers explicitly from the pane we're connecting on.
-    const { buckets } = await api<{ buckets: { Name: string; CreationDate: string | null }[] }>(
-      '/api/buckets',
-      { headers: connHeaders(conn) },
-    );
-    pane.buckets = buckets;
-    renderBuckets();
-    $('buckets-section').style.display = 'block';
-    statusEl.classList.add('online');
-    statusEl.textContent = `Conectado · ${buckets.length} buckets`;
-    toggleEmpty(true, p);
-    paneEl('empty', p).innerHTML = '<h2>Selecciona un bucket</h2><p>Elige un bucket en la barra lateral para navegar tus archivos.</p>';
   } catch (e) {
     const err = e as Error;
     statusEl.textContent = 'Error de conexión';
@@ -160,18 +335,20 @@ function connHeaders(c: Connection): Record<string, string> {
 }
 
 // When the active pane changes (user clicks the other side), refresh the
-// sidebar so its highlight + bucket list reflect whichever pane is now focused.
+// sidebar so its highlight reflects whichever pane is now focused. Also
+// auto-expand whatever connection the focused pane is using.
 subscribe('activePane', () => {
+  const cid = getPane().activeConnId;
+  if (cid) expanded.add(cid);
   renderConnections();
-  renderBuckets();
-  // Hide the buckets section when the active pane has no connection yet.
-  const hasBuckets = getPane().buckets.length > 0;
-  $('buckets-section').style.display = hasBuckets ? 'block' : 'none';
 });
 
 export function clearMain(): void {
-  $('buckets-section').style.display = 'none';
-  $('buckets').innerHTML = '';
+  expanded.clear();
+  bucketCache.clear();
+  inflight.clear();
+  const ulMaybe = document.getElementById('connections');
+  if (ulMaybe) ulMaybe.innerHTML = '';
   for (const p of ['left', 'right'] as PaneId[]) {
     const grid = document.querySelector<HTMLElement>(`.pane[data-pane="${p}"] [data-el="grid"]`);
     const crumbs = document.querySelector<HTMLElement>(`.pane[data-pane="${p}"] [data-el="breadcrumbs"]`);
@@ -182,3 +359,18 @@ export function clearMain(): void {
   s.textContent = 'Sin conexión';
   s.classList.remove('online');
 }
+
+// Exposed so other modules can refresh the tree after creating a bucket, etc.
+// Re-fetches buckets for the active pane's connection then re-renders.
+export async function refreshActiveConnBuckets(): Promise<void> {
+  const cid = getPane().activeConnId;
+  if (!cid) return;
+  const conn = State.connections.find((c) => c.id === cid);
+  if (!conn) return;
+  await refreshConnBuckets(conn);
+  renderConnections();
+}
+
+// Re-export for callers that still want the legacy "loadVersioning"/"openBucket"
+// names from this module. (Existing imports point at ../buckets/list.ts directly.)
+export { openBucket, loadVersioning };

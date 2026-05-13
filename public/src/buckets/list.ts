@@ -1,69 +1,25 @@
-// Sidebar bucket list + per-bucket menu + open/versioning.
+// Bucket open/versioning logic. The actual sidebar rendering lives in
+// connections/list.ts now (single tree). This file only exposes:
+//   - openBucket(name, paneId): make a bucket active in a pane and load it
+//   - loadVersioning(paneId): hydrate the versioning state for the toolbar
 //
-// The sidebar shows one bucket list at a time. Clicking a bucket opens it
-// in the currently-active pane. The "active" highlight reflects the bucket
-// open in the active pane.
+// We keep these here so the import graph stays acyclic — connections/list.ts
+// imports from us, not the other way around. The tree renderer is plugged in
+// via setTreeRenderer() at boot.
 
 import { State, getPane } from '../state.js';
 import type { PaneId } from '../state.js';
 import { api } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
-import { $, paneEl, paneElMaybe, escapeHtml } from '../util/dom.js';
+import { paneEl, paneElMaybe } from '../util/dom.js';
+import { confirmDialog } from '../util/dialog.js';
 import { loadObjects } from '../objects/grid.js';
-import { mountIcons } from '../util/icons.js';
+import { navigateTo } from '../router/index.js';
 
 interface BucketRow { Name: string; CreationDate: string | null }
 
-function showBucketMenu(e: MouseEvent, b: BucketRow): void {
-  e.stopPropagation();
-  document.querySelectorAll('.dropdown.bucket-menu').forEach((d) => d.remove());
-  const dd = document.createElement('div');
-  dd.className = 'dropdown bucket-menu';
-  dd.style.position = 'fixed';
-  dd.style.left = e.clientX + 'px';
-  dd.style.top = e.clientY + 'px';
-  dd.innerHTML = '<button data-act="delete" class="danger">Eliminar bucket</button>';
-  document.body.appendChild(dd);
-  const close = (): void => { dd.remove(); document.removeEventListener('click', close); };
-  setTimeout(() => document.addEventListener('click', close), 10);
-  dd.onclick = async (ev: Event): Promise<void> => {
-    const target = ev.target as HTMLElement;
-    if (target.dataset.act === 'delete') {
-      if (!confirm(`Eliminar bucket "${b.Name}"? Debe estar vacío.`)) return;
-      try {
-        await api(`/api/buckets/${encodeURIComponent(b.Name)}`, { method: 'DELETE' });
-        toast('Bucket eliminado', 'success');
-        const { buckets } = await api<{ buckets: BucketRow[] }>('/api/buckets');
-        State.buckets = buckets;
-        renderBuckets();
-      } catch (e) {
-        toast((e as Error).message, 'error', errorIdOpts(e));
-      }
-    }
-  };
-}
-
-export function renderBuckets(): void {
-  const ul = $('buckets');
-  ul.innerHTML = '';
-  const active = getPane().activeBucket;
-  for (const b of State.buckets) {
-    const li = document.createElement('li');
-    li.className = b.Name === active ? 'active' : '';
-    li.innerHTML = `
-      <span class="ft-badge folder" style="width:22px;height:22px"><i data-icon="bucket" data-icon-size="12"></i></span>
-      <span class="name">${escapeHtml(b.Name)}</span>
-      <span class="menu" data-bucket="${escapeHtml(b.Name)}" aria-label="Menú"><i data-icon="dots_h" data-icon-size="14"></i></span>
-    `;
-    li.onclick = (e: MouseEvent): void => {
-      const target = e.target as HTMLElement;
-      if (target.classList.contains('menu') || target.closest('.menu')) showBucketMenu(e, b);
-      else void openBucket(b.Name);
-    };
-    ul.appendChild(li);
-  }
-  mountIcons(ul);
-}
+let renderTree: () => void = () => undefined;
+export function setTreeRenderer(fn: () => void): void { renderTree = fn; }
 
 let onBucketOpened: (paneId: PaneId) => void = () => undefined;
 
@@ -71,12 +27,23 @@ export function configureBuckets(deps: { onBucketOpened: (paneId: PaneId) => voi
   onBucketOpened = deps.onBucketOpened;
 }
 
+// Kept for legacy callers that used to refresh the bucket list directly. Now
+// it just nudges the sidebar tree, which derives its rows from the per-conn
+// bucket cache maintained by connections/list.ts.
+export function renderBuckets(): void {
+  renderTree();
+}
+
 export async function openBucket(name: string, paneId?: PaneId): Promise<void> {
   const p: PaneId = paneId || State.activePane;
   const pane = getPane(p);
   pane.activeBucket = name;
   pane.prefix = '';
-  renderBuckets();
+  renderTree();
+  // Sync URL when this happens on the active pane.
+  if (p === State.activePane && pane.activeConnId) {
+    navigateTo({ connId: pane.activeConnId, bucket: name, prefix: '' });
+  }
   await loadVersioning(p);
   await loadObjects(p);
   onBucketOpened(p);
@@ -108,12 +75,14 @@ export async function loadVersioning(paneId?: PaneId): Promise<void> {
       btn.title = 'Activar versionado en este bucket (no se puede desactivar después desde esta app)';
       btn.disabled = false;
       btn.onclick = async (): Promise<void> => {
-        if (!confirm(
-          `Activar versionado en "${pane.activeBucket}"?\n\n`
-          + 'IMPORTANTE: una vez activado, NO podrás desactivarlo desde esta app. '
-          + 'Si necesitas suspenderlo, deberás usar awscli o la consola del proveedor.\n\n'
-          + '¿Continuar?',
-        )) return;
+        const ok = await confirmDialog({
+          title: 'Activar versionado',
+          message: `Se activará versionado en "${pane.activeBucket}".\n\n`
+            + 'IMPORTANTE: una vez activado, NO podrás desactivarlo desde esta app. '
+            + 'Si necesitas suspenderlo, deberás usar awscli o la consola del proveedor.',
+          confirmLabel: 'Activar versionado',
+        });
+        if (!ok) return;
         try {
           await api(`/api/buckets/${encodeURIComponent(pane.activeBucket || '')}/versioning`, {
             method: 'PUT',
@@ -130,3 +99,6 @@ export async function loadVersioning(paneId?: PaneId): Promise<void> {
     pane.versioning = 'Disabled';
   }
 }
+
+// Re-export to keep callers happy that imported BucketRow from here previously.
+export type { BucketRow };

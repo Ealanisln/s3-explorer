@@ -18,15 +18,19 @@ import { loadObjects } from '../objects/grid.js';
 export interface TransferRequest {
   sourcePaneId: PaneId;
   destPaneId: PaneId;
-  // Source keys to transfer. `destKey` is computed from the dest pane's prefix
-  // + basename(key) unless `keepRelative` is set.
-  keys: string[];
+  // Either explicit file keys OR a folder prefix (mutually exclusive).
+  keys?: string[];
+  folder?: { sourcePrefix: string };
   // Pre-selected mode (from a context-menu pick). When omitted, the confirm
   // modal asks the user. Either way the modal opens for a final confirmation.
   preselectMode?: 'copy' | 'move';
   // When true, destKey preserves the path relative to `sourcePrefix`.
   keepRelative?: boolean;
   sourcePrefix?: string;
+  // Override the destination prefix. Default is `destPane.prefix`. Used for
+  // intra-pane drops onto a specific folder row: the destination is that
+  // folder, NOT the currently-open folder.
+  destPrefixOverride?: string;
 }
 
 function sideHeaders(c: Connection, side: 'source' | 'dest'): Record<string, string> {
@@ -45,10 +49,35 @@ function basename(key: string): string {
   return key.split('/').pop() || key;
 }
 
+// Status labels as plain-text badges. (Earlier iterations used SVG icons,
+// but they rendered inconsistently in some browsers — text labels are
+// bullet-proof and screen-reader-friendly out of the box.)
+type StatusKey = 'pending' | 'active' | 'done' | 'error';
+const STATUS_TEXT_COPY: Record<StatusKey, string> = {
+  pending: 'Pendiente',
+  active: 'Copiando…',
+  done: 'Copiado',
+  error: 'Error',
+};
+const STATUS_TEXT_MOVE: Record<StatusKey, string> = {
+  pending: 'Pendiente',
+  active: 'Moviendo…',
+  done: 'Movido',
+  error: 'Error',
+};
+
+function setRowStatus(row: HTMLElement, status: StatusKey, mode: 'copy' | 'move'): void {
+  const cell = row.querySelector('.status');
+  if (!cell) return;
+  const map = mode === 'move' ? STATUS_TEXT_MOVE : STATUS_TEXT_COPY;
+  cell.textContent = map[status];
+}
+
 function buildItems(req: TransferRequest): { key: string; destKey: string }[] {
   const destPane = getPane(req.destPaneId);
-  const destPrefix = destPane.prefix;
-  return req.keys.map((key) => {
+  const destPrefix = req.destPrefixOverride ?? destPane.prefix;
+  const keys = req.keys ?? [];
+  return keys.map((key) => {
     let destKey: string;
     if (req.keepRelative && req.sourcePrefix !== undefined) {
       const rel = key.startsWith(req.sourcePrefix) ? key.slice(req.sourcePrefix.length) : basename(key);
@@ -68,10 +97,19 @@ interface ConfirmDeps {
   destLabel: string;
   crossConn: boolean;
   preselect?: 'copy' | 'move';
+  // When set, this is a folder transfer — show the prefix instead of a file
+  // count. Server discovers content; we don't know the exact item count yet.
+  folderLabel?: string;
 }
 
 function openConfirmModal(deps: ConfirmDeps): Promise<'copy' | 'move' | null> {
-  $('transfer-confirm-count').textContent = String(deps.count);
+  // Switch the count slot to show either "N archivos" or "carpeta foo/".
+  // The HTML element exists in both modes; we just rewrite its content.
+  if (deps.folderLabel !== undefined) {
+    $('transfer-confirm-count').textContent = `carpeta ${deps.folderLabel} (descubrir contenido al confirmar)`;
+  } else {
+    $('transfer-confirm-count').textContent = String(deps.count);
+  }
   $('transfer-confirm-source').textContent = deps.sourceLabel;
   $('transfer-confirm-dest').textContent = deps.destLabel;
   $('transfer-confirm-cross').style.display = deps.crossConn ? 'block' : 'none';
@@ -100,32 +138,50 @@ function openConfirmModal(deps: ConfirmDeps): Promise<'copy' | 'move' | null> {
 // ── Progress modal ────────────────────────────────────────────────────────
 
 interface ProgressState {
-  items: { key: string; destKey: string }[];
   byKey: Map<string, HTMLElement>;
   mode: 'copy' | 'move';
   abort: AbortController;
   ok: number;
   failed: number;
+  // Folder/recursive mode: total is `null` until the server emits `discovered`.
+  // In items mode, total is known from the start.
+  total: number | null;
+  isFolderMode: boolean;
+  // Rolling cap for the DOM list. Older `done` rows are evicted when exceeded.
+  // Error rows are pinned and never evicted (typically rare).
+  maxRowsInList: number;
 }
 
-function openProgressModal(items: { key: string; destKey: string }[], mode: 'copy' | 'move'): ProgressState {
-  $('transfer-progress-title').textContent = mode === 'move' ? 'Moviendo archivos' : 'Copiando archivos';
+// Initial state shape depends on whether we know the items upfront (file list)
+// or have to discover them server-side (folder).
+function openProgressModal(opts: {
+  knownItems: { key: string; destKey: string }[] | null;
+  mode: 'copy' | 'move';
+  isFolderMode: boolean;
+  initialTitle: string;
+}): ProgressState {
+  $('transfer-progress-title').textContent = opts.initialTitle;
   ($('btn-transfer-close') as HTMLButtonElement).style.display = 'none';
   ($('btn-transfer-abort') as HTMLButtonElement).style.display = 'inline-flex';
   ($('btn-transfer-abort') as HTMLButtonElement).textContent = 'Cancelar';
   ($('btn-transfer-abort') as HTMLButtonElement).disabled = false;
-  $('transfer-progress-summary').textContent = `0 / ${items.length}`;
   ($('transfer-progress-fill') as HTMLElement).style.width = '0%';
+  // Sweep animation while transfer is active. CSS toggles via the
+  // `.in-progress` class on the outer bar.
+  ($('transfer-progress-fill').parentElement as HTMLElement | null)?.classList.add('in-progress');
 
   const list = $('transfer-item-list');
   list.innerHTML = '';
   const byKey = new Map<string, HTMLElement>();
-  for (const it of items) {
-    const row = document.createElement('div');
-    row.className = 'transfer-item pending';
-    row.innerHTML = `<span class="status"></span><span class="key" title="${escapeHtml(it.key)}">${escapeHtml(it.key)}</span><span class="err-msg"></span>`;
-    list.appendChild(row);
-    byKey.set(it.key, row);
+  const total = opts.knownItems ? opts.knownItems.length : null;
+  $('transfer-progress-summary').textContent = opts.isFolderMode
+    ? 'Descubriendo carpeta…'
+    : `0 / ${total ?? '?'}`;
+  if (opts.knownItems) {
+    for (const it of opts.knownItems) {
+      const row = addRow(byKey, list, it.key, 'pending');
+      setRowStatus(row, 'pending', opts.mode);
+    }
   }
   openModal('modal-transfer-progress');
 
@@ -136,49 +192,143 @@ function openProgressModal(items: { key: string; destKey: string }[], mode: 'cop
     ($('btn-transfer-abort') as HTMLButtonElement).textContent = 'Cancelando…';
   };
 
-  return { items, byKey, mode, abort, ok: 0, failed: 0 };
+  return {
+    byKey, mode: opts.mode, abort,
+    ok: 0, failed: 0,
+    total, isFolderMode: opts.isFolderMode,
+    maxRowsInList: 50,
+  };
+}
+
+// Create (or return existing) row for a key. In folder mode rows are created
+// lazily as items appear via `progress` frames. The rolling cap is enforced
+// when adding — oldest `done` row is evicted if we'd go over.
+function addRow(byKey: Map<string, HTMLElement>, list: HTMLElement, key: string, initialClass: string): HTMLElement {
+  const existing = byKey.get(key);
+  if (existing) return existing;
+  const row = document.createElement('div');
+  row.className = `transfer-item ${initialClass}`;
+  row.innerHTML = `<span class="status"></span>`
+    + `<span class="key" title="${escapeHtml(key)}">${escapeHtml(key)}</span>`
+    + `<span class="err-msg"></span>`;
+  list.appendChild(row);
+  byKey.set(key, row);
+  return row;
+}
+
+// Roll the list down to maxRowsInList by evicting the oldest `done` row.
+// Errors are pinned (never evicted) so users can see what failed.
+function evictIfNeeded(state: ProgressState, list: HTMLElement): void {
+  while (list.children.length > state.maxRowsInList) {
+    const oldestDone = list.querySelector<HTMLElement>('.transfer-item.done');
+    if (!oldestDone) break;            // nothing safe to remove
+    // Find which key maps to this element so we can clear it from byKey.
+    for (const [k, el] of state.byKey) {
+      if (el === oldestDone) { state.byKey.delete(k); break; }
+    }
+    oldestDone.remove();
+  }
 }
 
 function finishProgressModal(state: ProgressState, aborted: boolean): void {
   ($('btn-transfer-abort') as HTMLButtonElement).style.display = 'none';
   ($('btn-transfer-close') as HTMLButtonElement).style.display = 'inline-flex';
+  // Stop the sweep animation; bar stays at its final width.
+  ($('transfer-progress-fill').parentElement as HTMLElement | null)?.classList.remove('in-progress');
   const verb = state.mode === 'move' ? 'movidos' : 'copiados';
   const tail = aborted ? ' (cancelado)' : '';
+  const totalSuffix = state.total !== null && state.total !== state.ok + state.failed
+    ? ` (de ${state.total.toLocaleString()})` : '';
   $('transfer-progress-summary').textContent =
-    `${state.ok} ${verb} · ${state.failed} fallidos${tail}`;
+    `${state.ok.toLocaleString()} ${verb} · ${state.failed.toLocaleString()} fallidos${totalSuffix}${tail}`;
 }
 
 // ── SSE frame handling ────────────────────────────────────────────────────
 
+interface DiscoveringFrame { t: 'discovering'; scanned: number }
+interface DiscoveredFrame { t: 'discovered'; total: number }
 interface ProgressFrame { t: 'progress'; completed: number; total: number; currentKey: string }
+interface BytesFrame { t: 'bytes'; key: string; loaded: number; total: number }
 interface ItemDoneFrame { t: 'item-done'; key: string }
 interface ItemErrorFrame { t: 'item-error'; key: string; message: string }
 interface DoneFrame { t: 'done'; ok: number; failed: number }
 interface FatalFrame { t: 'fatal'; message?: string; errorId?: string }
-type SseFrame = ProgressFrame | ItemDoneFrame | ItemErrorFrame | DoneFrame | FatalFrame;
+type SseFrame =
+  | DiscoveringFrame | DiscoveredFrame
+  | ProgressFrame | BytesFrame
+  | ItemDoneFrame | ItemErrorFrame | DoneFrame | FatalFrame;
 
 function applyFrame(state: ProgressState, ev: SseFrame): void {
-  if (ev.t === 'progress') {
-    const row = state.byKey.get(ev.currentKey);
-    if (row) {
-      state.byKey.forEach((r) => r.classList.remove('active'));
-      row.classList.remove('pending');
-      row.classList.add('active');
-    }
-    const pct = ev.total ? (ev.completed / ev.total) * 100 : 0;
+  const list = $('transfer-item-list');
+  if (ev.t === 'discovering') {
+    // Folder mode: backend is still walking ListObjectsV2. Tell the user.
+    $('transfer-progress-summary').textContent = `Descubriendo carpeta… ${ev.scanned.toLocaleString()} archivos`;
+  } else if (ev.t === 'discovered') {
+    // Discovery done — `total` is now stable. Subsequent `progress` frames
+    // use this total for the bar %.
+    state.total = ev.total;
+    $('transfer-progress-summary').textContent =
+      `Descubrimiento completo · ${ev.total.toLocaleString()} archivos`;
+  } else if (ev.t === 'progress') {
+    // Special sentinel keys from the backend circuit breakers — surface as
+    // visible errors but don't try to add a row for them by their fake key.
+    if (ev.currentKey === '__OVERFLOW__' || ev.currentKey === '__CIRCUIT_BREAKER__') return;
+    // Lazily create the row if we're in folder mode (no pre-population).
+    const row = addRow(state.byKey, list, ev.currentKey, 'pending');
+    setRowStatus(row, 'pending', state.mode);
+    // Mark previously-active rows as best-effort done (defensive: backend
+    // always emits item-done before next progress, but if a frame is lost or
+    // we evicted the row, this prevents an orphan-active state).
+    state.byKey.forEach((r) => {
+      if (r !== row && r.classList.contains('active')) {
+        r.classList.remove('active');
+        r.classList.add('done');
+        setRowStatus(r, 'done', state.mode);
+      }
+    });
+    row.classList.remove('pending');
+    row.classList.add('active');
+    setRowStatus(row, 'active', state.mode);
+    evictIfNeeded(state, list);
+    // Bar percent: known total → real %, else 0% with text indication.
+    const total = state.total ?? ev.total ?? 0;
+    const pct = total > 0 ? (ev.completed / total) * 100 : 0;
     ($('transfer-progress-fill') as HTMLElement).style.width = pct.toFixed(1) + '%';
-    $('transfer-progress-summary').textContent = `${ev.completed} / ${ev.total} · ${escapeHtml(ev.currentKey)}`;
+    const denominator = state.total !== null
+      ? state.total.toLocaleString()
+      : `${ev.total.toLocaleString()}+`;  // discovering still
+    $('transfer-progress-summary').textContent =
+      `${ev.completed.toLocaleString()} / ${denominator} · ${escapeHtml(ev.currentKey)}`;
+  } else if (ev.t === 'bytes') {
+    // (Bytes-level progress within a single item — reserved for future UI
+    // showing per-file %. For now we just let the overall bar reflect items.)
+    return;
   } else if (ev.t === 'item-done') {
-    const row = state.byKey.get(ev.key);
-    if (row) { row.classList.remove('active', 'pending'); row.classList.add('done'); }
-  } else if (ev.t === 'item-error') {
     const row = state.byKey.get(ev.key);
     if (row) {
       row.classList.remove('active', 'pending');
-      row.classList.add('error');
-      const em = row.querySelector('.err-msg');
-      if (em) em.textContent = ev.message;
+      row.classList.add('done');
+      setRowStatus(row, 'done', state.mode);
     }
+    // Don't evict here — eviction happens when the NEXT row is added, so the
+    // user gets to see the row briefly transition to "done".
+  } else if (ev.t === 'item-error') {
+    // Surface sentinel errors at the top of the list with full text.
+    if (ev.key === '__OVERFLOW__' || ev.key === '__CIRCUIT_BREAKER__') {
+      const sentinel = document.createElement('div');
+      sentinel.className = 'transfer-item error';
+      sentinel.innerHTML = `<span class="status"></span>`
+        + `<span class="key">${escapeHtml(ev.key)}</span>`
+        + `<span class="err-msg">${escapeHtml(ev.message)}</span>`;
+      list.insertBefore(sentinel, list.firstChild);
+      return;
+    }
+    const row = addRow(state.byKey, list, ev.key, 'pending');
+    row.classList.remove('active', 'pending');
+    row.classList.add('error');
+    setRowStatus(row, 'error', state.mode);
+    const em = row.querySelector('.err-msg');
+    if (em) em.textContent = ev.message;
   } else if (ev.t === 'done') {
     state.ok = ev.ok;
     state.failed = ev.failed;
@@ -203,18 +353,68 @@ export async function runTransfer(req: TransferRequest): Promise<void> {
     return;
   }
 
-  const sourceLabel = `${sourceConn.name} · ${sourcePane.activeBucket}/${sourcePane.prefix || ''}`;
-  const destLabel = `${destConn.name} · ${destPane.activeBucket}/${destPane.prefix || ''}`;
-  const crossConn = sourceConn.id !== destConn.id;
+  // Exactly one of keys / folder must be set.
+  const isFolderMode = !!req.folder;
+  if (isFolderMode === Boolean(req.keys?.length)) {
+    toast('Drop inválido — ni archivos ni carpeta', 'error');
+    return;
+  }
 
+  const crossConn = sourceConn.id !== destConn.id;
+  const crossBucket = sourcePane.activeBucket !== destPane.activeBucket;
+  const effectiveDestPrefix = req.destPrefixOverride ?? destPane.prefix;
+  // Source prefix: for folder transfers we use the folder's prefix; otherwise
+  // the pane's current prefix.
+  const effectiveSourcePrefix = req.folder?.sourcePrefix ?? sourcePane.prefix;
+
+  // Build labels. When source and dest live in the same bucket+connection,
+  // collapse the redundant parts so the user sees `prefix/ → prefix/` cleanly
+  // instead of two long identical paths.
+  let sourceLabel: string;
+  let destLabel: string;
+  if (!crossConn && !crossBucket) {
+    const bucket = sourcePane.activeBucket || '';
+    sourceLabel = `${bucket}/${effectiveSourcePrefix || ''}`;
+    destLabel = `${bucket}/${effectiveDestPrefix || ''}`;
+  } else {
+    sourceLabel = `${sourceConn.name} · ${sourcePane.activeBucket}/${effectiveSourcePrefix || ''}`;
+    destLabel = `${destConn.name} · ${destPane.activeBucket}/${effectiveDestPrefix || ''}`;
+  }
+
+  // Confirm modal: for folders, show "carpeta foo/" instead of file count.
+  // We don't pre-discover (would require an extra round trip); user confirms
+  // and discovery happens inside the same SSE stream.
+  const confirmCount = isFolderMode ? 0 : (req.keys?.length ?? 0);
   const mode = await openConfirmModal({
-    count: req.keys.length, sourceLabel, destLabel, crossConn,
+    count: confirmCount, sourceLabel, destLabel, crossConn,
     preselect: req.preselectMode,
+    folderLabel: req.folder?.sourcePrefix,
   });
   if (!mode) return;
 
-  const items = buildItems(req);
-  const state = openProgressModal(items, mode);
+  const items = isFolderMode ? null : buildItems({ ...req, keys: req.keys ?? [] });
+  const verbTitle = mode === 'move' ? 'Moviendo' : 'Copiando';
+  const state = openProgressModal({
+    knownItems: items,
+    mode,
+    isFolderMode,
+    initialTitle: isFolderMode ? `${verbTitle} carpeta` : `${verbTitle} archivos`,
+  });
+
+  // Body shape: items vs prefix (mutually exclusive per the server schema).
+  const body: Record<string, unknown> = {
+    sourceBucket: sourcePane.activeBucket,
+    destBucket: destPane.activeBucket,
+    mode,
+  };
+  if (isFolderMode) {
+    body.prefix = {
+      source: req.folder!.sourcePrefix,
+      dest: effectiveDestPrefix || '',
+    };
+  } else {
+    body.items = items;
+  }
 
   try {
     const headers: Record<string, string> = {
@@ -227,12 +427,7 @@ export async function runTransfer(req: TransferRequest): Promise<void> {
       headers,
       credentials: 'same-origin',
       signal: state.abort.signal,
-      body: JSON.stringify({
-        sourceBucket: sourcePane.activeBucket,
-        destBucket: destPane.activeBucket,
-        items,
-        mode,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {

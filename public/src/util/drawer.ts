@@ -27,9 +27,10 @@ export function initDrawer(): void {
   if (backdrop) backdrop.onclick = (): void => setOpen(false);
 
   // Auto-close after the user picks a connection / bucket — the drawer's job
-  // is done and we want to give focus back to the content.
+  // is done and we want to give focus back to the content. The sidebar now
+  // uses a single tree (#connections holds both connection rows and their
+  // nested bucket children), so one listener covers both.
   $('connections').addEventListener('click', () => setOpen(false));
-  $('buckets').addEventListener('click', () => setOpen(false));
 
   // Esc closes the drawer too (matches the modal behavior).
   document.addEventListener('keydown', (e: KeyboardEvent) => {

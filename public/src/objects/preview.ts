@@ -5,6 +5,7 @@ import { State } from '../state.js';
 import { api, authHeaders } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
 import { $, openModal, escapeHtml } from '../util/dom.js';
+import { confirmDialog } from '../util/dialog.js';
 import { formatSize, formatDate } from '../util/format.js';
 import { mountIcons } from '../util/icons.js';
 import { downloadObject, shareObject } from './actions.js';
@@ -133,7 +134,12 @@ export function initPreview(): void {
             } else if (act === 'share') {
               await shareObject(currentPreview.Key, v.VersionId);
             } else if (act === 'restore') {
-              if (!confirm('Restaurar esta versión como la actual?')) return;
+              const ok = await confirmDialog({
+                title: 'Restaurar versión',
+                message: 'Esta versión se promoverá a versión actual del objeto. La versión actual quedará en el historial. ¿Continuar?',
+                confirmLabel: 'Restaurar',
+              });
+              if (!ok) return;
               try {
                 await api(`/api/object/${encodeURIComponent(State.activeBucket || '')}/copy`, {
                   method: 'POST',
@@ -146,7 +152,13 @@ export function initPreview(): void {
                 toast((e as Error).message, 'error', errorIdOpts(e));
               }
             } else if (act === 'delete') {
-              if (!confirm(`Eliminar esta versión (${v.VersionId.slice(0, 8)}...)?`)) return;
+              const ok = await confirmDialog({
+                title: 'Eliminar versión',
+                message: `Se eliminará la versión ${v.VersionId.slice(0, 8)}… Esta acción no se puede deshacer.`,
+                confirmLabel: 'Eliminar versión',
+                danger: true,
+              });
+              if (!ok) return;
               try {
                 await api(`/api/object/${encodeURIComponent(State.activeBucket || '')}`, {
                   method: 'DELETE',

@@ -5,6 +5,7 @@ import { State } from '../state.js';
 import { api, authHeaders } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
 import { $, openModal } from '../util/dom.js';
+import { confirmDialog, choiceDialog } from '../util/dialog.js';
 
 export async function fetchAsBlob(url: string, filename: string): Promise<void> {
   try {
@@ -24,6 +25,57 @@ export async function fetchAsBlob(url: string, filename: string): Promise<void> 
   }
 }
 
+// Helper: generate a presigned URL for `key` with a short validity. Used by
+// "open in new tab" and "copy link" — both want a single round-trip with a
+// fixed default duration, not the choice picker that shareObject() shows.
+async function presignShort(key: string, versionId?: string): Promise<string> {
+  if (!State.activeBucket) throw new Error('Bucket no activo');
+  const params = new URLSearchParams({ key, expires: '300' });
+  if (versionId) params.set('versionId', versionId);
+  const { url } = await api<{ url: string; expires: number; capped: boolean }>(
+    `/api/object/${encodeURIComponent(State.activeBucket)}/presign?${params}`,
+  );
+  return url;
+}
+
+export async function openObjectInNewTab(key: string, versionId?: string): Promise<void> {
+  try {
+    const url = await presignShort(key, versionId);
+    // noopener,noreferrer: presigned URL goes straight to the S3 endpoint —
+    // we don't want the opened tab to retain a window.opener handle back to
+    // the SPA, and we don't want to leak the s3-explorer Referer to S3.
+    window.open(url, '_blank', 'noopener,noreferrer');
+  } catch (e) {
+    toast((e as Error).message, 'error', errorIdOpts(e));
+  }
+}
+
+export async function copyObjectLink(key: string, versionId?: string): Promise<void> {
+  try {
+    const url = await presignShort(key, versionId);
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+      toast('Enlace copiado (expira en 5 min)', 'success', 5000);
+      return;
+    }
+    // Fallback for older browsers / non-HTTPS contexts where the Clipboard
+    // API isn't available. document.execCommand('copy') is deprecated but
+    // still widely supported as a last-resort path.
+    const ta = document.createElement('textarea');
+    ta.value = url;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    if (ok) toast('Enlace copiado (expira en 5 min)', 'success', 5000);
+    else toast('No se pudo copiar — selecciónalo manualmente: ' + url, 'info', 10000);
+  } catch (e) {
+    toast((e as Error).message, 'error', errorIdOpts(e));
+  }
+}
+
 export function downloadObject(key: string, versionId?: string): void {
   if (!State.activeBucket) return;
   const params = new URLSearchParams({ key });
@@ -36,13 +88,18 @@ export function downloadObject(key: string, versionId?: string): void {
 
 export async function shareObject(key: string, versionId?: string): Promise<void> {
   if (!State.activeBucket) return;
-  const choice = prompt(
-    'Validez del enlace temporal:\n  1 = 5 minutos (recomendado)\n  2 = 1 hora\n  3 = 24 horas\n\nIngresa 1, 2 o 3:',
-    '1',
-  );
+  const choice = await choiceDialog<'5m' | '1h' | '24h'>({
+    title: 'Enlace temporal',
+    message: 'Selecciona la validez del enlace. El archivo será accesible vía URL durante ese tiempo.',
+    choices: [
+      { value: '5m', label: '5 minutos', hint: 'Ideal para compartir rápidamente.', recommended: true },
+      { value: '1h', label: '1 hora', hint: 'Para envíos por chat o correo.' },
+      { value: '24h', label: '24 horas', hint: 'Acceso temporal extendido.' },
+    ],
+  });
   if (choice === null) return;
-  const expiresMap: Record<string, number> = { '1': 300, '2': 3600, '3': 86400 };
-  const expires = expiresMap[choice.trim()] || 300;
+  const expiresMap: Record<string, number> = { '5m': 300, '1h': 3600, '24h': 86400 };
+  const expires = expiresMap[choice];
   try {
     const params = new URLSearchParams({ key, expires: String(expires) });
     if (versionId) params.set('versionId', versionId);
@@ -62,7 +119,14 @@ export async function deleteObject(
   onAfter: () => void | Promise<void>,
 ): Promise<void> {
   if (!State.activeBucket) return;
-  if (!confirm(`Eliminar "${key}"?`)) return;
+  const name = key.split('/').pop() || key;
+  const ok = await confirmDialog({
+    title: 'Eliminar archivo',
+    message: `Se eliminará "${name}". ¿Continuar?`,
+    confirmLabel: 'Eliminar',
+    danger: true,
+  });
+  if (!ok) return;
   try {
     await api(`/api/object/${encodeURIComponent(State.activeBucket)}`, {
       method: 'DELETE',

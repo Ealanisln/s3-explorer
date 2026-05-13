@@ -6,6 +6,7 @@
 
 import { $, openModal, escapeHtml } from '../util/dom.js';
 import { toast, errorIdOpts } from '../util/toast.js';
+import { confirmDialog, promptDialog } from '../util/dialog.js';
 import { formatDate } from '../util/format.js';
 import { mountIcons } from '../util/icons.js';
 import { getCurrentUser } from './bootstrap.js';
@@ -60,19 +61,46 @@ async function loadUsersAdmin(): Promise<void> {
 async function handleUserAction(act: string, username: string): Promise<void> {
   let body: Record<string, unknown> | undefined;
   let url = '';
+  let confirmTitle = '';
   let confirmMsg = '';
-  if (act === 'disable') { confirmMsg = `Deshabilitar a ${username}?`; url = `/auth/admin/users/${encodeURIComponent(username)}/disable`; }
-  else if (act === 'enable') { confirmMsg = `Habilitar a ${username}?`; url = `/auth/admin/users/${encodeURIComponent(username)}/enable`; }
-  else if (act === 'reset-totp') { confirmMsg = `Resetear TOTP de ${username}? Tendrá que re-enrolar en su próximo login.`; url = `/auth/admin/users/${encodeURIComponent(username)}/reset-totp`; }
-  else if (act === 'reset-pw') {
-    const np = prompt(`Nueva contraseña inicial para ${username} (mín. 8 chars):`);
-    if (!np) return;
+  let confirmLabel = 'Aceptar';
+  let danger = false;
+  if (act === 'disable') {
+    confirmTitle = 'Deshabilitar usuario';
+    confirmMsg = `Se deshabilitará a "${username}". No podrá iniciar sesión hasta que lo vuelvas a habilitar.`;
+    confirmLabel = 'Deshabilitar';
+    danger = true;
+    url = `/auth/admin/users/${encodeURIComponent(username)}/disable`;
+  } else if (act === 'enable') {
+    confirmTitle = 'Habilitar usuario';
+    confirmMsg = `Se habilitará a "${username}" para iniciar sesión nuevamente.`;
+    confirmLabel = 'Habilitar';
+    url = `/auth/admin/users/${encodeURIComponent(username)}/enable`;
+  } else if (act === 'reset-totp') {
+    confirmTitle = 'Resetear TOTP';
+    confirmMsg = `Se borrará el segundo factor de "${username}". Tendrá que re-enrolar su app de autenticación en su próximo login.`;
+    confirmLabel = 'Resetear TOTP';
+    danger = true;
+    url = `/auth/admin/users/${encodeURIComponent(username)}/reset-totp`;
+  } else if (act === 'reset-pw') {
+    const np = await promptDialog({
+      title: 'Reset de contraseña',
+      message: `Nueva contraseña inicial para "${username}". El usuario deberá cambiarla en su próximo inicio de sesión.`,
+      inputType: 'password',
+      placeholder: 'Mínimo 8 caracteres',
+      confirmLabel: 'Aplicar',
+      validate: (v) => (v.length < 8 ? 'La contraseña debe tener al menos 8 caracteres.' : null),
+    });
+    if (np === null) return;
     body = { newPassword: np };
     url = `/auth/admin/users/${encodeURIComponent(username)}/reset-password`;
   } else {
     return;
   }
-  if (confirmMsg && !confirm(confirmMsg)) return;
+  if (confirmMsg) {
+    const ok = await confirmDialog({ title: confirmTitle, message: confirmMsg, confirmLabel, danger });
+    if (!ok) return;
+  }
   try {
     const res = await fetch(url, {
       method: 'POST',

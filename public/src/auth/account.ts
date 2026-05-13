@@ -2,6 +2,7 @@
 
 import { $ } from '../util/dom.js';
 import { toast, errorIdOpts } from '../util/toast.js';
+import { confirmDialog } from '../util/dialog.js';
 import { setCurrentUser, getCurrentUser } from './bootstrap.js';
 
 function escapeHtml(s: string): string {
@@ -39,7 +40,12 @@ export function initAccountForms(): void {
   };
 
   $('btn-regen-recovery').onclick = async (): Promise<void> => {
-    if (!confirm('Regenerar invalidará tus códigos actuales. ¿Continuar?')) return;
+    const ok = await confirmDialog({
+      title: 'Regenerar códigos de recuperación',
+      message: 'Tus códigos actuales quedarán inválidos al generar los nuevos. Asegúrate de guardar los nuevos en un lugar seguro.',
+      confirmLabel: 'Regenerar',
+    });
+    if (!ok) return;
     try {
       const res = await fetch('/auth/me/recovery', { method: 'POST', credentials: 'same-origin' });
       const data = await res.json() as { recoveryCodes?: string[]; message?: string };

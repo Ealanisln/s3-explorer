@@ -7,6 +7,7 @@ import type { PaneId } from '../state.js';
 import { api } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
 import { paneEl, paneRoot, escapeHtml } from '../util/dom.js';
+import { confirmDialog } from '../util/dialog.js';
 import { formatSize, formatDate, fileIcon } from '../util/format.js';
 import { openPreview } from './preview.js';
 import { downloadObject, shareObject, openRename } from './actions.js';
@@ -118,7 +119,14 @@ export function initInfoPanel(paneId: PaneId): void {
     const obj = currentInfoObj[paneId];
     if (!obj) return;
     const key = obj.Key;
-    if (!confirm(`Eliminar "${key}"?`)) return;
+    const name = key.split('/').pop() || key;
+    const ok = await confirmDialog({
+      title: 'Eliminar archivo',
+      message: `Se eliminará "${name}". ¿Continuar?`,
+      confirmLabel: 'Eliminar',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api(`/api/object/${encodeURIComponent(getPane(paneId).activeBucket || '')}`, {
         method: 'DELETE',
