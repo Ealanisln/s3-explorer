@@ -11,6 +11,7 @@ import { api } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
 import { paneEl, escapeHtml } from '../util/dom.js';
 import { formatSize, formatDate, fileIcon } from '../util/format.js';
+import { mountIcons } from '../util/icons.js';
 import { openPreview } from './preview.js';
 import { openInfoPanel, closeInfoPanel } from './info-panel.js';
 import {
@@ -52,7 +53,7 @@ export function showLoadingRow(paneId: PaneId): HTMLTableRowElement {
   const tbody = paneEl('grid-body', paneId);
   tbody.innerHTML = '';
   const tr = document.createElement('tr');
-  tr.innerHTML = '<td colspan="5" style="text-align:center; padding:40px; color:var(--text-dim)">⏳ Cargando carpeta...</td>';
+  tr.innerHTML = '<td colspan="5" style="text-align:center; padding:40px; color:var(--text-dim)">Cargando carpeta…</td>';
   tbody.appendChild(tr);
   return tr as HTMLTableRowElement;
 }
@@ -297,7 +298,7 @@ function renderGridInner(paneId: PaneId): void {
   if (!visiblePrefixes.length && !visibleObjects.length) {
     const tr = document.createElement('tr');
     const msg = term
-      ? `Sin coincidencias en esta carpeta para "${escapeHtml(State.filterTerm)}". <a href="#" data-recursive-search style="color:var(--primary-2)">Buscar en todo el bucket →</a>`
+      ? `Sin coincidencias en esta carpeta para "${escapeHtml(State.filterTerm)}". <a href="#" data-recursive-search style="color:var(--accent)">Buscar en todo el bucket →</a>`
       : 'Carpeta vacía. Arrastra archivos aquí o usa "Subir archivos".';
     tr.innerHTML = `<td colspan="5" style="text-align:center; padding:40px; color:var(--text-dim)">${msg}</td>`;
     tbody.appendChild(tr);
@@ -309,8 +310,8 @@ function renderGridInner(paneId: PaneId): void {
 
   if (State.listingTruncated) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="5" style="background:rgba(227,179,65,0.12); border-left:3px solid var(--yellow); padding:10px 14px; font-size:12px; color:var(--yellow)">
-      ⚠ Listado truncado en ${(State.prefixes.length + State.objects.length).toLocaleString()} entradas (${State.listingPages} páginas). Esta carpeta tiene más — usa la búsqueda para localizar elementos específicos.
+    tr.innerHTML = `<td colspan="5" style="background:var(--warn-soft); border-left:3px solid var(--warn); padding:10px 14px; font-size:12px; color:var(--warn)">
+      <i data-icon="warn" style="vertical-align:middle; margin-right:4px"></i>Listado truncado en ${(State.prefixes.length + State.objects.length).toLocaleString()} entradas (${State.listingPages} páginas). Esta carpeta tiene más — usa la búsqueda para localizar elementos específicos.
     </td>`;
     tbody.appendChild(tr);
   }
@@ -320,7 +321,7 @@ function renderGridInner(paneId: PaneId): void {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="col-check"></td>
-      <td class="cell-name"><span class="icon-file icon-folder">📁</span>${escapeHtml(name)}/</td>
+      <td class="cell-name"><span class="ft-badge folder"><i data-icon="folder" data-icon-size="12"></i></span>${escapeHtml(name)}/</td>
       <td class="col-size">—</td>
       <td class="col-date">—</td>
       <td class="col-act"></td>
@@ -347,10 +348,10 @@ function renderGridInner(paneId: PaneId): void {
     const badge = o.IsDeleteMarker ? '<span class="badge-deleted">DELETED</span>' : '';
     tr.innerHTML = `
       <td class="col-check"><input type="checkbox" data-key="${escapeHtml(o.Key)}"/></td>
-      <td class="cell-name"><span class="icon-file ${ico.cls}">${ico.label}</span>${escapeHtml(name)}${badge}</td>
+      <td class="cell-name"><span class="ft-badge ${ico.cls}">${ico.label}</span>${escapeHtml(name)}${badge}</td>
       <td class="col-size">${o.IsDeleteMarker ? '—' : formatSize(o.Size)}</td>
       <td class="col-date">${escapeHtml(formatDate(o.LastModified))}</td>
-      <td class="col-act"><button class="menu-btn" data-menu="${escapeHtml(o.Key)}">⋯</button></td>
+      <td class="col-act"><button class="menu-btn" data-menu="${escapeHtml(o.Key)}" aria-label="Acciones"><i data-icon="dots_h"></i></button></td>
     `;
     bindRowEvents(tr as HTMLTableRowElement, o, paneId);
     tbody.appendChild(tr);
@@ -365,6 +366,7 @@ function renderGridInner(paneId: PaneId): void {
     });
   };
 
+  mountIcons(tbody);
   updateBatchBar(paneId);
 }
 
@@ -400,6 +402,7 @@ function renderSearchMode(tbody: HTMLElement, paneId: PaneId): void {
   for (const o of sortedFiles) {
     renderSearchFileRow(tbody, o, paneId);
   }
+  mountIcons(tbody);
   updateBatchBar(paneId);
 }
 
@@ -411,7 +414,7 @@ function renderSearchFolderRow(tbody: HTMLElement, folderKey: string, info: Sear
   tr.innerHTML = `
     <td class="col-check"></td>
     <td class="cell-name">
-      <span class="icon-file icon-folder">📁</span>
+      <span class="ft-badge folder"><i data-icon="folder" data-icon-size="12"></i></span>
       <div>
         <div>${escapeHtml(name)}/ <span style="color:var(--text-dim); font-size:11px; margin-left:6px">${info.fileCount} archivos</span></div>
         ${parent ? `<div class="path-cell">${escapeHtml(parent)}</div>` : ''}
@@ -445,7 +448,7 @@ function renderSearchFileRow(tbody: HTMLElement, o: S3Object, paneId: PaneId): v
   tr.innerHTML = `
     <td class="col-check"><input type="checkbox" data-key="${escapeHtml(o.Key)}"/></td>
     <td class="cell-name">
-      <span class="icon-file ${ico.cls}">${ico.label}</span>
+      <span class="ft-badge ${ico.cls}">${ico.label}</span>
       <div>
         <div>${escapeHtml(name)}</div>
         ${folder ? `<div class="path-cell">${escapeHtml(folder)}</div>` : ''}
@@ -453,7 +456,7 @@ function renderSearchFileRow(tbody: HTMLElement, o: S3Object, paneId: PaneId): v
     </td>
     <td class="col-size">${formatSize(o.Size)}</td>
     <td class="col-date">${escapeHtml(formatDate(o.LastModified))}</td>
-    <td class="col-act"><button class="menu-btn">⋯</button></td>
+    <td class="col-act"><button class="menu-btn" aria-label="Acciones"><i data-icon="dots_h"></i></button></td>
   `;
   bindRowEvents(tr as HTMLTableRowElement, o, paneId);
   tbody.appendChild(tr);
