@@ -27,6 +27,10 @@ export interface TransferRequest {
   // When true, destKey preserves the path relative to `sourcePrefix`.
   keepRelative?: boolean;
   sourcePrefix?: string;
+  // Override the destination prefix. Default is `destPane.prefix`. Used for
+  // intra-pane drops onto a specific folder row: the destination is that
+  // folder, NOT the currently-open folder.
+  destPrefixOverride?: string;
 }
 
 function sideHeaders(c: Connection, side: 'source' | 'dest'): Record<string, string> {
@@ -71,7 +75,7 @@ function setRowStatus(row: HTMLElement, status: StatusKey, mode: 'copy' | 'move'
 
 function buildItems(req: TransferRequest): { key: string; destKey: string }[] {
   const destPane = getPane(req.destPaneId);
-  const destPrefix = destPane.prefix;
+  const destPrefix = req.destPrefixOverride ?? destPane.prefix;
   const keys = req.keys ?? [];
   return keys.map((key) => {
     let destKey: string;
@@ -356,9 +360,26 @@ export async function runTransfer(req: TransferRequest): Promise<void> {
     return;
   }
 
-  const sourceLabel = `${sourceConn.name} · ${sourcePane.activeBucket}/${sourcePane.prefix || ''}`;
-  const destLabel = `${destConn.name} · ${destPane.activeBucket}/${destPane.prefix || ''}`;
   const crossConn = sourceConn.id !== destConn.id;
+  const crossBucket = sourcePane.activeBucket !== destPane.activeBucket;
+  const effectiveDestPrefix = req.destPrefixOverride ?? destPane.prefix;
+  // Source prefix: for folder transfers we use the folder's prefix; otherwise
+  // the pane's current prefix.
+  const effectiveSourcePrefix = req.folder?.sourcePrefix ?? sourcePane.prefix;
+
+  // Build labels. When source and dest live in the same bucket+connection,
+  // collapse the redundant parts so the user sees `prefix/ → prefix/` cleanly
+  // instead of two long identical paths.
+  let sourceLabel: string;
+  let destLabel: string;
+  if (!crossConn && !crossBucket) {
+    const bucket = sourcePane.activeBucket || '';
+    sourceLabel = `${bucket}/${effectiveSourcePrefix || ''}`;
+    destLabel = `${bucket}/${effectiveDestPrefix || ''}`;
+  } else {
+    sourceLabel = `${sourceConn.name} · ${sourcePane.activeBucket}/${effectiveSourcePrefix || ''}`;
+    destLabel = `${destConn.name} · ${destPane.activeBucket}/${effectiveDestPrefix || ''}`;
+  }
 
   // Confirm modal: for folders, show "carpeta foo/" instead of file count.
   // We don't pre-discover (would require an extra round trip); user confirms
@@ -389,7 +410,7 @@ export async function runTransfer(req: TransferRequest): Promise<void> {
   if (isFolderMode) {
     body.prefix = {
       source: req.folder!.sourcePrefix,
-      dest: destPane.prefix || '',
+      dest: effectiveDestPrefix || '',
     };
   } else {
     body.items = items;

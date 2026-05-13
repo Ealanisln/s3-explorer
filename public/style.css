@@ -773,6 +773,18 @@ body.is-resizing * { user-select: none !important; }
   z-index: 4;
 }
 
+/* Drop target highlight on a SINGLE folder row when something is being
+   dragged over it — distinguishes "drop into this sub-folder" from "drop
+   into the currently-open folder" (which is the pane-level highlight). */
+.grid tr.drop-target-row > td {
+  background: var(--accent-soft) !important;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.grid tr.drop-target-row .cell-name {
+  color: var(--text);
+  font-weight: 600;
+}
+
 /* ============================================================
    Grid (table) — selector kept as `.grid` for TS bindings
    ============================================================ */

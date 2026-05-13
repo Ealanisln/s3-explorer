@@ -238,6 +238,32 @@ type DndPayload =
   | { kind: 'keys'; sourcePaneId: PaneId; keys: string[] }
   | { kind: 'folder'; sourcePaneId: PaneId; prefix: string };
 
+// Validate whether dropping `payload` onto folder `destFolderPrefix` (in the
+// same pane) is sensible. Returns an error message or null when OK. Used by
+// the folder-row drop handler to bail early with a toast.
+function validateFolderDrop(
+  payload: DndPayload, destFolderPrefix: string, samePane: boolean,
+): string | null {
+  if (payload.kind === 'folder') {
+    const src = payload.prefix;
+    if (samePane && src === destFolderPrefix) {
+      return 'No puedes mover una carpeta dentro de sí misma.';
+    }
+    if (samePane && destFolderPrefix.startsWith(src)) {
+      return 'No puedes mover una carpeta a una de sus subcarpetas.';
+    }
+  } else {
+    // Files: only block when the dest folder is the file's CURRENT folder —
+    // otherwise it'd be a no-op move/copy in the same location.
+    const allSameLocation = samePane && payload.keys.every((k) => {
+      const parent = k.slice(0, k.lastIndexOf('/') + 1);
+      return parent === destFolderPrefix;
+    });
+    if (allSameLocation) return 'Los archivos ya están en esa carpeta.';
+  }
+  return null;
+}
+
 function bindRowEvents(tr: HTMLTableRowElement, o: S3Object, paneId: PaneId): void {
   // Rows are draggable when they're real files (not delete markers). The
   // payload contains either the single key or the current selection if the
@@ -366,6 +392,7 @@ function renderGridInner(paneId: PaneId): void {
       e.dataTransfer?.setData('text/plain', pp);
       if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copyMove';
     });
+    attachFolderRowDropHandlers(tr, pp, paneId);
     tr.onclick = (): void => {
       setActivePane(paneId);
       const pane = getPane(paneId);
@@ -575,7 +602,10 @@ export function initDragDrop(paneId: PaneId): void {
     if (!raw) return;
     let payload: DndPayload;
     try { payload = JSON.parse(raw) as DndPayload; } catch { return; }
-    if (payload.sourcePaneId === paneId) return; // drop on same pane is a no-op
+    // Same-pane drop on the empty area is a no-op — the user dropped onto
+    // "this folder" which is where the files already are. Folder-row drops
+    // are handled by attachFolderRowDropHandlers (they stop propagation).
+    if (payload.sourcePaneId === paneId) return;
     if (payload.kind === 'folder') {
       void runTransfer({
         sourcePaneId: payload.sourcePaneId,
@@ -587,6 +617,66 @@ export function initDragDrop(paneId: PaneId): void {
         sourcePaneId: payload.sourcePaneId,
         destPaneId: paneId,
         keys: payload.keys,
+      });
+    }
+  });
+}
+
+// Wire dragenter/over/leave/drop on a single folder row so it acts as a drop
+// target. The row's prefix becomes the destination (overriding the pane's
+// open folder), so the user can drag a file or folder into ANY visible
+// sub-folder — including in the same pane.
+function attachFolderRowDropHandlers(tr: HTMLTableRowElement, folderPrefix: string, paneId: PaneId): void {
+  let hovering = false;
+  tr.addEventListener('dragenter', (e: DragEvent) => {
+    if (!e.dataTransfer?.types.includes(DND_MIME)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!hovering) { hovering = true; tr.classList.add('drop-target-row'); }
+  });
+  tr.addEventListener('dragover', (e: DragEvent) => {
+    if (!e.dataTransfer?.types.includes(DND_MIME)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  });
+  tr.addEventListener('dragleave', (e: DragEvent) => {
+    if (!e.dataTransfer?.types.includes(DND_MIME)) return;
+    // Only remove the highlight when the cursor truly leaves the row (not
+    // when it crosses into a child <td>). relatedTarget === null inside the
+    // row means we're truly out.
+    if (tr.contains(e.relatedTarget as Node)) return;
+    hovering = false;
+    tr.classList.remove('drop-target-row');
+  });
+  tr.addEventListener('drop', (e: DragEvent) => {
+    if (!e.dataTransfer?.types.includes(DND_MIME)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    hovering = false;
+    tr.classList.remove('drop-target-row');
+    const raw = e.dataTransfer.getData(DND_MIME);
+    if (!raw) return;
+    let payload: DndPayload;
+    try { payload = JSON.parse(raw) as DndPayload; } catch { return; }
+
+    const samePane = payload.sourcePaneId === paneId;
+    const err = validateFolderDrop(payload, folderPrefix, samePane);
+    if (err) { toast(err, 'info', 4000); return; }
+
+    if (payload.kind === 'folder') {
+      void runTransfer({
+        sourcePaneId: payload.sourcePaneId,
+        destPaneId: paneId,
+        folder: { sourcePrefix: payload.prefix },
+        destPrefixOverride: folderPrefix,
+      });
+    } else {
+      void runTransfer({
+        sourcePaneId: payload.sourcePaneId,
+        destPaneId: paneId,
+        keys: payload.keys,
+        destPrefixOverride: folderPrefix,
       });
     }
   });

@@ -65,6 +65,31 @@ export function transferRouter(): Router {
 
     const sameConn = isSameConnection(req);
     const isPrefixMode = body.prefix !== undefined;
+
+    // Defense-in-depth: when moving/copying within the SAME bucket+connection,
+    // reject a prefix-mode transfer where the destination sits inside (or is
+    // equal to) the source. Without this, the recursive copy would walk into
+    // its own freshly-written objects forever. The client also blocks this,
+    // but a malicious / buggy client could still post it.
+    if (
+      isPrefixMode
+      && sameConn
+      && body.sourceBucket === body.destBucket
+    ) {
+      const src = normalizePrefix(body.prefix!.source);
+      const dst = normalizePrefix(body.prefix!.dest);
+      // Same prefix (no-op) or dest descendant of source (recursion trap).
+      if (src === dst || (src !== '' && dst.startsWith(src))) {
+        res.status(400).json({
+          error: 'InvalidTransfer',
+          message: src === dst
+            ? 'Origen y destino son la misma carpeta.'
+            : 'No puedes mover una carpeta dentro de sí misma o de una subcarpeta.',
+        });
+        return;
+      }
+    }
+
     if (!sameConn) {
       audit('transfer_cross_connection', {
         username: req.user?.username,
