@@ -39,6 +39,11 @@ public/dist/
 # /cso security audit reports stay local
 .gstack/
 
+# Claude Code per-user project settings (project-level allowlists live in
+# .claude/settings.json which IS committed; .local.json is personal).
+.claude/settings.local.json
+.claude/*.local.json
+
 # Editor / OS
 .DS_Store
 Thumbs.db
