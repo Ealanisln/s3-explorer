@@ -495,6 +495,85 @@ body.is-resizing * { user-select: none !important; }
   font-weight: 600;
 }
 
+/* Edit button at the end of the breadcrumb — toggles the chips to a
+   free-form text input for jumping to a known path. Subtle until hover so
+   it doesn't compete with the path itself. */
+.crumb-edit-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px;
+  margin-left: 6px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 5px;
+  color: var(--text-mute);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity var(--t-fast), background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+}
+/* Brighten the edit button while the user is hovering anywhere in the
+   breadcrumb — it's a discovery affordance, not the primary action. */
+.crumbs:hover .crumb-edit-btn { opacity: 0.95; }
+.crumb-edit-btn:hover {
+  opacity: 1;
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text);
+}
+.crumb-edit-btn:focus-visible {
+  opacity: 1;
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+/* When the breadcrumb is in edit mode the chips are replaced by a text
+   input + accept/cancel buttons. Use the available width so even long
+   paths fit comfortably. */
+.crumbs.editing { gap: 6px; }
+.crumb-edit-input {
+  flex: 1;
+  min-width: 200px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.crumb-edit-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+.crumb-edit-input.err {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}
+.crumb-edit-action {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+}
+.crumb-edit-action.ok:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.crumb-edit-action.cancel:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
 .actions {
   display: flex; align-items: center; gap: 6px;
   flex-wrap: wrap; row-gap: 6px;

@@ -26,11 +26,23 @@ function readConnForm(): Connection {
   };
 }
 
+// Tracks whether the modal was opened for a fresh connection (create) or to
+// edit an existing one. Used by the submit handler to guarantee a NEW uuid
+// for create-mode submissions, even if the hidden id field still carries a
+// stale value from a previous edit (form.reset() does NOT always clear hidden
+// inputs whose value was set programmatically — that's the bug that made
+// adding a second Vultr connection overwrite the first).
+let modalMode: 'create' | 'edit' = 'create';
+
 export function openConnModal(c: Connection | null): void {
   const f = $('form-conn') as HTMLFormElement;
   const el = f.elements;
   const get = (name: string): HTMLInputElement => el.namedItem(name) as HTMLInputElement;
   f.reset();
+  modalMode = c ? 'edit' : 'create';
+  // Always wipe the hidden id field FIRST so even if the form-reset quirk
+  // left a stale id, we're starting from a clean slate.
+  get('id').value = '';
   $('test-result').textContent = '';
   const importResult = document.getElementById('import-result');
   if (importResult) { importResult.textContent = ''; importResult.className = 'test-result'; }
@@ -89,6 +101,11 @@ export function initConnModal(): void {
   ($('form-conn') as HTMLFormElement).onsubmit = (e: Event): void => {
     e.preventDefault();
     const conn = readConnForm();
+    // Defense in depth: in create mode, always mint a fresh uuid regardless
+    // of what the hidden field contains. This guarantees a new connection
+    // even if a stale id somehow leaked through from a previous edit-mode
+    // session of the same modal.
+    if (modalMode === 'create') conn.id = crypto.randomUUID();
     const idx = State.connections.findIndex((c) => c.id === conn.id);
     if (idx >= 0) State.connections[idx] = conn;
     else State.connections.push(conn);
