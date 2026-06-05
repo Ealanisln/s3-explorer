@@ -147,7 +147,161 @@ export function renderBreadcrumbs(paneId?: PaneId): void {
         el.appendChild(s);
       }
     });
+
+    // Edit button at the end of the breadcrumb — toggles the crumb chips
+    // into a free-form text input for jumping directly to a known path.
+    if (State.activeBucket) {
+      const editBtn = document.createElement('button');
+      editBtn.className = 'crumb-edit-btn';
+      editBtn.type = 'button';
+      editBtn.title = 'Editar ruta (escribir / pegar)';
+      editBtn.setAttribute('aria-label', 'Editar ruta');
+      editBtn.innerHTML = '<i data-icon="edit" data-icon-size="13"></i>';
+      editBtn.onclick = (): void => enterBreadcrumbEdit(p);
+      el.appendChild(editBtn);
+    }
   });
+}
+
+// Replace the breadcrumb chips with a single text input containing the
+// current `bucket/prefix/` path. The user types or pastes a new path,
+// Enter navigates, Escape cancels. Cross-bucket switch is allowed only
+// when the target bucket already exists in the active connection's
+// bucket list (we don't switch connections via the breadcrumb edit).
+function enterBreadcrumbEdit(paneId: PaneId): void {
+  withPane(paneId, () => {
+    const el = paneEl('breadcrumbs', paneId);
+    const conn = State.connections.find((c) => c.id === State.activeConnId);
+    if (!conn || !State.activeBucket) return;
+
+    const currentPath = `${State.activeBucket}/${State.prefix || ''}`;
+    el.innerHTML = '';
+    el.classList.add('editing');
+
+    // Connection pill stays — it's locked, can't be changed from here.
+    const connSpan = document.createElement('span');
+    connSpan.className = 'crumb-conn';
+    connSpan.textContent = conn.name;
+    connSpan.title = conn.endpoint || 'AWS S3';
+    el.appendChild(connSpan);
+    const sep = document.createElement('span');
+    sep.className = 'sep'; sep.textContent = '/';
+    el.appendChild(sep);
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'crumb-edit-input';
+    input.value = currentPath;
+    input.spellcheck = false;
+    input.autocomplete = 'off';
+    input.setAttribute('aria-label', 'Ruta');
+    el.appendChild(input);
+
+    const okBtn = document.createElement('button');
+    okBtn.type = 'button';
+    okBtn.className = 'crumb-edit-action ok';
+    okBtn.title = 'Ir a esta ruta (Enter)';
+    okBtn.innerHTML = '<i data-icon="check" data-icon-size="13"></i>';
+    el.appendChild(okBtn);
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'crumb-edit-action cancel';
+    cancelBtn.title = 'Cancelar (Esc)';
+    cancelBtn.innerHTML = '<i data-icon="close" data-icon-size="13"></i>';
+    el.appendChild(cancelBtn);
+
+    mountIcons(el);
+
+    const pane = getPane(paneId);
+    // pane.buckets is the authoritative cached bucket list for this pane —
+    // it's whatever `fetchConnBuckets` resolved to (manual list or auto-
+    // discovered). Empty means "haven't loaded yet" — skip the membership
+    // check in that case so the user isn't blocked.
+    const bucketNames = pane.buckets.map((b) => b.Name);
+
+    const exitEditMode = (): void => {
+      el.classList.remove('editing');
+      renderBreadcrumbs(paneId);
+    };
+
+    const commit = (): void => {
+      const parsed = parseBreadcrumbInput(input.value, bucketNames);
+      if (!parsed.ok) {
+        input.classList.add('err');
+        toast(parsed.error, 'error', 4000);
+        return;
+      }
+      pane.activeBucket = parsed.bucket;
+      pane.prefix = parsed.prefix;
+      pane.selected.clear();
+      // loadObjects re-renders the breadcrumb in normal mode, so we don't
+      // need to call exitEditMode explicitly.
+      void loadObjects(paneId);
+    };
+
+    input.addEventListener('keydown', (e: KeyboardEvent) => {
+      input.classList.remove('err');
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); exitEditMode(); }
+    });
+    okBtn.onclick = (): void => commit();
+    cancelBtn.onclick = (): void => exitEditMode();
+    // Clicking outside the input (anywhere not on the edit controls) cancels.
+    setTimeout(() => {
+      const handleOutside = (e: MouseEvent): void => {
+        if (!el.contains(e.target as Node)) {
+          document.removeEventListener('mousedown', handleOutside);
+          exitEditMode();
+        }
+      };
+      document.addEventListener('mousedown', handleOutside);
+    }, 0);
+
+    input.focus();
+    input.select();
+  });
+}
+
+type BreadcrumbParseResult =
+  | { ok: true; bucket: string; prefix: string }
+  | { ok: false; error: string };
+
+// Normalize and parse the path the user typed/pasted into the breadcrumb.
+// Returns { ok: true, bucket, prefix } on success, or { ok: false, error }
+// when the input doesn't resolve to a bucket the current connection can
+// reach.
+function parseBreadcrumbInput(raw: string, availableBuckets: string[]): BreadcrumbParseResult {
+  let s = raw.trim();
+  if (!s) return { ok: false, error: 'Ruta vacía' };
+
+  // Accept s3://bucket/foo/bar styles.
+  s = s.replace(/^s3:\/\//i, '');
+  // Convert Windows-style backslashes to forward slashes (paste from File
+  // Explorer is a real-world thing).
+  s = s.replace(/\\/g, '/');
+  // Drop any number of leading slashes.
+  s = s.replace(/^\/+/, '');
+  if (!s) return { ok: false, error: 'Ruta vacía' };
+
+  const firstSlash = s.indexOf('/');
+  const bucket = firstSlash === -1 ? s : s.slice(0, firstSlash);
+  let prefix = firstSlash === -1 ? '' : s.slice(firstSlash + 1);
+  // Drop double-slash artifacts; ensure trailing slash on a non-empty prefix.
+  prefix = prefix.replace(/\/{2,}/g, '/');
+  if (prefix && !prefix.endsWith('/')) prefix += '/';
+
+  if (!bucket) return { ok: false, error: 'Falta el nombre del bucket' };
+  // When the active connection has a manual bucket allowlist, enforce it.
+  // For auto-discovered buckets (availableBuckets pulled from the pane's
+  // loaded list) we trust whatever the user typed but warn if it's clearly
+  // not in the cached list — the next loadObjects will surface a real error
+  // from S3 if it's wrong.
+  if (availableBuckets.length > 0 && !availableBuckets.includes(bucket)) {
+    return { ok: false, error: `El bucket "${bucket}" no existe en esta conexión` };
+  }
+
+  return { ok: true, bucket, prefix };
 }
 
 // Allow dragging a row onto a breadcrumb segment to move/copy UP the
