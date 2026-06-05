@@ -159,6 +159,11 @@ export function renderBreadcrumbs(paneId?: PaneId): void {
       editBtn.innerHTML = '<i data-icon="edit" data-icon-size="13"></i>';
       editBtn.onclick = (): void => enterBreadcrumbEdit(p);
       el.appendChild(editBtn);
+      // Hydrate the <i data-icon="edit"> inside the button — mountIcons only
+      // runs once at boot on the original DOM, so any dynamically-injected
+      // icon (this button, and the OK / cancel ones in edit mode) needs an
+      // explicit call here.
+      mountIcons(el);
     }
   });
 }

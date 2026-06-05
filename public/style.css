@@ -500,19 +500,24 @@ body.is-resizing * { user-select: none !important; }
    it doesn't compete with the path itself. */
 .crumb-edit-btn {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px;
-  margin-left: 4px;
+  width: 24px; height: 24px;
+  margin-left: 6px;
   padding: 0;
-  border: none; background: transparent;
-  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 5px;
   color: var(--text-mute);
   cursor: pointer;
-  opacity: 0.55;
-  transition: opacity var(--t-fast), background var(--t-fast), color var(--t-fast);
+  opacity: 0.7;
+  transition: opacity var(--t-fast), background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
 }
+/* Brighten the edit button while the user is hovering anywhere in the
+   breadcrumb — it's a discovery affordance, not the primary action. */
+.crumbs:hover .crumb-edit-btn { opacity: 0.95; }
 .crumb-edit-btn:hover {
   opacity: 1;
   background: var(--surface-2);
+  border-color: var(--border);
   color: var(--text);
 }
 .crumb-edit-btn:focus-visible {
