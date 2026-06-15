@@ -378,6 +378,11 @@ export function updateBatchBar(paneId?: PaneId): void {
 // Folder row context menu. Same dropdown shell as showRowMenu but tailored
 // actions: navigate, rename (uses /api/transfer in move mode), delete
 // recursively (uses the new SSE-streamed /folder/delete endpoint).
+//
+// For DELETED folders (every key under the prefix is a delete-marker
+// tombstone) the action set is different — there's nothing live to
+// rename, but the user can either restore everything in one shot or
+// permanently purge the version history.
 function showFolderMenu(e: MouseEvent, folderPrefix: string, paneId: PaneId): void {
   document.querySelectorAll('.dropdown.row-actions-menu').forEach((d) => d.remove());
   const dd = document.createElement('div');
@@ -386,7 +391,12 @@ function showFolderMenu(e: MouseEvent, folderPrefix: string, paneId: PaneId): vo
   dd.style.left = e.clientX + 'px';
   dd.style.top = e.clientY + 'px';
   dd.style.visibility = 'hidden';
-  dd.innerHTML = `
+  const isDeleted = State.deletedPrefixes.has(folderPrefix);
+  dd.innerHTML = isDeleted ? `
+    <button data-act="restore">Restaurar carpeta</button>
+    <button data-act="open">Abrir (ver eliminados)</button>
+    <button data-act="purge" class="danger">Purgar carpeta…</button>
+  ` : `
     <button data-act="open">Abrir</button>
     <button data-act="rename">Renombrar</button>
     <button data-act="delete" class="danger">Eliminar carpeta…</button>
@@ -417,6 +427,16 @@ function showFolderMenu(e: MouseEvent, folderPrefix: string, paneId: PaneId): vo
     } else if (act === 'rename') {
       void openRenameFolder(folderPrefix, paneId);
     } else if (act === 'delete') {
+      void deleteFolder(folderPrefix, paneId);
+    } else if (act === 'restore') {
+      void restoreFolder(folderPrefix, paneId);
+    } else if (act === 'purge') {
+      // Deleted folder → permanently remove every version + marker.
+      // Reuse deleteFolder with a flag so the confirm dialog defaults to
+      // purgeVersions:true. For now, deleteFolder already exposes the
+      // picker; on a versioned bucket the user just picks "purgar" from
+      // the choice dialog. On a non-versioned bucket there's no purge
+      // distinction so the regular confirm + delete applies.
       void deleteFolder(folderPrefix, paneId);
     }
   };
@@ -599,6 +619,133 @@ async function deleteFolder(folderPrefix: string, paneId: PaneId): Promise<void>
     toast(`Carpeta eliminada — ${totalDeleted.toLocaleString()} archivo(s)`, 'success', 5000);
   } else if (aborted) {
     toast('Eliminación cancelada', 'info');
+  } else {
+    toast(`Completado con ${totalFailed} error(es)`, 'error');
+  }
+}
+
+// Restore a deleted folder: walks ListObjectVersions server-side and removes
+// the LATEST delete marker for each key under `folderPrefix` whose top-of-
+// stack record is a marker. Same SSE progress flow as deleteFolder, sharing
+// the same modal markup with a different title.
+async function restoreFolder(folderPrefix: string, paneId: PaneId): Promise<void> {
+  const pane = getPane(paneId);
+  if (!pane.activeBucket) return;
+  const bucket = pane.activeBucket;
+  const folderName = folderPrefix.replace(/\/$/, '').split('/').pop() || folderPrefix;
+
+  const ok = await confirmDialog({
+    title: `Restaurar carpeta "${folderName}"`,
+    message: 'Se eliminarán los delete markers de cada archivo bajo esta carpeta — sus versiones anteriores volverán a ser las actuales.\n\nNo afecta archivos vivos. Si la carpeta no tiene delete markers (bucket sin versionado), no pasa nada.',
+    confirmLabel: 'Restaurar',
+  });
+  if (!ok) return;
+
+  // Reuse the folder-delete progress modal — same shape, different title.
+  $('folder-delete-title').textContent = `Restaurando "${folderName}"`;
+  ($('btn-folder-delete-close') as HTMLButtonElement).style.display = 'none';
+  ($('btn-folder-delete-abort') as HTMLButtonElement).style.display = 'inline-flex';
+  ($('btn-folder-delete-abort') as HTMLButtonElement).disabled = false;
+  ($('btn-folder-delete-abort') as HTMLButtonElement).textContent = 'Cancelar';
+  ($('folder-delete-progress-fill') as HTMLElement).style.width = '0%';
+  ($('folder-delete-progress-fill').parentElement as HTMLElement | null)?.classList.add('in-progress');
+  $('folder-delete-summary').textContent = 'Iniciando…';
+  $('folder-delete-current').textContent = '';
+  openModal('modal-folder-delete');
+
+  const abort = new AbortController();
+  ($('btn-folder-delete-abort') as HTMLButtonElement).onclick = (): void => {
+    abort.abort();
+    ($('btn-folder-delete-abort') as HTMLButtonElement).disabled = true;
+    ($('btn-folder-delete-abort') as HTMLButtonElement).textContent = 'Cancelando…';
+  };
+
+  let totalRestored = 0;
+  let totalFailed = 0;
+  let totalScanned = 0;
+  let aborted = false;
+
+  interface RestoreFrame {
+    t: 'progress' | 'done' | 'fatal';
+    restored?: number;
+    failed?: number;
+    scanned?: number;
+    currentKey?: string;
+    message?: string;
+    errorId?: string;
+  }
+
+  try {
+    const res = await fetch(`/api/object/${encodeURIComponent(bucket)}/folder/restore`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      credentials: 'same-origin',
+      signal: abort.signal,
+      body: JSON.stringify({ prefix: folderPrefix }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: res.statusText }));
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+    if (!res.body) throw new Error('No response body');
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx: number;
+      while ((idx = buf.indexOf('\n\n')) !== -1) {
+        const frame = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        const line = frame.split('\n').find((l) => l.startsWith('data:'));
+        if (!line) continue;
+        let ev: RestoreFrame;
+        try { ev = JSON.parse(line.slice(5).trim()) as RestoreFrame; } catch { continue; }
+        if (ev.t === 'fatal') {
+          toast(`Error del servidor: ${ev.message || 'desconocido'}`, 'error',
+            ev.errorId ? { errorId: ev.errorId } : undefined);
+          continue;
+        }
+        if (ev.t === 'progress') {
+          totalRestored = ev.restored ?? totalRestored;
+          totalFailed = ev.failed ?? totalFailed;
+          totalScanned = ev.scanned ?? totalScanned;
+          const pct = Math.min(95, (totalRestored % 1000) / 10 + (totalRestored > 0 ? 5 : 0));
+          ($('folder-delete-progress-fill') as HTMLElement).style.width = pct.toFixed(1) + '%';
+          $('folder-delete-summary').textContent =
+            `${totalRestored.toLocaleString()} restaurado(s) · ${totalScanned.toLocaleString()} escaneados${totalFailed > 0 ? ` · ${totalFailed} fallidos` : ''}`;
+          if (ev.currentKey) $('folder-delete-current').textContent = ev.currentKey;
+        } else if (ev.t === 'done') {
+          totalRestored = ev.restored ?? totalRestored;
+          totalFailed = ev.failed ?? totalFailed;
+          totalScanned = ev.scanned ?? totalScanned;
+          ($('folder-delete-progress-fill') as HTMLElement).style.width = '100%';
+        }
+      }
+    }
+  } catch (e) {
+    const err = e as Error;
+    if (err.name === 'AbortError') aborted = true;
+    else toast('Error: ' + err.message, 'error', errorIdOpts(e));
+  }
+
+  ($('folder-delete-progress-fill').parentElement as HTMLElement | null)?.classList.remove('in-progress');
+  ($('btn-folder-delete-abort') as HTMLButtonElement).style.display = 'none';
+  ($('btn-folder-delete-close') as HTMLButtonElement).style.display = 'inline-flex';
+  const tail = aborted ? ' (cancelado)' : '';
+  $('folder-delete-summary').textContent =
+    `${totalRestored.toLocaleString()} restaurado(s) · ${totalScanned.toLocaleString()} escaneados${totalFailed > 0 ? ` · ${totalFailed} fallidos` : ''}${tail}`;
+  $('folder-delete-current').textContent = '';
+
+  void loadObjects(paneId);
+
+  if (totalFailed === 0 && !aborted) {
+    toast(`Carpeta restaurada — ${totalRestored.toLocaleString()} archivo(s)`, 'success', 5000);
+  } else if (aborted) {
+    toast('Restauración cancelada', 'info');
   } else {
     toast(`Completado con ${totalFailed} error(es)`, 'error');
   }

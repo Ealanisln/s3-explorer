@@ -66,3 +66,11 @@ export const folderDeleteSchema = z.object({
   prefix: z.string().min(1).max(1024),
   purgeVersions: z.boolean().optional(),
 });
+
+// Recursive folder restore — the inverse of folder delete (markers mode).
+// Walks ListObjectVersions, finds every key whose LATEST version is a delete
+// marker, and removes that marker so the prior content version surfaces as
+// "current" again. No-op on a non-versioned bucket (which has no markers).
+export const folderRestoreSchema = z.object({
+  prefix: z.string().min(1).max(1024),
+});
