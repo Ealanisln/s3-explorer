@@ -182,6 +182,11 @@ export interface TransferRecursiveOptions {
   maxItems: number;         // safety cap, default 100k
   onEvent: (e: ProgressEvent) => void;
   abort: AbortSignal;
+  // When true, lands keys at `destPrefix + rel` instead of the default
+  // `destPrefix + folderName + rel`. Used by folder rename, where the
+  // caller already encoded the new name in `destPrefix` and would get a
+  // double-nested path if the source folder name were prepended again.
+  flatten?: boolean;
 }
 
 /**
@@ -208,6 +213,7 @@ export async function transferRecursive(
   const {
     sourceBucket, destBucket, sourcePrefix, destPrefix,
     mode, sameConn, concurrency, maxItems, onEvent, abort,
+    flatten,
   } = opts;
 
   // Internal controller so the worker pool can abort itself on circuit-break
@@ -230,8 +236,12 @@ export async function transferRecursive(
   //   "zell/logs/2026/02/" → folderName = "02/"
   //   "02/"                → folderName = "02/"
   //   ""                   → folderName = ""
+  //
+  // When `flatten` is true (folder rename flow), the caller has already
+  // encoded the new name into `destPrefix` and we skip prepending the source
+  // folder name to avoid a doubled path like `parent/newName/oldName/...`.
   const folderNameMatch = sourcePrefix.match(/([^/]+\/)$/);
-  const folderName = folderNameMatch ? folderNameMatch[1] : '';
+  const folderName = flatten ? '' : (folderNameMatch ? folderNameMatch[1] : '');
 
   // ── Producer: list pages and push to queue ───────────────────────────────
   const producer = (async (): Promise<void> => {

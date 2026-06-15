@@ -13,6 +13,7 @@ import { wrap } from '../../http/errors';
 import { validateBody } from '../../http/validate';
 import {
   folderSchema,
+  folderDeleteSchema,
   restoreSchema,
   deleteObjectSchema,
   deleteBatchSchema,
@@ -20,6 +21,9 @@ import {
   renameSchema,
   existsSchema,
 } from '../schemas';
+import { newErrorId } from '../../http/errors';
+import { sanitizeError } from '../errors';
+import { audit } from '../../auth/audit';
 
 type ClientFactory = (req: Request) => S3Client;
 
@@ -227,6 +231,196 @@ export function objectsRouter(buildClient: ClientFactory): Router {
     await s3.send(new PutObjectCommand({ Bucket: req.params.bucket, Key: key, Body: '' }));
     res.json({ ok: true, key });
   }));
+
+  // GET /api/object/:bucket/folder/count?prefix=foo/bar/
+  // Quick size-of-folder probe used by the delete-confirm dialog. Capped at
+  // 5 pages (≤5000 keys) so a huge folder doesn't make the user wait for a
+  // full enumeration just to render the confirm screen. The flag
+  // `truncated` lets the UI render "≥5000 archivos" when the cap was hit.
+  r.get('/object/:bucket/folder/count', wrap(async (req: Request, res: Response) => {
+    const s3 = buildClient(req);
+    const prefix = q(req, 'prefix');
+    if (!prefix || !prefix.endsWith('/')) {
+      res.status(400).json({ error: 'InvalidPrefix', message: 'prefix debe terminar en /' });
+      return;
+    }
+    let count = 0;
+    let totalBytes = 0;
+    let token: string | undefined;
+    let page = 0;
+    const MAX_PAGES = 5;
+    do {
+      const lr = await s3.send(new ListObjectsV2Command({
+        Bucket: req.params.bucket,
+        Prefix: prefix,
+        ContinuationToken: token,
+        MaxKeys: 1000,
+      }));
+      for (const obj of lr.Contents ?? []) {
+        count++;
+        totalBytes += obj.Size ?? 0;
+      }
+      token = lr.NextContinuationToken;
+      page++;
+    } while (token && page < MAX_PAGES);
+    res.json({ count, totalBytes, truncated: !!token });
+  }));
+
+  // POST /api/object/:bucket/folder/delete — SSE-streamed recursive folder delete.
+  //
+  // Default behavior: walk ListObjectsV2 under `prefix` and delete each key in
+  // batches of 1000 (the S3 DeleteObjects limit). On a versioned bucket this
+  // creates a delete-marker per key — recoverable from the "Mostrar
+  // eliminados" toggle.
+  //
+  // When body.purgeVersions === true, instead walks ListObjectVersions (both
+  // versions and delete markers) and removes every record permanently. Useful
+  // for actually freeing storage on a versioned bucket. Irreversible.
+  r.post('/object/:bucket/folder/delete', validateBody(folderDeleteSchema), async (req: Request, res: Response): Promise<void> => {
+    const { prefix, purgeVersions } = req.body as { prefix: string; purgeVersions?: boolean };
+    if (!prefix.endsWith('/')) {
+      res.status(400).json({ error: 'InvalidPrefix', message: 'prefix debe terminar en /' });
+      return;
+    }
+    if (prefix === '/' || prefix.length === 0) {
+      res.status(400).json({ error: 'InvalidPrefix', message: 'No se puede eliminar la raíz del bucket' });
+      return;
+    }
+
+    let s3: S3Client;
+    try {
+      s3 = buildClient(req);
+    } catch (e) {
+      const errorId = newErrorId();
+      const err = e as { name?: string; message?: string };
+      console.error('[folder-delete-build]', { errorId, name: err.name, message: err.message });
+      const { status, body } = sanitizeError(e as Parameters<typeof sanitizeError>[0], errorId);
+      res.status(status).json(body);
+      return;
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    let lastEmit = Date.now();
+    const send = (e: Record<string, unknown>): void => {
+      try { res.write(`data: ${JSON.stringify(e)}\n\n`); lastEmit = Date.now(); }
+      catch { /* client disconnected */ }
+    };
+    const keepalive = setInterval(() => {
+      if (Date.now() - lastEmit < 30_000) return;
+      try { res.write(`: keepalive ${Date.now()}\n\n`); } catch { /* ignore */ }
+    }, 15_000);
+
+    const abortCtl = new AbortController();
+    let finished = false;
+    res.on('close', () => { if (!finished) abortCtl.abort(); });
+
+    audit('folder_delete_started', {
+      username: req.user?.username,
+      bucket: req.params.bucket,
+      prefix,
+      purgeVersions: !!purgeVersions,
+    });
+
+    let deleted = 0;
+    let failed = 0;
+    let scanned = 0;
+
+    const flush = async (batch: { Key: string; VersionId?: string }[]): Promise<void> => {
+      if (batch.length === 0) return;
+      const r2 = await s3.send(new DeleteObjectsCommand({
+        Bucket: req.params.bucket,
+        Delete: { Objects: batch, Quiet: true },
+      }));
+      const okCount = batch.length - (r2.Errors?.length ?? 0);
+      deleted += okCount;
+      failed += r2.Errors?.length ?? 0;
+      send({ t: 'progress', deleted, failed, scanned, currentKey: batch[batch.length - 1].Key });
+    };
+
+    try {
+      if (purgeVersions) {
+        let keyToken: string | undefined;
+        let versionToken: string | undefined;
+        do {
+          if (abortCtl.signal.aborted) break;
+          const lr = await s3.send(new ListObjectVersionsCommand({
+            Bucket: req.params.bucket,
+            Prefix: prefix,
+            KeyMarker: keyToken,
+            VersionIdMarker: versionToken,
+            MaxKeys: 1000,
+          }));
+          const records: { Key: string; VersionId?: string }[] = [];
+          for (const v of lr.Versions ?? []) {
+            if (typeof v.Key === 'string') records.push({ Key: v.Key, VersionId: v.VersionId });
+          }
+          for (const m of lr.DeleteMarkers ?? []) {
+            if (typeof m.Key === 'string') records.push({ Key: m.Key, VersionId: m.VersionId });
+          }
+          scanned += records.length;
+          for (let i = 0; i < records.length; i += 1000) {
+            if (abortCtl.signal.aborted) break;
+            await flush(records.slice(i, i + 1000));
+          }
+          keyToken = lr.NextKeyMarker;
+          versionToken = lr.NextVersionIdMarker;
+        } while (keyToken || versionToken);
+      } else {
+        let batch: { Key: string }[] = [];
+        let token: string | undefined;
+        do {
+          if (abortCtl.signal.aborted) break;
+          const lr = await s3.send(new ListObjectsV2Command({
+            Bucket: req.params.bucket,
+            Prefix: prefix,
+            ContinuationToken: token,
+            MaxKeys: 1000,
+          }));
+          for (const obj of lr.Contents ?? []) {
+            if (typeof obj.Key === 'string') {
+              batch.push({ Key: obj.Key });
+              scanned++;
+              if (batch.length >= 1000) {
+                await flush(batch);
+                batch = [];
+              }
+            }
+          }
+          token = lr.NextContinuationToken;
+        } while (token);
+        if (!abortCtl.signal.aborted && batch.length > 0) {
+          await flush(batch);
+        }
+      }
+      send({ t: 'done', deleted, failed, scanned });
+    } catch (e) {
+      const errorId = newErrorId();
+      const err = e as { name?: string; message?: string };
+      console.error('[folder-delete]', {
+        errorId, user: req.user?.username, prefix, name: err.name, message: err.message,
+      });
+      const { body } = sanitizeError(e as Parameters<typeof sanitizeError>[0], errorId);
+      try { res.write(`data: ${JSON.stringify({ t: 'fatal', ...body })}\n\n`); } catch { /* ignore */ }
+    } finally {
+      clearInterval(keepalive);
+      finished = true;
+    }
+
+    audit('folder_delete_finished', {
+      username: req.user?.username,
+      bucket: req.params.bucket,
+      prefix,
+      purgeVersions: !!purgeVersions,
+      deleted,
+      failed,
+      scanned,
+    });
+    res.end();
+  });
 
   r.delete('/object/:bucket', validateBody(deleteObjectSchema), wrap(async (req: Request, res: Response) => {
     const s3 = buildClient(req);

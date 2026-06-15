@@ -395,6 +395,41 @@
   </div>
 </div>
 
+<!-- Modal: Folder delete progress — SSE-streamed recursive delete -->
+<div class="modal-backdrop" id="modal-folder-delete" style="display:none">
+  <div class="modal">
+    <header>
+      <h3 id="folder-delete-title">Eliminando carpeta</h3>
+      <div class="header-actions">
+        <button class="btn" id="btn-folder-delete-abort">Cancelar</button>
+        <button class="btn-icon" id="btn-folder-delete-close" style="display:none" data-close><i data-icon="close"></i></button>
+      </div>
+    </header>
+    <div style="padding:18px">
+      <div class="transfer-progress-bar"><div id="folder-delete-progress-fill"></div></div>
+      <p class="hint" id="folder-delete-summary" style="margin:8px 0 4px">Preparando…</p>
+      <p class="hint" id="folder-delete-current" style="margin:6px 0 4px; color:var(--text-dim); font-size:11.5px; font-family:var(--font-mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis"></p>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Folder rename — simple input, submission delegated to the existing transfer endpoint -->
+<div class="modal-backdrop" id="modal-folder-rename" style="display:none">
+  <div class="modal">
+    <header><h3>Renombrar carpeta</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
+    <form id="form-folder-rename">
+      <p class="hint" style="margin-top:0">Actual: <code id="folder-rename-current"></code></p>
+      <label>Nuevo nombre <input name="newName" required autocomplete="off" placeholder="mi-carpeta"/></label>
+      <p class="hint">Sin barras (<code>/</code>). Renombrar mueve todo el contenido — sobre carpetas grandes puede tardar.</p>
+      <p class="test-result err" id="folder-rename-error"></p>
+      <footer>
+        <button type="button" class="btn" data-close>Cancelar</button>
+        <button type="submit" class="btn btn-primary">Renombrar</button>
+      </footer>
+    </form>
+  </div>
+</div>
+
 <!-- Modal: My account -->
 <div class="modal-backdrop" id="modal-account" style="display:none">
   <div class="modal">

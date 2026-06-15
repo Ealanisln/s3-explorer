@@ -7,10 +7,10 @@
 
 import { State, withPane, setActivePane, getPane } from '../state.js';
 import type { PaneId } from '../state.js';
-import { api } from '../api/client.js';
+import { api, authHeaders } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
-import { paneEl, escapeHtml } from '../util/dom.js';
-import { confirmDialog } from '../util/dialog.js';
+import { paneEl, escapeHtml, $, openModal, closeModal } from '../util/dom.js';
+import { confirmDialog, choiceDialog } from '../util/dialog.js';
 import { formatSize, formatDate, fileIcon } from '../util/format.js';
 import { mountIcons } from '../util/icons.js';
 import { openPreview } from './preview.js';
@@ -373,6 +373,292 @@ export function updateBatchBar(paneId?: PaneId): void {
   if (pane.selected.size === 0) { bar.style.display = 'none'; return; }
   bar.style.display = 'flex';
   paneEl('batch-info', p).textContent = `${pane.selected.size} archivo(s) seleccionado(s)`;
+}
+
+// Folder row context menu. Same dropdown shell as showRowMenu but tailored
+// actions: navigate, rename (uses /api/transfer in move mode), delete
+// recursively (uses the new SSE-streamed /folder/delete endpoint).
+function showFolderMenu(e: MouseEvent, folderPrefix: string, paneId: PaneId): void {
+  document.querySelectorAll('.dropdown.row-actions-menu').forEach((d) => d.remove());
+  const dd = document.createElement('div');
+  dd.className = 'dropdown row-actions-menu';
+  dd.style.position = 'fixed';
+  dd.style.left = e.clientX + 'px';
+  dd.style.top = e.clientY + 'px';
+  dd.style.visibility = 'hidden';
+  dd.innerHTML = `
+    <button data-act="open">Abrir</button>
+    <button data-act="rename">Renombrar</button>
+    <button data-act="delete" class="danger">Eliminar carpeta…</button>
+  `;
+  document.body.appendChild(dd);
+  const rect = dd.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const margin = 8;
+  let left = e.clientX;
+  let top = e.clientY;
+  if (left + rect.width + margin > vw) left = Math.max(margin, vw - rect.width - margin);
+  if (top + rect.height + margin > vh) top = Math.max(margin, vh - rect.height - margin);
+  dd.style.left = left + 'px';
+  dd.style.top = top + 'px';
+  dd.style.visibility = '';
+
+  const close = (): void => { dd.remove(); document.removeEventListener('click', close); };
+  setTimeout(() => document.addEventListener('click', close), 10);
+  dd.onclick = async (ev: Event): Promise<void> => {
+    setActivePane(paneId);
+    const target = ev.target as HTMLElement;
+    const act = target.dataset.act;
+    if (act === 'open') {
+      const pane = getPane(paneId);
+      pane.prefix = folderPrefix;
+      void loadObjects(paneId);
+    } else if (act === 'rename') {
+      void openRenameFolder(folderPrefix, paneId);
+    } else if (act === 'delete') {
+      void deleteFolder(folderPrefix, paneId);
+    }
+  };
+}
+
+// Pretty-print byte counts for the confirm dialog. Mirrors formatSize but
+// kept inline so the folder-delete code doesn't pull a util just for this.
+function fmtBytes(b: number): string {
+  if (b < 1024) return b + ' B';
+  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+  if (b < 1024 * 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + ' MB';
+  return (b / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+}
+
+interface FolderCountResponse { count: number; totalBytes: number; truncated: boolean }
+interface FolderDeleteFrame {
+  t: 'progress' | 'done' | 'fatal';
+  deleted?: number;
+  failed?: number;
+  scanned?: number;
+  currentKey?: string;
+  message?: string;
+  errorId?: string;
+}
+
+// Confirm + stream the recursive delete for `folderPrefix` (must end in '/').
+// The /count endpoint gives a quick "≈N archivos / size" preview so the user
+// knows what they're nuking before saying yes. On a versioned bucket we ask
+// whether to leave a recoverable delete-marker or purge every version.
+async function deleteFolder(folderPrefix: string, paneId: PaneId): Promise<void> {
+  const pane = getPane(paneId);
+  if (!pane.activeBucket) return;
+  const bucket = pane.activeBucket;
+  const folderName = folderPrefix.replace(/\/$/, '').split('/').pop() || folderPrefix;
+
+  // Count preview — capped at 5000 server-side so a huge folder doesn't make
+  // the confirm dialog wait forever for a number.
+  let countMsg = '';
+  try {
+    const c = await api<FolderCountResponse>(
+      `/api/object/${encodeURIComponent(bucket)}/folder/count?prefix=${encodeURIComponent(folderPrefix)}`,
+    );
+    const num = c.truncated ? `${c.count.toLocaleString()}+` : c.count.toLocaleString();
+    countMsg = `Contiene ${num} archivo(s) (${fmtBytes(c.totalBytes)}${c.truncated ? '+' : ''}).`;
+  } catch {
+    countMsg = 'No se pudo contar el contenido — se eliminará lo que haya.';
+  }
+
+  // Pick delete strategy. On a non-versioned bucket the choice is moot — a
+  // regular delete is permanent either way. We still show the picker if
+  // versioning is on so the user knows what's happening.
+  let purgeVersions = false;
+  if (pane.versioning === 'Enabled') {
+    const choice = await choiceDialog<'marker' | 'purge'>({
+      title: `Eliminar carpeta "${folderName}"`,
+      message: `${countMsg}\n\nEste bucket tiene versionado activo. Elige cómo eliminar:`,
+      choices: [
+        { value: 'marker', label: 'Crear delete markers', hint: 'Recuperable desde "Mostrar eliminados". Los archivos siguen ocupando espacio en S3.', recommended: true },
+        { value: 'purge', label: 'Purgar todas las versiones', hint: 'Borra absolutamente todo. Libera espacio. IRREVERSIBLE.' },
+      ],
+    });
+    if (choice === null) return;
+    purgeVersions = choice === 'purge';
+  } else {
+    const ok = await confirmDialog({
+      title: `Eliminar carpeta "${folderName}"`,
+      message: `${countMsg}\n\nEsta acción NO se puede deshacer (el bucket no tiene versionado).`,
+      confirmLabel: 'Eliminar',
+      danger: true,
+    });
+    if (!ok) return;
+  }
+
+  // Open the progress modal.
+  $('folder-delete-title').textContent = purgeVersions
+    ? `Purgando "${folderName}"`
+    : `Eliminando "${folderName}"`;
+  ($('btn-folder-delete-close') as HTMLButtonElement).style.display = 'none';
+  ($('btn-folder-delete-abort') as HTMLButtonElement).style.display = 'inline-flex';
+  ($('btn-folder-delete-abort') as HTMLButtonElement).disabled = false;
+  ($('btn-folder-delete-abort') as HTMLButtonElement).textContent = 'Cancelar';
+  ($('folder-delete-progress-fill') as HTMLElement).style.width = '0%';
+  ($('folder-delete-progress-fill').parentElement as HTMLElement | null)?.classList.add('in-progress');
+  $('folder-delete-summary').textContent = 'Iniciando…';
+  $('folder-delete-current').textContent = '';
+  openModal('modal-folder-delete');
+
+  const abort = new AbortController();
+  ($('btn-folder-delete-abort') as HTMLButtonElement).onclick = (): void => {
+    abort.abort();
+    ($('btn-folder-delete-abort') as HTMLButtonElement).disabled = true;
+    ($('btn-folder-delete-abort') as HTMLButtonElement).textContent = 'Cancelando…';
+  };
+
+  let totalDeleted = 0;
+  let totalFailed = 0;
+  let totalScanned = 0;
+  let aborted = false;
+
+  try {
+    const res = await fetch(`/api/object/${encodeURIComponent(bucket)}/folder/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      credentials: 'same-origin',
+      signal: abort.signal,
+      body: JSON.stringify({ prefix: folderPrefix, purgeVersions }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: res.statusText }));
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+    if (!res.body) throw new Error('No response body');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx: number;
+      while ((idx = buf.indexOf('\n\n')) !== -1) {
+        const frame = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        const line = frame.split('\n').find((l) => l.startsWith('data:'));
+        if (!line) continue;
+        let ev: FolderDeleteFrame;
+        try { ev = JSON.parse(line.slice(5).trim()) as FolderDeleteFrame; } catch { continue; }
+
+        if (ev.t === 'fatal') {
+          toast(`Error del servidor: ${ev.message || 'desconocido'}`, 'error',
+            ev.errorId ? { errorId: ev.errorId } : undefined);
+          continue;
+        }
+        if (ev.t === 'progress') {
+          totalDeleted = ev.deleted ?? totalDeleted;
+          totalFailed = ev.failed ?? totalFailed;
+          totalScanned = ev.scanned ?? totalScanned;
+          // Indeterminate bar — we don't know the final count up front; sweep
+          // animation in the CSS makes the bar feel alive. Each batch shifts
+          // the fill by a small fraction so there's also some real movement.
+          const pct = Math.min(95, (totalDeleted % 1000) / 10 + (totalDeleted > 0 ? 5 : 0));
+          ($('folder-delete-progress-fill') as HTMLElement).style.width = pct.toFixed(1) + '%';
+          $('folder-delete-summary').textContent =
+            `${totalDeleted.toLocaleString()} eliminado(s) · ${totalScanned.toLocaleString()} escaneados${totalFailed > 0 ? ` · ${totalFailed} fallidos` : ''}`;
+          if (ev.currentKey) $('folder-delete-current').textContent = ev.currentKey;
+        } else if (ev.t === 'done') {
+          totalDeleted = ev.deleted ?? totalDeleted;
+          totalFailed = ev.failed ?? totalFailed;
+          totalScanned = ev.scanned ?? totalScanned;
+          ($('folder-delete-progress-fill') as HTMLElement).style.width = '100%';
+        }
+      }
+    }
+  } catch (e) {
+    const err = e as Error;
+    if (err.name === 'AbortError') aborted = true;
+    else {
+      toast('Error: ' + err.message, 'error', errorIdOpts(e));
+    }
+  }
+
+  // Wrap up the modal.
+  ($('folder-delete-progress-fill').parentElement as HTMLElement | null)?.classList.remove('in-progress');
+  ($('btn-folder-delete-abort') as HTMLButtonElement).style.display = 'none';
+  ($('btn-folder-delete-close') as HTMLButtonElement).style.display = 'inline-flex';
+  const tail = aborted ? ' (cancelado)' : '';
+  $('folder-delete-summary').textContent =
+    `${totalDeleted.toLocaleString()} eliminado(s) · ${totalScanned.toLocaleString()} escaneados${totalFailed > 0 ? ` · ${totalFailed} fallidos` : ''}${tail}`;
+  $('folder-delete-current').textContent = '';
+
+  // Hop one level up if the deleted folder was the open one, otherwise stay
+  // and refresh. Either way we want the row to disappear.
+  const parentPrefix = folderPrefix.replace(/[^/]+\/$/, '');
+  if (pane.prefix.startsWith(folderPrefix)) pane.prefix = parentPrefix;
+  void loadObjects(paneId);
+
+  if (totalFailed === 0 && !aborted) {
+    toast(`Carpeta eliminada — ${totalDeleted.toLocaleString()} archivo(s)`, 'success', 5000);
+  } else if (aborted) {
+    toast('Eliminación cancelada', 'info');
+  } else {
+    toast(`Completado con ${totalFailed} error(es)`, 'error');
+  }
+}
+
+// Open the rename modal for `folderPrefix`. On submit, fires runTransfer with
+// folder mode + move so the server-side recursive copy + delete already in
+// /api/transfer does all the work. No new backend required.
+async function openRenameFolder(folderPrefix: string, paneId: PaneId): Promise<void> {
+  const pane = getPane(paneId);
+  if (!pane.activeBucket) return;
+  // Derive parent prefix + current folder name.
+  const match = folderPrefix.match(/([^/]+)\/$/);
+  if (!match) return;
+  const currentName = match[1];
+  const parentPrefix = folderPrefix.slice(0, folderPrefix.length - currentName.length - 1);
+
+  const f = $('form-folder-rename') as HTMLFormElement;
+  f.reset();
+  $('folder-rename-current').textContent = folderPrefix;
+  const errEl = $('folder-rename-error');
+  errEl.textContent = '';
+  const input = f.elements.namedItem('newName') as HTMLInputElement;
+  input.value = currentName;
+  openModal('modal-folder-rename');
+  setTimeout(() => { input.focus(); input.select(); }, 30);
+
+  f.onsubmit = async (e: Event): Promise<void> => {
+    e.preventDefault();
+    errEl.textContent = '';
+    const newName = input.value.trim().replace(/\/+$/, '');
+    if (!newName) { errEl.textContent = 'El nombre no puede estar vacío.'; return; }
+    if (newName.includes('/')) { errEl.textContent = 'El nombre no puede contener "/"'; return; }
+    if (newName === currentName) { closeModal('modal-folder-rename'); return; }
+    const destPrefix = parentPrefix + newName + '/';
+    // Conflict check: is there already a sibling with that name? The pane's
+    // current prefixes list is the cheapest source. Note this catches the
+    // "rename to existing folder" case only when we're already viewing the
+    // parent; that's the common case, and the server-side transfer would
+    // happily merge into an existing folder otherwise.
+    if (pane.prefix === parentPrefix && pane.prefixes.includes(destPrefix)) {
+      errEl.textContent = `Ya existe una carpeta llamada "${newName}" aquí.`;
+      return;
+    }
+    closeModal('modal-folder-rename');
+    // Rename = recursive MOVE from foo/oldName/ → foo/newName/ with the new
+    // `flatten` flag so the server lands each key at destPrefix + rel
+    // (instead of destPrefix + sourceFolderName + rel which would double the
+    // path). `skipConfirm` bypasses the standard copy/move picker since this
+    // dialog already committed to "rename = move".
+    await runTransfer({
+      sourcePaneId: paneId,
+      destPaneId: paneId,
+      folder: { sourcePrefix: folderPrefix },
+      destPrefixOverride: destPrefix,
+      preselectMode: 'move',
+      flattenFolder: true,
+      skipConfirm: true,
+    });
+  };
 }
 
 function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
@@ -973,17 +1259,30 @@ export function initBatchBar(paneId: PaneId): void {
   const tbody = paneEl('grid-body', paneId);
   tbody.addEventListener('contextmenu', (e: MouseEvent) => {
     const target = e.target as HTMLElement;
-    const tr = target.closest<HTMLTableRowElement>('tr[data-key]');
-    if (!tr) return;  // header, folder row, or anywhere else → native menu
-    const key = tr.dataset.key;
-    if (!key) return;
-    // Find the S3Object in the pane state (normal mode OR search results).
-    const pane = getPane(paneId);
-    const obj = (pane.searchResults?.find((o) => o.Key === key))
-      ?? pane.objects.find((o) => o.Key === key);
-    if (!obj) return;
-    e.preventDefault();
-    setActivePane(paneId);
-    showRowMenu(e, obj, paneId);
+    // File rows (normal mode + search results) carry data-key.
+    const fileTr = target.closest<HTMLTableRowElement>('tr[data-key]');
+    if (fileTr) {
+      const key = fileTr.dataset.key;
+      if (!key) return;
+      const pane = getPane(paneId);
+      const obj = (pane.searchResults?.find((o) => o.Key === key))
+        ?? pane.objects.find((o) => o.Key === key);
+      if (!obj) return;
+      e.preventDefault();
+      setActivePane(paneId);
+      showRowMenu(e, obj, paneId);
+      return;
+    }
+    // Folder rows in normal mode carry data-folder-prefix; search-mode
+    // folder rows carry data-folder. Both map to a prefix string we can
+    // pass into showFolderMenu.
+    const folderTr = target.closest<HTMLTableRowElement>('tr[data-folder-prefix], tr[data-folder]');
+    if (folderTr) {
+      const prefix = folderTr.dataset.folderPrefix ?? folderTr.dataset.folder;
+      if (!prefix) return;
+      e.preventDefault();
+      setActivePane(paneId);
+      showFolderMenu(e, prefix, paneId);
+    }
   });
 }

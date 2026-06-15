@@ -49,6 +49,7 @@ public/dist/
 Thumbs.db
 .vscode/*
 !.vscode/extensions.json
+.vs/
 .idea/
 *.swp
 *.swo
