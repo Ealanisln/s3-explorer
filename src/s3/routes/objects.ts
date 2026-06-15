@@ -124,27 +124,39 @@ export function objectsRouter(buildClient: ClientFactory): Router {
       // subfolders that exist as paths but whose every key is a delete-marker
       // tombstone. The frontend will style those rows the same as deleted
       // files (DELETED badge + strikethrough).
-      const livePrefixes = new Set<string>();
-      let v2Token: string | undefined;
-      let v2Pages = 0;
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const v2 = await s3.send(new ListObjectsV2Command({
-          Bucket: req.params.bucket,
-          Prefix: prefix,
-          Delimiter: '/',
-          ContinuationToken: v2Token,
-          MaxKeys: 1000,
-        }));
-        for (const cp of v2.CommonPrefixes || []) {
-          if (cp.Prefix) livePrefixes.add(cp.Prefix);
+      //
+      // Wrapped in try/catch so a transient V2 failure (network, IAM gap on
+      // s3:ListBucket but not s3:ListBucketVersions, mock missing in tests)
+      // doesn't crash the whole listing — the user just doesn't see deleted-
+      // folder styling, which is a degraded but functional state.
+      let deletedPrefixes: string[] = [];
+      try {
+        const livePrefixes = new Set<string>();
+        let v2Token: string | undefined;
+        let v2Pages = 0;
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const v2 = await s3.send(new ListObjectsV2Command({
+            Bucket: req.params.bucket,
+            Prefix: prefix,
+            Delimiter: '/',
+            ContinuationToken: v2Token,
+            MaxKeys: 1000,
+          }));
+          for (const cp of v2.CommonPrefixes || []) {
+            if (cp.Prefix) livePrefixes.add(cp.Prefix);
+          }
+          v2Pages++;
+          if (!v2.IsTruncated) break;
+          if (v2Pages >= PAGE_CAP) break;
+          v2Token = v2.NextContinuationToken;
         }
-        v2Pages++;
-        if (!v2.IsTruncated) break;
-        if (v2Pages >= PAGE_CAP) break;
-        v2Token = v2.NextContinuationToken;
+        deletedPrefixes = [...prefixesSet].filter((p) => !livePrefixes.has(p));
+      } catch (e) {
+        const err = e as { name?: string; message?: string };
+        console.warn('[listing] deletedPrefixes probe failed (showDeleted degraded):',
+          err.name, err.message);
       }
-      const deletedPrefixes = [...prefixesSet].filter((p) => !livePrefixes.has(p));
 
       res.json({
         prefixes: [...prefixesSet],
