@@ -918,9 +918,13 @@ function renderGridInner(paneId: PaneId): void {
     const isDeletedFolder = State.deletedPrefixes.has(pp);
     if (isDeletedFolder) tr.classList.add('deleted');
     const folderBadge = isDeletedFolder ? '<span class="badge-deleted">DELETED</span>' : '';
+    // Wrap the folder name in .name-text (same as file rows) so it gets
+    // flex:1 and pushes the DELETED badge to the right edge of the cell —
+    // matching the file-row alignment instead of the badge sitting glued
+    // to the name.
     tr.innerHTML = `
       <td class="col-check"></td>
-      <td class="cell-name"><span class="ft-badge folder"><i data-icon="folder" data-icon-size="12"></i></span>${escapeHtml(name)}/${folderBadge}</td>
+      <td class="cell-name"><span class="ft-badge folder"><i data-icon="folder" data-icon-size="12"></i></span><span class="name-text">${escapeHtml(name)}/</span>${folderBadge}</td>
       <td class="col-size">—</td>
       <td class="col-date">—</td>
       <td class="col-act"></td>
