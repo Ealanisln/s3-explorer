@@ -155,6 +155,7 @@ export function transferRouter(): Router {
           maxItems: TRANSFER_MAX_PREFIX_ITEMS,
           onEvent: send,
           abort: abortCtl.signal,
+          flatten: body.prefix!.flatten === true,
         });
       } else {
         const opts = {

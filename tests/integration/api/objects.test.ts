@@ -79,6 +79,15 @@ describe('GET /api/objects/:bucket (folder listing)', () => {
   });
 
   describe('?showDeleted=1 (versions + delete-marker dedupe)', () => {
+    // The showDeleted listing does TWO calls now: ListObjectVersions to
+    // surface versions + delete markers, and ListObjectsV2 to determine
+    // which subfolder prefixes are "fully dead" (every key under them is
+    // a delete-marker tombstone). The V2 call needs its own mock so it
+    // doesn't return undefined and crash the handler.
+    beforeEach(() => {
+      s3.on(ListObjectsV2Command).resolves({ Contents: [], CommonPrefixes: [], IsTruncated: false });
+    });
+
     it('uses ListObjectVersionsCommand and surfaces delete markers', async () => {
       s3.on(ListObjectVersionsCommand).resolves({
         Versions: [
@@ -121,6 +130,29 @@ describe('GET /api/objects/:bucket (folder listing)', () => {
         IsDeleteMarker: false,
         VersionId: 'v3',
       });
+    });
+
+    it('flags subfolders with only delete-markers as deletedPrefixes', async () => {
+      s3.on(ListObjectVersionsCommand).resolves({
+        Versions: [],
+        DeleteMarkers: [
+          { Key: 'dead/inside.txt', VersionId: 'm1', LastModified: new Date('2026-02-01') },
+        ],
+        CommonPrefixes: [{ Prefix: 'live/' }, { Prefix: 'dead/' }],
+        IsTruncated: false,
+      });
+      // Only `live/` has a non-marker latest version → V2 returns just that.
+      s3.on(ListObjectsV2Command).resolves({
+        Contents: [],
+        CommonPrefixes: [{ Prefix: 'live/' }],
+        IsTruncated: false,
+      });
+      const res = await request(app)
+        .get('/api/objects/b?showDeleted=1')
+        .set('Cookie', cookie)
+        .set(TEST_S3_HEADERS);
+      expect(res.body.prefixes).toEqual(expect.arrayContaining(['live/', 'dead/']));
+      expect(res.body.deletedPrefixes).toEqual(['dead/']);
     });
   });
 });

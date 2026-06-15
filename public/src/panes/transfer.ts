@@ -31,6 +31,15 @@ export interface TransferRequest {
   // intra-pane drops onto a specific folder row: the destination is that
   // folder, NOT the currently-open folder.
   destPrefixOverride?: string;
+  // For folder mode only: when true, the server lands keys at
+  // `destPrefixOverride + rel` instead of `destPrefixOverride + sourceFolderName + rel`.
+  // Used by folder rename, where the caller already encoded the new name in
+  // destPrefixOverride.
+  flattenFolder?: boolean;
+  // Skip the copy/move confirm modal entirely. Used by callers that already
+  // showed their own confirm (folder rename) — going through the standard
+  // one would ask "Copiar vs Mover" again, which is confusing.
+  skipConfirm?: boolean;
 }
 
 function sideHeaders(c: Connection, side: 'source' | 'dest'): Record<string, string> {
@@ -384,12 +393,21 @@ export async function runTransfer(req: TransferRequest): Promise<void> {
   // Confirm modal: for folders, show "carpeta foo/" instead of file count.
   // We don't pre-discover (would require an extra round trip); user confirms
   // and discovery happens inside the same SSE stream.
-  const confirmCount = isFolderMode ? 0 : (req.keys?.length ?? 0);
-  const mode = await openConfirmModal({
-    count: confirmCount, sourceLabel, destLabel, crossConn,
-    preselect: req.preselectMode,
-    folderLabel: req.folder?.sourcePrefix,
-  });
+  //
+  // `skipConfirm` callers (e.g. folder rename) have already shown their own
+  // confirm and pass `preselectMode` to lock in the operation — no second
+  // dialog needed.
+  let mode: 'copy' | 'move' | null;
+  if (req.skipConfirm && req.preselectMode) {
+    mode = req.preselectMode;
+  } else {
+    const confirmCount = isFolderMode ? 0 : (req.keys?.length ?? 0);
+    mode = await openConfirmModal({
+      count: confirmCount, sourceLabel, destLabel, crossConn,
+      preselect: req.preselectMode,
+      folderLabel: req.folder?.sourcePrefix,
+    });
+  }
   if (!mode) return;
 
   const items = isFolderMode ? null : buildItems({ ...req, keys: req.keys ?? [] });
@@ -411,6 +429,7 @@ export async function runTransfer(req: TransferRequest): Promise<void> {
     body.prefix = {
       source: req.folder!.sourcePrefix,
       dest: effectiveDestPrefix || '',
+      ...(req.flattenFolder ? { flatten: true } : {}),
     };
   } else {
     body.items = items;

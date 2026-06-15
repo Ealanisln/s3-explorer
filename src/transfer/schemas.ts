@@ -10,9 +10,12 @@ const itemSchema = z.object({
 // Prefix-based recursive transfer: server enumerates everything under
 // `source` and copies each to `dest + relative_path`. Empty string = bucket
 // root (entire bucket). Trailing slashes are normalized in the handler.
+// `flatten` skips prepending the source folder name to destKey — used by
+// the rename flow where `dest` already contains the new name.
 const prefixSchema = z.object({
   source: z.string().max(1024),
   dest: z.string().max(1024),
+  flatten: z.boolean().optional(),
 });
 
 // Batch transfer. The destination bucket may live on a different S3 backend

@@ -14,6 +14,8 @@ cookies.txt
 
 # Node
 node_modules/
+node_modules.deleteme/
+node_modules.old/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -49,6 +51,7 @@ public/dist/
 Thumbs.db
 .vscode/*
 !.vscode/extensions.json
+.vs/
 .idea/
 *.swp
 *.swo
