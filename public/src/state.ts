@@ -35,6 +35,10 @@ export interface PaneState {
   prefix: string;
   objects: S3Object[];
   prefixes: string[];
+  // Subset of `prefixes` whose contents are all delete-marker tombstones
+  // (only populated when showDeleted is true). Used by the grid to apply
+  // the DELETED badge + strikethrough styling to those folder rows.
+  deletedPrefixes: Set<string>;
   selected: Set<string>;
   versioning: 'Enabled' | 'Suspended' | 'Disabled';
   filterTerm: string;
@@ -64,6 +68,7 @@ function newPane(): PaneState {
     prefix: '',
     objects: [],
     prefixes: [],
+    deletedPrefixes: new Set<string>(),
     selected: new Set<string>(),
     versioning: 'Disabled',
     filterTerm: '',
@@ -78,7 +83,7 @@ function newPane(): PaneState {
 // The set of keys that should be redirected to the active pane. Anything not
 // here is read/written directly on the raw object.
 const PANE_KEYS = new Set<keyof PaneState>([
-  'activeConnId', 'activeBucket', 'buckets', 'prefix', 'objects', 'prefixes', 'selected',
+  'activeConnId', 'activeBucket', 'buckets', 'prefix', 'objects', 'prefixes', 'deletedPrefixes', 'selected',
   'versioning', 'filterTerm', 'searchResults', 'searchFolderHits', 'searchMeta',
   'showDeleted', 'sort', 'listingTruncated', 'listingPages',
 ]);

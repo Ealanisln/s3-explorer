@@ -910,9 +910,17 @@ function renderGridInner(paneId: PaneId): void {
     const tr = document.createElement('tr');
     tr.draggable = true;        // folders are draggable for recursive transfer
     tr.dataset.folderPrefix = pp;
+    // Folder is "deleted" when every key under it is a delete-marker
+    // tombstone — surfaced by the showDeleted=1 listing via the
+    // deletedPrefixes set. Apply the same `.deleted` row class as deleted
+    // files so it picks up the strikethrough + dim styling, and append a
+    // DELETED badge to mirror file rows.
+    const isDeletedFolder = State.deletedPrefixes.has(pp);
+    if (isDeletedFolder) tr.classList.add('deleted');
+    const folderBadge = isDeletedFolder ? '<span class="badge-deleted">DELETED</span>' : '';
     tr.innerHTML = `
       <td class="col-check"></td>
-      <td class="cell-name"><span class="ft-badge folder"><i data-icon="folder" data-icon-size="12"></i></span>${escapeHtml(name)}/</td>
+      <td class="cell-name"><span class="ft-badge folder"><i data-icon="folder" data-icon-size="12"></i></span>${escapeHtml(name)}/${folderBadge}</td>
       <td class="col-size">—</td>
       <td class="col-date">—</td>
       <td class="col-act"></td>
@@ -1063,6 +1071,9 @@ function renderSearchFileRow(tbody: HTMLElement, o: S3Object, paneId: PaneId): v
 
 interface ListingResponse {
   prefixes: string[];
+  // Only present when showDeleted=1. Subset of `prefixes` whose contents
+  // are all delete-marker tombstones — i.e. "deleted folders".
+  deletedPrefixes?: string[];
   objects: S3Object[];
   isTruncated?: boolean;
   pages?: number;
@@ -1100,6 +1111,7 @@ export async function loadObjects(paneId?: PaneId): Promise<void> {
     if (pane.showDeleted) params.set('showDeleted', '1');
     const data = await api<ListingResponse>(`/api/objects/${encodeURIComponent(pane.activeBucket)}?${params}`);
     pane.prefixes = data.prefixes;
+    pane.deletedPrefixes = new Set(data.deletedPrefixes ?? []);
     pane.objects = data.objects;
     pane.listingTruncated = !!data.isTruncated;
     pane.listingPages = data.pages || 1;

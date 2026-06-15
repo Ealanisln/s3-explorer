@@ -116,8 +116,38 @@ export function objectsRouter(buildClient: ClientFactory): Router {
         versionMarker = out.NextVersionIdMarker;
       }
 
+      // Second pass: ListObjectsV2 only returns LIVE keys (delete markers are
+      // hidden by S3). The CommonPrefixes it returns are the subfolders that
+      // still have at least one live object inside. Subtract those from the
+      // versions-listing prefixes and we get the set of "deleted folders" —
+      // subfolders that exist as paths but whose every key is a delete-marker
+      // tombstone. The frontend will style those rows the same as deleted
+      // files (DELETED badge + strikethrough).
+      const livePrefixes = new Set<string>();
+      let v2Token: string | undefined;
+      let v2Pages = 0;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const v2 = await s3.send(new ListObjectsV2Command({
+          Bucket: req.params.bucket,
+          Prefix: prefix,
+          Delimiter: '/',
+          ContinuationToken: v2Token,
+          MaxKeys: 1000,
+        }));
+        for (const cp of v2.CommonPrefixes || []) {
+          if (cp.Prefix) livePrefixes.add(cp.Prefix);
+        }
+        v2Pages++;
+        if (!v2.IsTruncated) break;
+        if (v2Pages >= PAGE_CAP) break;
+        v2Token = v2.NextContinuationToken;
+      }
+      const deletedPrefixes = [...prefixesSet].filter((p) => !livePrefixes.has(p));
+
       res.json({
         prefixes: [...prefixesSet],
+        deletedPrefixes,
         objects: [...byKey.values()],
         nextToken: null,
         isTruncated: truncated,
