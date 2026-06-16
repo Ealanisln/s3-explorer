@@ -169,6 +169,24 @@ const stmtSearchFts = db.prepare<[string, string, string, string, number]>(`
   LIMIT ?
 `);
 
+// Prefix-scoped FTS5 variant — same shape plus a `key LIKE prefix%` filter.
+// Used when the SPA's search input is invoked from a subfolder and the
+// recursive scope should be restricted to descendants of the current
+// prefix. SQLite uses `?` placeholders positionally so we need a separate
+// prepared statement; performance-wise it's a single extra index scan.
+const stmtSearchFtsScoped = db.prepare<[string, string, string, string, string, number]>(`
+  SELECT bi.key, bi.size, bi.modified, bi.etag, bi.storage_class
+  FROM bucket_index_fts fts
+  JOIN bucket_index bi ON bi.id = fts.rowid
+  WHERE bucket_index_fts MATCH ?
+    AND bi.username = ?
+    AND bi.connection_id = ?
+    AND bi.bucket = ?
+    AND bi.key LIKE ? ESCAPE '\\'
+  ORDER BY rank
+  LIMIT ?
+`);
+
 interface SearchRow {
   key: string;
   size: number | null;
@@ -220,17 +238,33 @@ function buildMatchExpr(raw: string): string {
   return `"${safe}"`;
 }
 
-export function searchIndex(scope: IndexScope, query: string, limit: number): SearchHit[] {
+export function searchIndex(
+  scope: IndexScope, query: string, limit: number, prefix?: string,
+): SearchHit[] {
   const match = buildMatchExpr(query);
   let rows: SearchRow[];
   try {
-    rows = stmtSearchFts.all(
-      match,
-      scope.username,
-      scope.connectionId,
-      scope.bucket,
-      limit,
-    ) as SearchRow[];
+    if (prefix && prefix.length > 0) {
+      // Escape SQLite LIKE wildcards in the prefix so a key like
+      // `foo_bar/`  doesn't accidentally match siblings.
+      const escaped = prefix.replace(/[\\%_]/g, (c) => `\\${c}`);
+      rows = stmtSearchFtsScoped.all(
+        match,
+        scope.username,
+        scope.connectionId,
+        scope.bucket,
+        escaped + '%',
+        limit,
+      ) as SearchRow[];
+    } else {
+      rows = stmtSearchFts.all(
+        match,
+        scope.username,
+        scope.connectionId,
+        scope.bucket,
+        limit,
+      ) as SearchRow[];
+    }
   } catch (e) {
     // FTS5 can still reject a malformed expression we didn't anticipate.
     // Failing closed (empty result) keeps the SPA usable instead of bubbling

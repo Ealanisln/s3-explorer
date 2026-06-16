@@ -142,4 +142,53 @@ describe('GET /api/search-stream/:bucket (NDJSON)', () => {
     expect(res.body.error).toBe('MissingCredentials');
     expect(res.body.errorId).toMatch(/^err-[a-f0-9]{8}$/);
   });
+
+  it('scopes both walks to the prefix query param', async () => {
+    let fileWalkPrefix: string | undefined;
+    let folderWalkRootPrefix: string | undefined;
+    s3.on(ListObjectsV2Command).callsFake((input: { Prefix?: string; Delimiter?: string }) => {
+      if (input.Delimiter === '/') {
+        if (folderWalkRootPrefix === undefined) folderWalkRootPrefix = input.Prefix;
+        return { Contents: [], CommonPrefixes: [], IsTruncated: false };
+      }
+      fileWalkPrefix = input.Prefix;
+      return { Contents: [{ Key: 'sub/zzz.txt', Size: 1 }], IsTruncated: false };
+    });
+    await request(app)
+      .get('/api/search-stream/b?q=zzz&prefix=sub/')
+      .set('Cookie', cookie)
+      .set(TEST_S3_HEADERS);
+    expect(fileWalkPrefix).toBe('sub/');
+    expect(folderWalkRootPrefix).toBe('sub/');
+  });
+
+  it('emits folder-hit for subfolders whose last segment matches the query', async () => {
+    s3.on(ListObjectsV2Command).callsFake((input: { Prefix?: string; Delimiter?: string }) => {
+      if (input.Delimiter === '/') {
+        // BFS root → return two children, one matches "92780".
+        if (input.Prefix === '') {
+          return {
+            Contents: [],
+            CommonPrefixes: [
+              { Prefix: 'live/' },
+              { Prefix: 'match_92780_dir/' },
+            ],
+            IsTruncated: false,
+          };
+        }
+        // Deeper levels → no more children, BFS terminates.
+        return { Contents: [], CommonPrefixes: [], IsTruncated: false };
+      }
+      // File walk: no matching file content.
+      return { Contents: [], IsTruncated: false };
+    });
+    const res = await request(app)
+      .get('/api/search-stream/b?q=92780')
+      .set('Cookie', cookie)
+      .set(TEST_S3_HEADERS);
+    const frames = parseFrames(res.text);
+    const folderHits = frames.filter((f) => f.t === 'folder-hit');
+    expect(folderHits).toHaveLength(1);
+    expect(folderHits[0]).toMatchObject({ key: 'match_92780_dir/' });
+  });
 });

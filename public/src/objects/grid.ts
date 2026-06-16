@@ -19,7 +19,7 @@ import {
   downloadObject, shareObject, deleteObject, restoreDeleteMarker, openRename,
   openObjectInNewTab, copyObjectLink,
 } from './actions.js';
-import { runRecursiveSearchForLink, updateSearchBanner, restoreFilterForContext } from './search.js';
+import { runRecursiveSearchForLink, updateSearchBanner, restoreFilterForContext, updateSearchPlaceholder } from './search.js';
 import { navigateTo } from '../router/index.js';
 import { runTransfer } from '../panes/transfer.js';
 import type { S3Object, SearchFolderInfo } from '../types.js';
@@ -1243,6 +1243,9 @@ export async function loadObjects(paneId?: PaneId): Promise<void> {
   // Restore any persisted local filter for this (conn, bucket, prefix) combo
   // BEFORE rendering, so the grid paint already applies the filter.
   restoreFilterForContext(p);
+  // Reflect the new scope in the search input's placeholder so the user
+  // knows what `Enter` will recursively search.
+  updateSearchPlaceholder(p);
   updateSearchBanner(p);
   renderBreadcrumbs(p);
   closeInfoPanel(p);
