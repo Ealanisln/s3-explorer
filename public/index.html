@@ -88,10 +88,11 @@
   <aside class="sidebar" id="sidebar">
     <div class="brand">
       <div class="brand-mark">S3</div>
-      <div>
+      <div class="brand-text">
         <div class="brand-title">S3 Explorer</div>
         <div class="brand-sub">MinIO-style console</div>
       </div>
+      <button class="btn-icon sidebar-collapse-btn" id="btn-sidebar-collapse" title="Colapsar barra lateral" aria-label="Colapsar barra lateral"><i data-icon="chevron_left"></i></button>
     </div>
 
     <div class="section">
@@ -126,6 +127,10 @@
     <section class="pane active" data-pane="left">
       <header class="toolbar">
         <button class="btn-icon mobile-only" id="btn-menu" title="Menú" aria-label="Abrir menú"><i data-icon="menu"></i></button>
+        <div class="nav-buttons">
+          <button class="btn-icon nav-btn" data-el="btn-nav-back" title="Atrás (Alt + ←)" aria-label="Atrás" disabled><i data-icon="chevron_left"></i></button>
+          <button class="btn-icon nav-btn" data-el="btn-nav-fwd" title="Adelante (Alt + →)" aria-label="Adelante" disabled><i data-icon="chevron_right"></i></button>
+        </div>
         <div class="crumbs" data-el="breadcrumbs"></div>
         <div class="search-box">
           <input type="text" data-el="search-input" placeholder="Buscar... (Enter = todo el bucket)" disabled />
@@ -143,6 +148,7 @@
           <input type="file" data-el="file-input" multiple hidden />
           <button data-el="btn-refresh" class="btn-icon" title="Refrescar"><i data-icon="refresh"></i></button>
           <button id="btn-toggle-dual" class="btn-icon dual-only-trigger" title="Vista de dos paneles" aria-label="Vista de dos paneles"><i data-icon="split"></i></button>
+          <button class="btn-icon btn-close-pane" data-el="btn-close-pane" title="Cerrar este panel" aria-label="Cerrar panel"><i data-icon="close"></i></button>
         </div>
       </header>
       <div data-el="search-banner" class="search-banner" style="display:none"></div>

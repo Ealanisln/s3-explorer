@@ -12,6 +12,7 @@ import { toast, errorIdOpts } from '../util/toast.js';
 import { $, paneEl, openModal, closeModal } from '../util/dom.js';
 import { loadObjects } from './grid.js';
 import { selectConnection, refreshActiveConnBuckets } from '../connections/list.js';
+import { setDualMode } from '../panes/init.js';
 import type { Connection } from '../types.js';
 
 // Bucket create + global rename submit (modals are app-global). Run once.
@@ -87,6 +88,15 @@ export function initPaneForms(paneId: PaneId): void {
     const pane = getPane(paneId);
     if (pane.activeBucket) void loadObjects(paneId);
     else if (pane.activeConnId) void selectConnection(pane.activeConnId);
+  };
+
+  // Dedicated "close this pane" button. CSS only renders it on the right
+  // pane in dual mode, but the wiring lives here for both panes (cloned
+  // DOM has the same data-el) so we don't depend on conditional clone
+  // timing. setDualMode(false) handles the focus reset and active-class
+  // sync — same as clicking the split-toggle button.
+  paneEl('btn-close-pane', paneId).onclick = (): void => {
+    setDualMode(false);
   };
 }
 

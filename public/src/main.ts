@@ -37,6 +37,7 @@ import { initImport } from './connections/import.js';
 import { configureBuckets, setTreeRenderer } from './buckets/list.js';
 import {
   loadObjects, renderGrid, initBatchBar, toggleEmpty, initDragDrop,
+  initNavButtons, initNavShortcuts,
 } from './objects/grid.js';
 import { initTransferModalDismiss } from './panes/transfer.js';
 import {
@@ -135,7 +136,11 @@ for (const p of PANES) {
   initReindex(p);
   initBatchBar(p);
   initDragDrop(p);
+  initNavButtons(p);
 }
+// Alt+Left / Alt+Right history shortcuts. Bound globally to the document —
+// fires for whichever pane has activePane focus.
+initNavShortcuts();
 initTransferModalDismiss();
 
 // ─── Boot ───────────────────────────────────────────────────────────────────

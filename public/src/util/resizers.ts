@@ -11,9 +11,11 @@
 
 const LS_SIDEBAR = 's3x-sidebar-w';
 const LS_INFO = 's3x-info-w';
+const LS_COLLAPSED = 's3x-sidebar-collapsed';
 
 const SIDEBAR_MIN = 200;
 const SIDEBAR_MAX = 520;
+const SIDEBAR_COLLAPSED_W = 52;
 const INFO_MIN = 300;
 const INFO_MAX = 720;
 
@@ -29,10 +31,45 @@ function applyInfoW(px: number): void {
 }
 
 function loadStoredWidths(): void {
-  const sb = parseInt(localStorage.getItem(LS_SIDEBAR) || '', 10);
-  if (Number.isFinite(sb)) applySidebarW(clamp(sb, SIDEBAR_MIN, SIDEBAR_MAX));
+  const collapsed = localStorage.getItem(LS_COLLAPSED) === '1';
+  if (collapsed) {
+    // When collapsed at boot, hold the var at the thin width but DON'T
+    // touch LS_SIDEBAR — the user's manual width is preserved for when
+    // they expand back. Class is applied once the DOM is parsed enough
+    // for the <aside> to exist; the inline width fallback in CSS covers
+    // the brief paint before then.
+    applySidebarW(SIDEBAR_COLLAPSED_W);
+  } else {
+    const sb = parseInt(localStorage.getItem(LS_SIDEBAR) || '', 10);
+    if (Number.isFinite(sb)) applySidebarW(clamp(sb, SIDEBAR_MIN, SIDEBAR_MAX));
+  }
   const inf = parseInt(localStorage.getItem(LS_INFO) || '', 10);
   if (Number.isFinite(inf)) applyInfoW(clamp(inf, INFO_MIN, INFO_MAX));
+}
+
+// Toggle / apply the collapsed state. Owns the CSS class on <aside> AND the
+// --sidebar-w var (so the grid template column shrinks/grows). The user's
+// manual width in LS_SIDEBAR is left untouched while collapsed and used as
+// the restore target when expanding.
+function applyCollapsed(on: boolean): void {
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar) sidebar.classList.toggle('collapsed', on);
+  const btn = document.getElementById('btn-sidebar-collapse');
+  if (btn) {
+    btn.title = on ? 'Expandir barra lateral' : 'Colapsar barra lateral';
+    btn.setAttribute('aria-label', btn.title);
+    // The visual flip is handled by CSS — `.sidebar.collapsed .sidebar-
+    // collapse-btn { transform: rotate(180deg) }` — so the chevron icon's
+    // SVG doesn't need to be re-hydrated when the state changes.
+  }
+  if (on) {
+    applySidebarW(SIDEBAR_COLLAPSED_W);
+  } else {
+    // Restore the user's manual width (or 260 default).
+    const sb = parseInt(localStorage.getItem(LS_SIDEBAR) || '', 10);
+    applySidebarW(Number.isFinite(sb) ? clamp(sb, SIDEBAR_MIN, SIDEBAR_MAX) : 260);
+  }
+  try { localStorage.setItem(LS_COLLAPSED, on ? '1' : '0'); } catch { /* quota */ }
 }
 
 // Apply persisted widths AS SOON AS this module is imported — before any
@@ -118,6 +155,23 @@ function startDrag(handle: HTMLElement, e: PointerEvent): void {
 }
 
 export function initResizers(): void {
+  // Re-apply the persisted collapse state now that DOM is parsed enough for
+  // the <aside id="sidebar"> to exist — the early loadStoredWidths() call
+  // only set the CSS var; the class needs the element.
+  if (localStorage.getItem(LS_COLLAPSED) === '1') {
+    applyCollapsed(true);
+  }
+
+  // Wire the collapse toggle button (one of the brand row children).
+  const collapseBtn = document.getElementById('btn-sidebar-collapse');
+  if (collapseBtn) {
+    collapseBtn.onclick = (): void => {
+      const sidebar = document.getElementById('sidebar');
+      const currentlyCollapsed = !!sidebar?.classList.contains('collapsed');
+      applyCollapsed(!currentlyCollapsed);
+    };
+  }
+
   // Delegated so we catch handles on both panes (the right pane is cloned
   // at runtime — listeners on cloned elements are NOT carried over, so we
   // attach at document level).
@@ -125,6 +179,12 @@ export function initResizers(): void {
     const target = e.target as HTMLElement | null;
     const handle = target?.closest<HTMLElement>('.resize-handle');
     if (!handle) return;
+    // The CSS hides the sidebar handle in collapsed mode, but if a hit
+    // sneaks through (e.g. stale layout), refuse to start the drag.
+    if (handle.dataset.resize === 'sidebar'
+        && document.getElementById('sidebar')?.classList.contains('collapsed')) {
+      return;
+    }
     startDrag(handle, e);
   });
   // Double-click resets to default. Convenient escape hatch.

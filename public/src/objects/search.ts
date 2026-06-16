@@ -80,6 +80,27 @@ export function restoreFilterForContext(paneId: PaneId): void {
   paneEl('btn-search-clear', paneId).style.display = stored ? 'block' : 'none';
 }
 
+// Update the search input's placeholder based on the pane's current prefix
+// so the user knows the scope of the recursive search. Called from
+// loadObjects after every navigation. At bucket root → "Buscar en
+// <bucket>/... (Enter)"; in a subfolder → "Buscar en <name>/... (Enter)".
+export function updateSearchPlaceholder(paneId: PaneId): void {
+  const pane = getPane(paneId);
+  const input = paneEl('search-input', paneId) as HTMLInputElement;
+  if (!pane.activeBucket) {
+    input.placeholder = 'Buscar...';
+    return;
+  }
+  let scopeName: string;
+  if (pane.prefix) {
+    const segs = pane.prefix.split('/').filter(Boolean);
+    scopeName = segs[segs.length - 1] || pane.activeBucket;
+  } else {
+    scopeName = pane.activeBucket;
+  }
+  input.placeholder = `Buscar en ${scopeName}/... (Enter)`;
+}
+
 interface IndexStatus {
   last_indexed_at: string | null;
   object_count: number;
@@ -109,8 +130,13 @@ async function tryFtsSearch(q: string, qLower: string, paneId: PaneId): Promise<
     return false; // /status failed → fall back
   }
   try {
+    // Scope the FTS5 search to the current pane.prefix so users searching
+    // from inside a subfolder only see hits below that path. Pass empty
+    // string when at bucket root (server treats that as "no prefix").
+    const ftsParams = new URLSearchParams({ q, limit: '2000' });
+    if (pane.prefix) ftsParams.set('prefix', pane.prefix);
     const { results } = await api<{ results: FtsHit[] }>(
-      `/api/index/${encodeURIComponent(pane.activeBucket)}/search?q=${encodeURIComponent(q)}&limit=2000`,
+      `/api/index/${encodeURIComponent(pane.activeBucket)}/search?${ftsParams}`,
     );
     pane.searchResults = [];
     pane.searchFolderHits = new Map<string, SearchFolderInfo>();
@@ -179,7 +205,12 @@ async function runRecursiveSearch(paneId: PaneId): Promise<void> {
   };
 
   try {
+    // Pass pane.prefix so the server scopes its recursive walk to this
+    // subfolder only. Without it the server scans the WHOLE bucket — which
+    // is what the user was hitting before (70k files scanned on a search
+    // from inside a subfolder).
     const params = new URLSearchParams({ q });
+    if (pane.prefix) params.set('prefix', pane.prefix);
     const res = await fetch(`/api/search-stream/${encodeURIComponent(pane.activeBucket)}?${params}`, {
       headers: authHeaders(),
       signal: searchAbort[paneId]!.signal,
@@ -230,6 +261,19 @@ async function runRecursiveSearch(paneId: PaneId): Promise<void> {
           }
           pane.searchMeta!.hits++;
           scheduleRerender();
+        } else if (ev.t === 'folder-hit') {
+          // Server-side folder name match (BFS through CommonPrefixes).
+          // Goes directly into searchFolderHits — no need to derive a folder
+          // path from a key. The Map dedupes if the same prefix was also
+          // surfaced via a 'hit' categorized as folder by content path.
+          const key = String(ev.key);
+          if (!pane.searchFolderHits!.has(key)) {
+            pane.searchFolderHits!.set(key, {
+              fileCount: 0, totalSize: 0, latestModified: null,
+            });
+            pane.searchMeta!.hits++;
+            scheduleRerender();
+          }
         } else if (ev.t === 'progress') {
           pane.searchMeta!.scanned = (ev.scanned as number) ?? 0;
           scheduleRerender();
@@ -288,11 +332,23 @@ export function updateSearchBanner(paneId?: PaneId): void {
       statusLabel = `<span style="color:var(--danger)">error: ${escapeHtml(error || '')}</span>`;
     }
 
+    // Surface the scope (bucket-root vs subfolder) in the banner so the user
+    // knows where the recursive search is looking. Matches the dynamic
+    // placeholder convention.
+    const pane = getPane(p);
+    let scopeLabel: string;
+    if (pane.prefix) {
+      const segs = pane.prefix.split('/').filter(Boolean);
+      scopeLabel = (segs[segs.length - 1] || pane.activeBucket || '') + '/';
+    } else {
+      scopeLabel = (pane.activeBucket || '') + '/';
+    }
     banner.style.display = 'flex';
     banner.innerHTML = `
       <span>
         <strong>${folderCount}</strong> carpeta(s) · <strong>${fileCount}</strong> archivo(s)
         para "<strong>${escapeHtml(query)}</strong>"
+        en <code>${escapeHtml(scopeLabel)}</code>
         · escaneados ${scanned.toLocaleString()}
         · ${statusLabel}
       </span>

@@ -31,20 +31,25 @@ export function indexRouter(buildClient: ClientFactory): Router {
     res.json(result);
   }));
 
-  // GET /api/index/:bucket/search?q=...&limit=500
+  // GET /api/index/:bucket/search?q=...&limit=500&prefix=foo/bar/
   // FTS5 substring/prefix search. Returns up to `limit` hits ranked by FTS5
   // bm25. No SDK call — pure DB read.
+  //
+  // `prefix` (optional) scopes the search to descendants of that key prefix
+  // — used by the SPA so a search from `solicitud/originales/` only returns
+  // hits under that path, not the whole bucket.
   r.get('/index/:bucket/search', wrap(async (req: Request, res: Response) => {
     const connectionId = getConnectionId(req, res);
     if (!connectionId) return;
     const query = q(req, 'q').trim();
     if (!query) { res.json({ results: [] }); return; }
     const limit = Math.max(1, Math.min(parseInt(q(req, 'limit', '500'), 10), 5000));
+    const prefix = q(req, 'prefix');
     const results = searchIndex({
       username: req.user!.username,
       connectionId,
       bucket: req.params.bucket,
-    }, query, limit);
+    }, query, limit, prefix || undefined);
     res.json({ results });
   }));
 

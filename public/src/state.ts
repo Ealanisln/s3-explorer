@@ -49,6 +49,14 @@ export interface PaneState {
   sort: { field: SortField; dir: SortDir };
   listingTruncated?: boolean;
   listingPages?: number;
+  // Per-pane prefix navigation history (back/forward stack). Scoped to the
+  // CURRENT (connId, bucket); switching either resets the stack. Maxes out
+  // at NAV_HISTORY_MAX entries; the oldest gets dropped if exceeded. The
+  // navIndex points at the CURRENT entry — back goes to navIndex-1, forward
+  // to navIndex+1. The stack is rewound (truncated) when the user navigates
+  // to a new path while not at the end, matching browser semantics.
+  navHistory: string[];
+  navIndex: number;
 }
 
 // The flat shape that consumers see. The pane-fields are virtual — at runtime
@@ -77,8 +85,14 @@ function newPane(): PaneState {
     searchMeta: null,
     showDeleted: false,
     sort: { field: 'name', dir: 'asc' },
+    navHistory: [''],   // start with bucket-root prefix as the seed entry
+    navIndex: 0,
   };
 }
+
+// Cap of per-pane navigation history. Generous but bounded — if the user
+// digs 100 folders deep without ever going back, the oldest entry rolls off.
+export const NAV_HISTORY_MAX = 100;
 
 // The set of keys that should be redirected to the active pane. Anything not
 // here is read/written directly on the raw object.
@@ -86,6 +100,7 @@ const PANE_KEYS = new Set<keyof PaneState>([
   'activeConnId', 'activeBucket', 'buckets', 'prefix', 'objects', 'prefixes', 'deletedPrefixes', 'selected',
   'versioning', 'filterTerm', 'searchResults', 'searchFolderHits', 'searchMeta',
   'showDeleted', 'sort', 'listingTruncated', 'listingPages',
+  'navHistory', 'navIndex',
 ]);
 
 interface RawState {

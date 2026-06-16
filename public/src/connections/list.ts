@@ -280,6 +280,10 @@ export async function selectConnection(id: string, paneId?: PaneId, opts: Select
   pane.activeBucket = null;
   pane.prefix = '';
   pane.buckets = [];
+  // Connection change wipes the nav history — back/forward is scoped to
+  // (connId, bucket) and a different connection has unrelated keys.
+  pane.navHistory = [''];
+  pane.navIndex = 0;
   if (opts.autoExpand) expanded.add(id);
   renderConnections();
   // Sync URL when this happens on the active pane (URL reflects active pane).

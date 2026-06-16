@@ -39,6 +39,11 @@ export async function openBucket(name: string, paneId?: PaneId): Promise<void> {
   const pane = getPane(p);
   pane.activeBucket = name;
   pane.prefix = '';
+  // Nav history is scoped to (connId, bucket) — opening a new bucket
+  // resets the back/forward stack so the user doesn't get tossed into a
+  // prefix that doesn't exist in this bucket.
+  pane.navHistory = [''];
+  pane.navIndex = 0;
   renderTree();
   // Sync URL when this happens on the active pane.
   if (p === State.activePane && pane.activeConnId) {
