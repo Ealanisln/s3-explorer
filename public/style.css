@@ -264,6 +264,7 @@ body.is-resizing * { user-select: none !important; }
   letter-spacing: -0.01em;
   box-shadow: inset 0 -2px 0 rgba(0,0,0,0.10);
 }
+.brand-text { flex: 1; min-width: 0; }
 .brand-title, .brand-name {
   font-family: var(--font-serif);
   font-size: 17px;
@@ -273,6 +274,84 @@ body.is-resizing * { user-select: none !important; }
   line-height: 1.1;
 }
 .brand-sub { font-size: 11.5px; color: var(--text-mute); margin-top: 2px; }
+
+/* The collapse toggle is a small chevron in the brand row. Hover brightens
+   it; click toggles between full-width and the thin icon-only state.
+   Hidden in mobile drawer mode (the drawer overlay isn't toggle-collapsible
+   — it's already full-screen-or-hidden). */
+.sidebar-collapse-btn {
+  flex-shrink: 0;
+  color: var(--text-mute);
+  transition: color var(--t-fast), background var(--t-fast), transform var(--t-fast);
+}
+.sidebar-collapse-btn:hover { color: var(--text); background: var(--surface-3); }
+/* When the sidebar is collapsed the chevron points the opposite way. The
+   JS swaps the data-icon attribute too, but the rotation fallback covers
+   the brief frame before re-hydration. */
+.sidebar.collapsed .sidebar-collapse-btn { transform: rotate(180deg); }
+@media (max-width: 768px) {
+  .sidebar-collapse-btn { display: none; }
+}
+
+/* ── Collapsed sidebar — narrow, icon-only ─────────────────────────────
+   Width shrinks to ~52px (enough for the S3 mark + padding). Labels,
+   section headers, connection tree text, and the status pill are hidden;
+   only the brand mark, connection badges, footer icons, and user-action
+   icons remain. The resize handle is disabled in this mode — to widen the
+   sidebar back, click the toggle. */
+.sidebar.collapsed {
+  /* The grid template uses --sidebar-w; JS sets that to 52px when this
+     class is on. The width here is a fallback for early paint. */
+  width: 52px;
+  min-width: 52px;
+  overflow: hidden;
+}
+.sidebar.collapsed .brand {
+  padding: 16px 8px 14px;
+  justify-content: center;
+}
+.sidebar.collapsed .brand-text { display: none; }
+.sidebar.collapsed .sidebar-collapse-btn {
+  position: absolute;
+  top: 18px;
+  right: -14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  z-index: 5;
+}
+.sidebar.collapsed .section-header span { display: none; }
+.sidebar.collapsed .section { padding: 14px 4px 4px; }
+.sidebar.collapsed .section-header { padding: 6px 2px 8px; justify-content: center; }
+.sidebar.collapsed .conn-tree .chevron,
+.sidebar.collapsed .conn-tree .name,
+.sidebar.collapsed .conn-tree .act-btn,
+.sidebar.collapsed .conn-tree .bucket-children { display: none; }
+.sidebar.collapsed .conn-tree .conn-row {
+  justify-content: center;
+  padding: 7px 4px;
+}
+.sidebar.collapsed .sidebar-foot {
+  padding: 12px 4px;
+  flex-direction: column;
+  gap: 8px;
+}
+.sidebar.collapsed #conn-status { display: none; }
+.sidebar.collapsed .sidebar-user {
+  padding: 10px 4px 12px;
+  flex-direction: column;
+  gap: 8px;
+}
+.sidebar.collapsed .sidebar-user .user-name,
+.sidebar.collapsed .sidebar-user .user-role { display: none; }
+.sidebar.collapsed .sidebar-user .user-actions {
+  flex-direction: column;
+  gap: 4px;
+}
+/* Disable the resize handle when collapsed — the toggle owns the width. */
+.sidebar.collapsed .resize-handle-sidebar { display: none; }
 
 .section, .sb-section { padding: 14px 16px 4px; }
 .section-header, .sb-head {
