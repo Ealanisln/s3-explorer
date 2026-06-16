@@ -770,6 +770,14 @@ body.is-resizing * { user-select: none !important; }
 .dual-only-trigger { color: var(--text-dim); }
 .panes-wrap.dual .dual-only-trigger { color: var(--accent); }
 
+/* Dedicated "close this pane" button in the toolbar actions cluster.
+   Hidden by default. Visible ONLY on the RIGHT pane and ONLY when dual
+   mode is on — closing the left pane would be ambiguous, and the button
+   is meaningless in single-pane mode (nothing to close). */
+.btn-close-pane { display: none; }
+.panes-wrap.dual .pane[data-pane="right"] .btn-close-pane { display: inline-grid; }
+.btn-close-pane:hover { color: var(--danger); background: var(--danger-soft); }
+
 /* ============================================================
    Status pills
    ============================================================ */
