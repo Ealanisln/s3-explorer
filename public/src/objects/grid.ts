@@ -5,7 +5,7 @@
 // State resolves to that pane during the render, even if the user is
 // currently focused on the other side.
 
-import { State, withPane, setActivePane, getPane } from '../state.js';
+import { State, withPane, setActivePane, getPane, NAV_HISTORY_MAX } from '../state.js';
 import type { PaneId } from '../state.js';
 import { api, authHeaders } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
@@ -29,6 +29,115 @@ import type { S3Object, SearchFolderInfo } from '../types.js';
 // where a transfer should land.
 function otherPane(paneId: PaneId): PaneId {
   return paneId === 'left' ? 'right' : 'left';
+}
+
+// ── Per-pane prefix navigation history (back / forward) ───────────────────
+//
+// Each pane keeps its own stack of visited prefixes for the CURRENT
+// (connId, bucket). The back/forward buttons in the toolbar move through
+// this stack; the URL hash router still independently reflects the active
+// pane (no change to that). The stack resets when the pane switches bucket
+// or connection — mixing histories across buckets would push the user to
+// keys that don't exist in the new scope.
+
+// Suppression flag for pushNav. Set to true while goBack/goForward apply a
+// history entry so the resulting loadObjects/navigateTo doesn't echo back
+// into the history and create a phantom entry.
+let suppressNavPush = false;
+
+function pushNav(paneId: PaneId, newPrefix: string): void {
+  if (suppressNavPush) return;
+  const pane = getPane(paneId);
+  // No-op if the target is the same as where we already are. Re-clicking
+  // the open folder, hitting the breadcrumb's current segment, etc. should
+  // not pollute the stack.
+  if (pane.navHistory[pane.navIndex] === newPrefix) return;
+  // Truncate any forward branch (matches browser semantics: navigating to
+  // somewhere new discards what was previously "forward").
+  pane.navHistory = pane.navHistory.slice(0, pane.navIndex + 1);
+  pane.navHistory.push(newPrefix);
+  // Roll off the oldest when exceeding the cap so memory stays bounded
+  // even after a marathon of folder digging.
+  while (pane.navHistory.length > NAV_HISTORY_MAX) {
+    pane.navHistory.shift();
+  }
+  pane.navIndex = pane.navHistory.length - 1;
+  updateNavButtons(paneId);
+}
+
+// Reset the history to a single seed entry — called when the pane switches
+// bucket or connection (different scope, mixed history would be confusing).
+export function resetNav(paneId: PaneId, seedPrefix = ''): void {
+  const pane = getPane(paneId);
+  pane.navHistory = [seedPrefix];
+  pane.navIndex = 0;
+  updateNavButtons(paneId);
+}
+
+// Reflect navIndex / history length onto the back+forward button disabled
+// state. Called whenever the stack changes OR when loadObjects finishes
+// (active pane switched, etc.).
+export function updateNavButtons(paneId: PaneId): void {
+  const pane = getPane(paneId);
+  const back = paneEl('btn-nav-back', paneId) as HTMLButtonElement | null;
+  const fwd = paneEl('btn-nav-fwd', paneId) as HTMLButtonElement | null;
+  if (back) back.disabled = pane.navIndex <= 0;
+  if (fwd) fwd.disabled = pane.navIndex >= pane.navHistory.length - 1;
+}
+
+async function goBack(paneId: PaneId): Promise<void> {
+  const pane = getPane(paneId);
+  if (pane.navIndex <= 0) return;
+  pane.navIndex--;
+  const prev = pane.navHistory[pane.navIndex];
+  pane.prefix = prev;
+  suppressNavPush = true;
+  try {
+    await loadObjects(paneId);
+  } finally {
+    suppressNavPush = false;
+    updateNavButtons(paneId);
+  }
+}
+
+async function goForward(paneId: PaneId): Promise<void> {
+  const pane = getPane(paneId);
+  if (pane.navIndex >= pane.navHistory.length - 1) return;
+  pane.navIndex++;
+  const next = pane.navHistory[pane.navIndex];
+  pane.prefix = next;
+  suppressNavPush = true;
+  try {
+    await loadObjects(paneId);
+  } finally {
+    suppressNavPush = false;
+    updateNavButtons(paneId);
+  }
+}
+
+export function initNavButtons(paneId: PaneId): void {
+  const back = paneEl('btn-nav-back', paneId) as HTMLButtonElement | null;
+  const fwd = paneEl('btn-nav-fwd', paneId) as HTMLButtonElement | null;
+  if (back) back.onclick = (): void => { setActivePane(paneId); void goBack(paneId); };
+  if (fwd) fwd.onclick = (): void => { setActivePane(paneId); void goForward(paneId); };
+  updateNavButtons(paneId);
+}
+
+// Alt+Left / Alt+Right keyboard shortcut for the active pane. Wired once at
+// boot from main.ts. Mirrors the conventional browser binding.
+let navShortcutsBound = false;
+export function initNavShortcuts(): void {
+  if (navShortcutsBound) return;
+  navShortcutsBound = true;
+  document.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    const target = e.target as HTMLElement | null;
+    // Don't hijack the shortcut while the user is typing into an input or
+    // editing the breadcrumb / search field.
+    if (target && (target.matches('input, textarea, [contenteditable="true"]'))) return;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); void goBack(State.activePane); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); void goForward(State.activePane); }
+  });
 }
 
 // Returns the keys to transfer when the user drags row `o`: if it's part of
@@ -135,6 +244,7 @@ export function renderBreadcrumbs(paneId?: PaneId): void {
         link.onclick = (): void => {
           setActivePane(p);
           getPane(p).prefix = part.prefix;
+          pushNav(p, part.prefix);
           void loadObjects(p);
         };
         // Each non-current breadcrumb is also a drop target so the user can
@@ -238,9 +348,14 @@ function enterBreadcrumbEdit(paneId: PaneId): void {
         toast(parsed.error, 'error', 4000);
         return;
       }
+      // If the typed path lands in a different bucket the nav history is
+      // bucket-scoped — reset it for the new scope. Otherwise just push.
+      const bucketChanged = parsed.bucket !== pane.activeBucket;
       pane.activeBucket = parsed.bucket;
       pane.prefix = parsed.prefix;
       pane.selected.clear();
+      if (bucketChanged) resetNav(paneId, parsed.prefix);
+      else pushNav(paneId, parsed.prefix);
       // loadObjects re-renders the breadcrumb in normal mode, so we don't
       // need to call exitEditMode explicitly.
       void loadObjects(paneId);
@@ -426,6 +541,7 @@ function showFolderMenu(e: MouseEvent, folderPrefix: string, paneId: PaneId): vo
     if (act === 'open') {
       const pane = getPane(paneId);
       pane.prefix = folderPrefix;
+      pushNav(paneId, folderPrefix);
       void loadObjects(paneId);
     } else if (act === 'open-other') {
       void openFolderInOtherPane(folderPrefix, paneId);
@@ -490,6 +606,11 @@ async function openFolderInOtherPane(folderPrefix: string, sourcePaneId: PaneId)
   target.searchFolderHits = null;
   target.searchMeta = null;
   target.filterTerm = '';
+  // The target pane's nav history is bound to ITS prior (connId, bucket).
+  // Since we're force-switching its scope to the source's, reset and seed
+  // with the new prefix as the first entry — back/forward in this pane
+  // starts fresh from the folder the user just opened.
+  resetNav(targetPaneId, folderPrefix);
 
   // Switch focus to the new pane so the user immediately sees they're
   // working in it, and so the URL routing reflects the new location.
@@ -1143,6 +1264,7 @@ function renderGridInner(paneId: PaneId): void {
       setActivePane(paneId);
       const pane = getPane(paneId);
       pane.prefix = pp;
+      pushNav(paneId, pp);
       pane.filterTerm = '';
       (paneEl('search-input', paneId) as HTMLInputElement).value = '';
       updateSearchBanner(paneId);
@@ -1241,6 +1363,7 @@ function renderSearchFolderRow(tbody: HTMLElement, folderKey: string, info: Sear
     setActivePane(paneId);
     const pane = getPane(paneId);
     pane.prefix = folderKey;
+    pushNav(paneId, folderKey);
     pane.searchResults = null;
     pane.searchFolderHits = null;
     pane.searchMeta = null;
@@ -1302,6 +1425,10 @@ export async function loadObjects(paneId?: PaneId): Promise<void> {
   // knows what `Enter` will recursively search.
   updateSearchPlaceholder(p);
   updateSearchBanner(p);
+  // Reflect the latest navIndex onto the back/forward buttons. They might
+  // have been edited by goBack/goForward (just moved the pointer) or by a
+  // user navigation that pushNav'd a new entry — either way refresh here.
+  updateNavButtons(p);
   renderBreadcrumbs(p);
   closeInfoPanel(p);
   // Sync URL when this load is for the active pane. Covers folder-click,

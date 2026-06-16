@@ -543,6 +543,19 @@ body.is-resizing * { user-select: none !important; }
   flex-wrap: wrap;
   row-gap: 10px;
 }
+
+/* Per-pane back / forward navigation buttons. Sit at the very start of the
+   toolbar, before the breadcrumb. Disabled state dims the icon and shows a
+   not-allowed cursor — same as a browser's history buttons at the edges of
+   their stack. */
+.nav-buttons { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.nav-btn { color: var(--text-2); }
+.nav-btn:not(:disabled):hover { background: var(--surface-3); color: var(--text); }
+.nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.nav-btn:disabled:hover { background: transparent; color: var(--text-2); }
 .crumbs {
   display: flex; align-items: center; gap: 2px;
   font-family: var(--font-mono);
