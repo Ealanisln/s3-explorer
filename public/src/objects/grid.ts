@@ -22,6 +22,7 @@ import {
 import { runRecursiveSearchForLink, updateSearchBanner, restoreFilterForContext, updateSearchPlaceholder } from './search.js';
 import { navigateTo } from '../router/index.js';
 import { runTransfer } from '../panes/transfer.js';
+import { setDualMode } from '../panes/init.js';
 import type { S3Object, SearchFolderInfo } from '../types.js';
 
 // The "other" pane id — used by drag-and-drop / context menu to figure out
@@ -395,9 +396,11 @@ function showFolderMenu(e: MouseEvent, folderPrefix: string, paneId: PaneId): vo
   dd.innerHTML = isDeleted ? `
     <button data-act="restore">Restaurar carpeta</button>
     <button data-act="open">Abrir (ver eliminados)</button>
+    <button data-act="open-other">Abrir en segundo panel ▸</button>
     <button data-act="purge" class="danger">Purgar carpeta…</button>
   ` : `
     <button data-act="open">Abrir</button>
+    <button data-act="open-other">Abrir en segundo panel ▸</button>
     <button data-act="rename">Renombrar</button>
     <button data-act="delete" class="danger">Eliminar carpeta…</button>
   `;
@@ -424,6 +427,8 @@ function showFolderMenu(e: MouseEvent, folderPrefix: string, paneId: PaneId): vo
       const pane = getPane(paneId);
       pane.prefix = folderPrefix;
       void loadObjects(paneId);
+    } else if (act === 'open-other') {
+      void openFolderInOtherPane(folderPrefix, paneId);
     } else if (act === 'rename') {
       void openRenameFolder(folderPrefix, paneId);
     } else if (act === 'delete') {
@@ -440,6 +445,56 @@ function showFolderMenu(e: MouseEvent, folderPrefix: string, paneId: PaneId): vo
       void deleteFolder(folderPrefix, paneId);
     }
   };
+}
+
+// Open `folderPrefix` in the OTHER pane (whichever pane doesn't have focus).
+// Inherits the source pane's connection + bucket + cached bucket list so the
+// user doesn't have to re-select them. Auto-enables dual mode when off, so
+// the option always works regardless of the current pane layout. Override is
+// silent — if the other pane was already pointing at a different conn/bucket,
+// it gets reset to match the source.
+async function openFolderInOtherPane(folderPrefix: string, sourcePaneId: PaneId): Promise<void> {
+  const targetPaneId = otherPane(sourcePaneId);
+  const source = getPane(sourcePaneId);
+  if (!source.activeConnId || !source.activeBucket) {
+    toast('Necesitas tener conexión + bucket abiertos primero', 'info', 4000);
+    return;
+  }
+
+  // Reveal the other pane if dual mode was off. setDualMode handles the CSS
+  // class on `.panes-wrap`, the right pane's `hidden` attr, and re-syncs the
+  // active outline. On mobile (≤ 900px) it short-circuits — single-pane only.
+  if (!State.dualMode) {
+    setDualMode(true);
+    if (!State.dualMode) {
+      // Mobile rejected the toggle. Fall back to opening in the current pane.
+      toast('En pantallas chicas no hay segundo panel — abro en este', 'info', 4000);
+      source.prefix = folderPrefix;
+      void loadObjects(sourcePaneId);
+      return;
+    }
+  }
+
+  const target = getPane(targetPaneId);
+  // Override the target pane's state with the source's connection + bucket
+  // context so the listing call below has everything it needs.
+  target.activeConnId = source.activeConnId;
+  target.activeBucket = source.activeBucket;
+  // Share the cached bucket list so the sidebar tree under that connection
+  // doesn't need to refetch it.
+  target.buckets = source.buckets.slice();
+  target.versioning = source.versioning;
+  target.prefix = folderPrefix;
+  target.selected.clear();
+  target.searchResults = null;
+  target.searchFolderHits = null;
+  target.searchMeta = null;
+  target.filterTerm = '';
+
+  // Switch focus to the new pane so the user immediately sees they're
+  // working in it, and so the URL routing reflects the new location.
+  setActivePane(targetPaneId);
+  await loadObjects(targetPaneId);
 }
 
 // Pretty-print byte counts for the confirm dialog. Mirrors formatSize but
