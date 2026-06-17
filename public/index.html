@@ -123,6 +123,14 @@
 
   <!-- Two-pane wrapper. The right pane is cloned at runtime from the left by
        panes/init.ts when dual mode is enabled; it stays hidden otherwise. -->
+  <!-- Floating chip shown when sync nav is on. Hidden by default; CSS reveals
+       it via `body.synced-nav .synced-nav-chip { display: ... }`. -->
+  <div id="synced-nav-chip" class="synced-nav-chip" style="display:none">
+    <i data-icon="link" data-icon-size="12"></i>
+    <span>Sync ON</span>
+    <button class="chip-dismiss" id="synced-nav-chip-dismiss" title="Desactivar sincronización" aria-label="Desactivar sincronización"><i data-icon="close" data-icon-size="10"></i></button>
+  </div>
+
   <div class="panes-wrap" id="panes-wrap">
     <section class="pane active" data-pane="left">
       <header class="toolbar">
@@ -147,6 +155,7 @@
           <button data-el="btn-upload" class="btn btn-primary" disabled><i data-icon="upload"></i> Subir archivos</button>
           <input type="file" data-el="file-input" multiple hidden />
           <button data-el="btn-refresh" class="btn-icon" title="Refrescar"><i data-icon="refresh"></i></button>
+          <button class="btn-icon btn-sync-nav dual-only-visible" data-el="btn-sync-nav" title="Activar navegación sincronizada" aria-label="Sincronizar navegación entre paneles"><i data-icon="link"></i></button>
           <button id="btn-toggle-dual" class="btn-icon dual-only-trigger" title="Vista de dos paneles" aria-label="Vista de dos paneles"><i data-icon="split"></i></button>
           <button class="btn-icon btn-close-pane" data-el="btn-close-pane" title="Cerrar este panel" aria-label="Cerrar panel"><i data-icon="close"></i></button>
         </div>

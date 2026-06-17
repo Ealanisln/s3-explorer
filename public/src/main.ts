@@ -60,6 +60,7 @@ import { initModalTabs, initExpandButtons } from './util/modal-ux.js';
 import {
   mountRightPane, initActivation, initDualToggle, paintRightPanePlaceholder,
 } from './panes/init.js';
+import { initSyncNavToggle, setSyncNavDeps } from './panes/synced-nav.js';
 
 applyTheme(loadTheme());
 
@@ -83,6 +84,7 @@ configureSearch({ onRenderGrid: (paneId) => renderGrid(paneId), onLoadObjects: (
 configureConnections({ openEditModal: (c) => openConnModal(c) });
 configureBuckets({ onBucketOpened: (paneId) => reindexOnBucketOpened(paneId) });
 setTreeRenderer(() => renderConnections());
+setSyncNavDeps({ loadObjects: (paneId) => loadObjects(paneId) });
 configureLock({
   onLock: async () => {
     const ok = await confirmDialog({
@@ -142,6 +144,10 @@ for (const p of PANES) {
 // fires for whichever pane has activePane focus.
 initNavShortcuts();
 initTransferModalDismiss();
+// Synced-nav toggle has to run AFTER the right pane is cloned (so the
+// data-el="btn-sync-nav" exists on both panes) and after the per-pane init
+// loop (so paneEl() lookups work).
+initSyncNavToggle();
 
 // ─── Boot ───────────────────────────────────────────────────────────────────
 

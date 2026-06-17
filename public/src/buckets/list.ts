@@ -15,6 +15,7 @@ import { paneEl, paneElMaybe } from '../util/dom.js';
 import { confirmDialog } from '../util/dialog.js';
 import { loadObjects } from '../objects/grid.js';
 import { navigateTo } from '../router/index.js';
+import { reanchorSyncNav } from '../panes/synced-nav.js';
 
 interface BucketRow { Name: string; CreationDate: string | null }
 
@@ -44,6 +45,10 @@ export async function openBucket(name: string, paneId?: PaneId): Promise<void> {
   // prefix that doesn't exist in this bucket.
   pane.navHistory = [''];
   pane.navIndex = 0;
+  // Path semantics changed in this pane — silent re-anchor so the user
+  // doesn't get a "anclajes actualizados" toast every time they pick a
+  // bucket from the sidebar.
+  reanchorSyncNav(true);
   renderTree();
   // Sync URL when this happens on the active pane.
   if (p === State.activePane && pane.activeConnId) {

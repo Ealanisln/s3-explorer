@@ -16,6 +16,7 @@ import { confirmDialog } from '../util/dialog.js';
 import { openBucket, loadVersioning } from '../buckets/list.js';
 import { toggleEmpty } from '../objects/grid.js';
 import { navigateTo } from '../router/index.js';
+import { reanchorSyncNav } from '../panes/synced-nav.js';
 import type { Connection } from '../types.js';
 
 let openEditModal: (c: Connection | null) => void = () => undefined;
@@ -284,6 +285,9 @@ export async function selectConnection(id: string, paneId?: PaneId, opts: Select
   // (connId, bucket) and a different connection has unrelated keys.
   pane.navHistory = [''];
   pane.navIndex = 0;
+  // Path semantics changed — silent re-anchor (no surprise toast every
+  // time the user picks a sidebar connection).
+  reanchorSyncNav(true);
   if (opts.autoExpand) expanded.add(id);
   renderConnections();
   // Sync URL when this happens on the active pane (URL reflects active pane).

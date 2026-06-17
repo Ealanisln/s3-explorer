@@ -59,6 +59,18 @@ export interface PaneState {
   navIndex: number;
 }
 
+// Synchronized navigation across panes. When enabled, navigating into a
+// folder on one side computes a "delta" relative to that pane's ANCHOR
+// (the prefix where sync was switched on) and applies the same delta to
+// the other pane's anchor. Lets users browse two buckets with similar but
+// non-identical roots in lock-step. Anchors re-set on bucket / connection
+// switch (silently) or when the user re-toggles sync.
+export interface SyncNavState {
+  enabled: boolean;
+  leftAnchor: string;
+  rightAnchor: string;
+}
+
 // The flat shape that consumers see. The pane-fields are virtual — at runtime
 // they're served by the Proxy below from `panes[activePane]`.
 export interface AppState extends PaneState {
@@ -66,6 +78,7 @@ export interface AppState extends PaneState {
   panes: { left: PaneState; right: PaneState };
   activePane: PaneId;
   dualMode: boolean;
+  syncNav: SyncNavState;
 }
 
 function newPane(): PaneState {
@@ -108,6 +121,7 @@ interface RawState {
   panes: { left: PaneState; right: PaneState };
   activePane: PaneId;
   dualMode: boolean;
+  syncNav: SyncNavState;
 }
 
 const raw: RawState = {
@@ -115,6 +129,7 @@ const raw: RawState = {
   panes: { left: newPane(), right: newPane() },
   activePane: 'left',
   dualMode: false,
+  syncNav: { enabled: false, leftAnchor: '', rightAnchor: '' },
 };
 
 export const State: AppState = new Proxy(raw, {
