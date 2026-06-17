@@ -862,6 +862,67 @@ body.is-resizing * { user-select: none !important; }
 .dual-only-trigger { color: var(--text-dim); }
 .panes-wrap.dual .dual-only-trigger { color: var(--accent); }
 
+/* Buttons that should only appear once dual mode is active (e.g. the sync-
+   nav toggle — meaningless in single pane). Hidden by default; revealed
+   when `.panes-wrap.dual` is on. */
+.dual-only-visible { display: none; }
+.panes-wrap.dual .dual-only-visible { display: inline-grid; }
+
+/* Synced-nav toggle button — sits next to the dual-toggle. Same outline
+   treatment when off, accent-filled when on so the user can tell at a
+   glance the panes are linked. */
+.btn-sync-nav { color: var(--text-dim); }
+.btn-sync-nav:hover { color: var(--text); background: var(--surface-3); }
+.btn-sync-nav.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+}
+
+/* Floating "sync ON" indicator chip. Hidden by default; revealed when
+   <body> picks up the `synced-nav` class (set by setSyncNav). Positioned
+   top-center of the main grid column so it doesn't depend on which pane
+   is active or whether dual mode is on. */
+.synced-nav-chip {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px 5px 12px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  z-index: 20;
+  box-shadow: var(--shadow-md);
+  pointer-events: auto;
+}
+.synced-nav-chip svg { color: var(--accent); }
+.synced-nav-chip .chip-dismiss {
+  display: inline-grid;
+  place-items: center;
+  width: 20px; height: 20px;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background var(--t-fast);
+}
+.synced-nav-chip .chip-dismiss:hover { background: var(--accent-soft-2); }
+@media (max-width: 768px) {
+  .synced-nav-chip { top: 8px; font-size: 11px; padding: 4px 4px 4px 10px; }
+}
+
 /* Dedicated "close this pane" button in the toolbar actions cluster.
    Hidden by default. Visible ONLY on the RIGHT pane and ONLY when dual
    mode is on — closing the left pane would be ambiguous, and the button

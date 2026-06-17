@@ -23,6 +23,7 @@ import { runRecursiveSearchForLink, updateSearchBanner, restoreFilterForContext,
 import { navigateTo } from '../router/index.js';
 import { runTransfer } from '../panes/transfer.js';
 import { setDualMode } from '../panes/init.js';
+import { syncNav, reanchorSyncNav, cancelSyncNav } from '../panes/synced-nav.js';
 import type { S3Object, SearchFolderInfo } from '../types.js';
 
 // The "other" pane id — used by drag-and-drop / context menu to figure out
@@ -245,6 +246,7 @@ export function renderBreadcrumbs(paneId?: PaneId): void {
           setActivePane(p);
           getPane(p).prefix = part.prefix;
           pushNav(p, part.prefix);
+          syncNav(p, part.prefix);
           void loadObjects(p);
         };
         // Each non-current breadcrumb is also a drop target so the user can
@@ -356,6 +358,10 @@ function enterBreadcrumbEdit(paneId: PaneId): void {
       pane.selected.clear();
       if (bucketChanged) resetNav(paneId, parsed.prefix);
       else pushNav(paneId, parsed.prefix);
+      // Breadcrumb edit is a baseline reset for synced nav — the user just
+      // jumped to an arbitrary path, so the delta concept breaks. Re-anchor
+      // both panes at their current positions (not silent — explicit toast).
+      reanchorSyncNav();
       // loadObjects re-renders the breadcrumb in normal mode, so we don't
       // need to call exitEditMode explicitly.
       void loadObjects(paneId);
@@ -542,6 +548,7 @@ function showFolderMenu(e: MouseEvent, folderPrefix: string, paneId: PaneId): vo
       const pane = getPane(paneId);
       pane.prefix = folderPrefix;
       pushNav(paneId, folderPrefix);
+      syncNav(paneId, folderPrefix);
       void loadObjects(paneId);
     } else if (act === 'open-other') {
       void openFolderInOtherPane(folderPrefix, paneId);
@@ -611,6 +618,10 @@ async function openFolderInOtherPane(folderPrefix: string, sourcePaneId: PaneId)
   // with the new prefix as the first entry — back/forward in this pane
   // starts fresh from the folder the user just opened.
   resetNav(targetPaneId, folderPrefix);
+  // "Abrir en segundo panel" is the opposite of "keep them linked" — the
+  // user explicitly forced the target pane to a specific location. Cancel
+  // sync if it was on; user can re-enable from the new positions.
+  cancelSyncNav('panel destino reasignado');
 
   // Switch focus to the new pane so the user immediately sees they're
   // working in it, and so the URL routing reflects the new location.
@@ -1265,6 +1276,7 @@ function renderGridInner(paneId: PaneId): void {
       const pane = getPane(paneId);
       pane.prefix = pp;
       pushNav(paneId, pp);
+      syncNav(paneId, pp);
       pane.filterTerm = '';
       (paneEl('search-input', paneId) as HTMLInputElement).value = '';
       updateSearchBanner(paneId);
@@ -1364,6 +1376,7 @@ function renderSearchFolderRow(tbody: HTMLElement, folderKey: string, info: Sear
     const pane = getPane(paneId);
     pane.prefix = folderKey;
     pushNav(paneId, folderKey);
+    syncNav(paneId, folderKey);
     pane.searchResults = null;
     pane.searchFolderHits = null;
     pane.searchMeta = null;
