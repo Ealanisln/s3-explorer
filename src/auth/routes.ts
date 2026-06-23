@@ -129,8 +129,11 @@ export function register(app: Application): void {
           audit('totp_replay_blocked', { username: user.username, ip });
         }
       }
-    } else if (/^[a-f0-9]{5}-[a-f0-9]{5}$/.test(clean)) {
-      // Recovery code
+    } else if (/^[a-f0-9]{5}-[a-f0-9]{5}$|^[a-f0-9]{8}(-[a-f0-9]{8}){3}$/.test(clean)) {
+      // Recovery code. Accept both the legacy 40-bit (xxxxx-xxxxx) and the
+      // current 128-bit (xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx) formats so codes
+      // issued before the entropy bump still validate. Match is by bcrypt
+      // compare against the stored hashes regardless of format.
       for (let i = 0; i < user.recoveryCodesHashed.length; i++) {
         const h = user.recoveryCodesHashed[i];
         if (h && await bcrypt.compare(clean, h)) {

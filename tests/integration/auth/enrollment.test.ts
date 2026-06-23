@@ -85,7 +85,8 @@ describe('TOTP enrollment flow', () => {
     expect(ok.status).toBe(200);
     expect(ok.body.recoveryCodes).toHaveLength(8);
     for (const c of ok.body.recoveryCodes) {
-      expect(c).toMatch(/^[a-f0-9]{5}-[a-f0-9]{5}$/);
+      // 128-bit codes: xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx
+      expect(c).toMatch(/^[a-f0-9]{8}(-[a-f0-9]{8}){3}$/);
     }
   });
 

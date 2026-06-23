@@ -216,7 +216,7 @@ describe('POST /auth/totp (step 2)', () => {
     }
   });
 
-  it('accepts recovery code in xxxxx-xxxxx format and burns it', async () => {
+  it('accepts a recovery code and burns it', async () => {
     // Recovery codes only get hashed/persisted via the confirm flow. Easiest:
     // exercise the enrollment path end-to-end so the user ends up with real
     // recovery codes wired through the normal store.

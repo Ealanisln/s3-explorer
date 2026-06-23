@@ -31,6 +31,16 @@ const S3_DENY_HOSTS: readonly string[] = (process.env.S3_DENY_HOSTS || '')
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
 
+// Opt-in allowlist (default OFF = current denylist posture). When S3_ALLOW_HOSTS
+// is non-empty, ONLY those exact hostnames are permitted and everything else is
+// rejected — the strongest SSRF posture for deployments with a known, fixed set
+// of S3 endpoints. Empty (the default) preserves the "allow any host except
+// cloud metadata / S3_DENY_HOSTS" behavior the multi-provider use case needs.
+const S3_ALLOW_HOSTS: readonly string[] = (process.env.S3_ALLOW_HOSTS || '')
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
 export function normalizeEndpoint(ep: string | undefined): string | undefined {
   if (!ep) return undefined;
   const trimmed = ep.trim();
@@ -99,6 +109,11 @@ export function endpointBlockReason(endpoint: string | undefined): string | null
     host = new URL(endpoint).hostname.toLowerCase();
   } catch {
     return null; // unparseable → let the SDK reject it
+  }
+  // Allowlist mode (opt-in) short-circuits everything: if configured, the host
+  // must be on the list or it's rejected outright.
+  if (S3_ALLOW_HOSTS.length > 0 && !S3_ALLOW_HOSTS.includes(host)) {
+    return 'not in S3_ALLOW_HOSTS allowlist';
   }
   if (BLOCK_METADATA) {
     if (METADATA_HOSTNAMES.includes(host)) return 'cloud metadata endpoint';
