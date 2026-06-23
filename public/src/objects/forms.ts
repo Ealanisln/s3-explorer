@@ -5,15 +5,41 @@
 // on the currently-active pane; they read State (which proxies to the active
 // pane) and target paneEl(...) for the toolbar refresh icon.
 
-import { State, getPane, setActivePane } from '../state.js';
+import { State, getPane, setActivePane, adoptPaneState } from '../state.js';
 import type { PaneId } from '../state.js';
 import { api } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
 import { $, paneEl, openModal, closeModal } from '../util/dom.js';
 import { loadObjects } from './grid.js';
-import { selectConnection, refreshActiveConnBuckets } from '../connections/list.js';
+import { selectConnection, refreshActiveConnBuckets, renderConnections } from '../connections/list.js';
+import { loadVersioning } from '../buckets/list.js';
 import { setDualMode } from '../panes/init.js';
 import type { Connection } from '../types.js';
+
+// Close one pane in dual mode. Closing the RIGHT pane just collapses back to
+// the (already-visible) left view. Closing the LEFT pane migrates the right
+// pane's full state into the left slot so the surviving content becomes the
+// single view, then repaints.
+function closePane(closing: PaneId): void {
+  if (closing === 'left') {
+    adoptPaneState('left', 'right');
+    setActivePane('left');
+    setDualMode(false);
+    // Repaint the (now single) left pane from the migrated state.
+    renderConnections(); // sidebar highlight + bucket list follow the new conn
+    const left = getPane('left');
+    if (left.activeBucket) {
+      void loadVersioning('left');
+      void loadObjects('left');
+    } else if (left.activeConnId) {
+      void selectConnection(left.activeConnId, 'left');
+    }
+    return;
+  }
+  // Closing the right pane: left is already the single view, nothing to move.
+  setActivePane('left');
+  setDualMode(false);
+}
 
 // Bucket create + global rename submit (modals are app-global). Run once.
 export function initGlobalForms(): void {
@@ -90,13 +116,11 @@ export function initPaneForms(paneId: PaneId): void {
     else if (pane.activeConnId) void selectConnection(pane.activeConnId);
   };
 
-  // Dedicated "close this pane" button. CSS only renders it on the right
-  // pane in dual mode, but the wiring lives here for both panes (cloned
-  // DOM has the same data-el) so we don't depend on conditional clone
-  // timing. setDualMode(false) handles the focus reset and active-class
-  // sync — same as clicking the split-toggle button.
+  // Dedicated "close this pane" button. Shown on BOTH panes in dual mode so
+  // the user can close whichever one they want — closing the left pane
+  // migrates the right pane's content into the single view (closePane).
   paneEl('btn-close-pane', paneId).onclick = (): void => {
-    setDualMode(false);
+    closePane(paneId);
   };
 }
 

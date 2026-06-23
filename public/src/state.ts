@@ -173,6 +173,17 @@ export function getPane(id?: PaneId): PaneState {
   return raw.panes[id || raw.activePane];
 }
 
+// Move one pane's entire state into another slot and reset the source to a
+// fresh pane. Used when closing a pane in dual mode: the surviving pane's
+// content must become the single (left) view. Swaps object identity rather
+// than copying field-by-field, so Sets/Maps/arrays aren't aliased between the
+// two slots afterward (the source gets a brand-new empty PaneState).
+export function adoptPaneState(target: PaneId, source: PaneId): void {
+  if (target === source) return;
+  raw.panes[target] = raw.panes[source];
+  raw.panes[source] = newPane();
+}
+
 // Returns the connection object for a specific pane (defaults to active).
 export function paneConn(id?: PaneId): Connection | undefined {
   const pane = getPane(id);
