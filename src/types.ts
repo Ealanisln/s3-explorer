@@ -16,6 +16,9 @@ export interface User {
   mustChangePassword: boolean;
   createdAt: string;
   lastLoginAt: string | null;
+  // Last TOTP timestep consumed by a successful 2FA login/enrollment. Used to
+  // reject replay of a still-valid code (see migration 003). 0 = none yet.
+  lastTotpStep: number;
 }
 
 export interface SessionPayload {

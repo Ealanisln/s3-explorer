@@ -3,6 +3,7 @@ import { authenticator } from 'otplib';
 import {
   buildOtpAuthUri,
   checkTotpCode,
+  currentTotpStep,
   decryptTotpSecret,
   encryptTotpSecret,
   generateTotpSecret,
@@ -100,25 +101,47 @@ describe('totp', () => {
       vi.useRealTimers();
     });
 
-    it('produces a base32 secret accepted by otplib', () => {
+    it('returns the matched timestep for a valid code', () => {
       const secret = generateTotpSecret();
       expect(typeof secret).toBe('string');
       expect(secret.length).toBeGreaterThanOrEqual(16);
       const code = authenticator.generate(secret);
-      expect(checkTotpCode(code, secret)).toBe(true);
+      // A freshly generated code matches the current step (delta 0).
+      expect(checkTotpCode(code, secret)).toBe(currentTotpStep());
     });
 
-    it('rejects a code generated from a different secret', () => {
+    it('returns null for a code generated from a different secret', () => {
       const a = generateTotpSecret();
       const b = generateTotpSecret();
       const codeForA = authenticator.generate(a);
-      expect(checkTotpCode(codeForA, b)).toBe(false);
+      expect(checkTotpCode(codeForA, b)).toBeNull();
     });
 
-    it('rejects obviously bad codes', () => {
+    it('returns null for obviously bad codes', () => {
       const secret = generateTotpSecret();
-      expect(checkTotpCode('000000', secret)).toBe(false);
-      expect(checkTotpCode('not-a-code', secret)).toBe(false);
+      expect(checkTotpCode('000000', secret)).toBeNull();
+      expect(checkTotpCode('not-a-code', secret)).toBeNull();
+    });
+  });
+
+  describe('currentTotpStep (replay tracking)', () => {
+    it('is the 30s-floored epoch step and increases monotonically', () => {
+      expect(currentTotpStep(0)).toBe(0);
+      expect(currentTotpStep(29_999)).toBe(0);
+      expect(currentTotpStep(30_000)).toBe(1);
+      expect(currentTotpStep(1_700_000_000_000)).toBe(Math.floor(1_700_000_000_000 / 1000 / 30));
+    });
+
+    it('the matched step of a fresh code exceeds a stale stored step (replay guard math)', () => {
+      const secret = generateTotpSecret();
+      const code = authenticator.generate(secret);
+      const matched = checkTotpCode(code, secret);
+      expect(matched).not.toBeNull();
+      // A user that never authenticated has lastTotpStep 0 → always accepted.
+      expect(matched as number).toBeGreaterThan(0);
+      // Re-checking the SAME code yields the SAME step → the route layer
+      // rejects it as <= lastTotpStep once consumed.
+      expect(checkTotpCode(code, secret)).toBe(matched);
     });
   });
 

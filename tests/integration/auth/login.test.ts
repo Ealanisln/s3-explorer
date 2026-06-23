@@ -125,6 +125,34 @@ describe('POST /auth/totp (step 2)', () => {
     expect(cleared).toMatch(/Expires=Thu, 01 Jan 1970/);
   });
 
+  it('blocks replay of an already-used TOTP code within its window', async () => {
+    const user = createTestUser({
+      username: 'totp-replay',
+      password: 'good-password-1!',
+      totpEnrolled: true,
+    });
+    const code = withTotp(user); // single code reused for both attempts
+
+    // First login with the code succeeds.
+    const p1 = setCookie(
+      await request(app).post('/auth/login').send({ username: user.username, password: user.password }),
+      's3x_pending',
+    )!;
+    const first = await request(app).post('/auth/totp').set('Cookie', p1).send({ code });
+    expect(first.status).toBe(200);
+
+    // Second login (fresh pending cookie) replays the SAME code → rejected,
+    // because its timestep was already consumed.
+    const p2 = setCookie(
+      await request(app).post('/auth/login').send({ username: user.username, password: user.password }),
+      's3x_pending',
+    )!;
+    const replay = await request(app).post('/auth/totp').set('Cookie', p2).send({ code });
+    expect(replay.status).toBe(401);
+    expect(replay.body.message).toBe('Código inválido');
+    expect(setCookie(replay, 's3x_session')).toBeNull();
+  });
+
   it('rejects wrong TOTP code', async () => {
     const user = createTestUser({
       username: 'totp-bad',
@@ -311,6 +339,7 @@ describe('Password rehash on legacy bcrypt login', () => {
       mustChangePassword: false,
       createdAt: new Date().toISOString(),
       lastLoginAt: null,
+      lastTotpStep: 0,
     });
     expect(findUser(username)!.passwordHash.startsWith('$2')).toBe(true);
 

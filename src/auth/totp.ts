@@ -55,8 +55,24 @@ export function generateTotpSecret(): string {
   return authenticator.generateSecret();
 }
 
-export function checkTotpCode(code: string, secret: string): boolean {
-  return authenticator.check(code, secret);
+// otplib authenticator default timestep. We don't override authenticator
+// options anywhere, so this matches what check()/checkDelta() use internally.
+const TOTP_STEP_SECONDS = 30;
+
+// The absolute TOTP timestep for a given instant. Monotonically increasing;
+// the caller compares it against the user's last consumed step to block replay.
+export function currentTotpStep(nowMs: number = Date.now()): number {
+  return Math.floor(nowMs / 1000 / TOTP_STEP_SECONDS);
+}
+
+// Validate a code and, if valid, return the ABSOLUTE timestep it matched (so
+// the caller can persist it and reject any future code at or below that step).
+// Returns null when the code is invalid. checkDelta accounts for any clock-skew
+// window: the consumed step is currentStep + delta.
+export function checkTotpCode(code: string, secret: string): number | null {
+  const delta = authenticator.checkDelta(code, secret);
+  if (delta === null || delta === undefined) return null;
+  return currentTotpStep() + delta;
 }
 
 export function buildOtpAuthUri(username: string, secret: string): string {

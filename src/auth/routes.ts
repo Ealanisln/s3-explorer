@@ -117,7 +117,18 @@ export function register(app: Application): void {
     let ok = false;
     if (/^\d{6}$/.test(clean)) {
       const secret = decryptTotpSecret(user.totpSecret, user.username);
-      if (secret) ok = checkTotpCode(clean, secret);
+      if (secret) {
+        const step = checkTotpCode(clean, secret);
+        if (step !== null && step > user.lastTotpStep) {
+          // Valid code AND its timestep hasn't been consumed yet — accept and
+          // burn the step so the same code can't be replayed within its window.
+          ok = true;
+          await updateUser(user.username, { lastTotpStep: step });
+        } else if (step !== null) {
+          // Code is cryptographically valid but its step was already used.
+          audit('totp_replay_blocked', { username: user.username, ip });
+        }
+      }
     } else if (/^[a-f0-9]{5}-[a-f0-9]{5}$/.test(clean)) {
       // Recovery code
       for (let i = 0; i < user.recoveryCodesHashed.length; i++) {
@@ -200,8 +211,10 @@ export function register(app: Application): void {
     const { code } = req.body as { code: string };
     if (!user.totpSecret) { res.status(400).json({ message: 'No hay secret pendiente' }); return; }
     const secret = decryptTotpSecret(user.totpSecret, user.username);
-    const ok = secret ? checkTotpCode(code.replace(/\s+/g, ''), secret) : false;
-    if (!ok) {
+    const step = secret ? checkTotpCode(code.replace(/\s+/g, ''), secret) : null;
+    // Enforce monotonic step here too so the enrollment-confirmation code can't
+    // be immediately replayed to complete a login in the same window.
+    if (step === null || step <= user.lastTotpStep) {
       audit('totp_setup_fail', { username: user.username });
       res.status(401).json({ message: 'Código inválido' });
       return;
@@ -210,6 +223,7 @@ export function register(app: Application): void {
     await updateUser(user.username, {
       totpConfirmed: true,
       recoveryCodesHashed: hashCodes(recoveryCodes),
+      lastTotpStep: step,
     });
     audit('totp_confirmed', { username: user.username });
     res.json({ ok: true, recoveryCodes });
@@ -290,6 +304,7 @@ export function register(app: Application): void {
       mustChangePassword: true,
       createdAt: new Date().toISOString(),
       lastLoginAt: null,
+      lastTotpStep: 0,
     });
     if (conflict) { res.status(409).json({ message: 'Usuario ya existe' }); return; }
     audit('user_created', { by: actor.username, username, role });
