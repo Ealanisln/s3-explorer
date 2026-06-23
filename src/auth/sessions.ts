@@ -6,6 +6,14 @@ import type { SessionPayload, PendingPayload, User } from '../types';
 // Same guarantee as users-store.ts: DB tables exist before we prepare statements.
 ensureDbInit();
 
+// Fail closed in production: a missing SESSION_SECRET there would silently run
+// with an ephemeral secret (sessions die on every restart, and a multi-replica
+// deploy can't validate each other's cookies). In dev we keep the convenient
+// ephemeral fallback with a loud warning.
+if (!process.env.SESSION_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('[auth] SESSION_SECRET must be set in production. Generate: openssl rand -hex 32');
+}
+
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 const SESSION_TTL_SECONDS = parseInt(process.env.SESSION_TTL_SECONDS || '43200', 10); // 12 h
 const SECURE_COOKIE = (process.env.SECURE_COOKIE || '1') === '1';

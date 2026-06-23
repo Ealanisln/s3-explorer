@@ -1295,7 +1295,7 @@ function renderGridInner(paneId: PaneId): void {
     const badge = o.IsDeleteMarker ? '<span class="badge-deleted">DELETED</span>' : '';
     tr.innerHTML = `
       <td class="col-check"><input type="checkbox" data-key="${escapeHtml(o.Key)}"/></td>
-      <td class="cell-name"><span class="ft-badge ${ico.cls}">${ico.label}</span><span class="name-text">${escapeHtml(name)}</span>${badge}</td>
+      <td class="cell-name"><span class="ft-badge ${ico.cls}">${escapeHtml(ico.label)}</span><span class="name-text">${escapeHtml(name)}</span>${badge}</td>
       <td class="col-size">${o.IsDeleteMarker ? '—' : formatSize(o.Size)}</td>
       <td class="col-date">${escapeHtml(formatDate(o.LastModified))}</td>
       <td class="col-act"><button class="menu-btn" data-menu="${escapeHtml(o.Key)}" aria-label="Acciones"><i data-icon="dots_h"></i></button></td>
@@ -1397,7 +1397,7 @@ function renderSearchFileRow(tbody: HTMLElement, o: S3Object, paneId: PaneId): v
   tr.innerHTML = `
     <td class="col-check"><input type="checkbox" data-key="${escapeHtml(o.Key)}"/></td>
     <td class="cell-name">
-      <span class="ft-badge ${ico.cls}">${ico.label}</span>
+      <span class="ft-badge ${ico.cls}">${escapeHtml(ico.label)}</span>
       <div class="name-stack">
         <div class="name-text">${escapeHtml(name)}</div>
         ${folder ? `<div class="path-cell">${escapeHtml(folder)}</div>` : ''}
