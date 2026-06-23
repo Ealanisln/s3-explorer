@@ -5,11 +5,14 @@ Consola web tipo MinIO para administrar buckets en cualquier almacenamiento comp
 **Funcionalidades:**
 - Multi-conexión: cada usuario define sus propios endpoints y credenciales.
 - Bóveda local cifrada (AES-256-GCM) — las credenciales S3 nunca se guardan en el servidor.
-- Búsqueda recursiva en streaming con agrupación por carpetas.
+- Explorador de dos paneles: navegación independiente, "abrir en segundo panel", navegación sincronizada estilo FileZilla, y cierre de cualquiera de los dos paneles.
+- Subida con resolución de conflictos: reemplazar / renombrar (auto-sufijo) / saltar cuando el archivo ya existe.
+- CRUD de carpetas: crear, renombrar, eliminar (con delete-marker o purga) y restaurar.
+- Búsqueda recursiva en streaming con agrupación por carpetas y alcance por prefijo.
 - Versionado con vista de versiones anteriores, restaurar, mostrar eliminados.
 - Preview inline para imágenes, video, audio, PDF, código.
 - Enlaces temporales firmados (5min / 1h / 24h).
-- Login con usuario + contraseña + TOTP (Google Authenticator).
+- Login con usuario + contraseña + TOTP (Google Authenticator); códigos de recuperación de 128 bits; sin replay de TOTP.
 - Gestión de usuarios desde la UI (admin).
 - Audit log JSON line a stdout.
 
