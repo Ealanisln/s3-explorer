@@ -35,16 +35,20 @@ export function uploadRouter(buildClient: ClientFactory): Router {
   const r = Router();
 
   r.post('/object/:bucket/upload', upload.array('files'), wrap(async (req: Request, res: Response) => {
-    const s3 = buildClient(req);
-    const prefix = typeof req.body?.prefix === 'string' ? req.body.prefix : '';
+    // multer has already written every part to a tmp file by the time this
+    // handler runs, so the cleanup MUST cover all of req.files unconditionally
+    // — including the case where buildClient(req) throws (blocked endpoint /
+    // missing creds) before we process a single file. Iterating req.files in
+    // finally (rather than a list built inside the loop) guarantees no tmp
+    // file is orphaned on the upload tmpfs.
     const files = (req.files || []) as Express.Multer.File[];
-    const results: Array<{ key: string; size: number }> = [];
-    const cleanups: string[] = [];
     try {
+      const s3 = buildClient(req);
+      const prefix = typeof req.body?.prefix === 'string' ? req.body.prefix : '';
+      const results: Array<{ key: string; size: number }> = [];
       for (const f of files) {
         const key = prefix + f.originalname;
         const stream = fs.createReadStream(f.path);
-        cleanups.push(f.path);
         const params: PutObjectCommandInput = {
           Bucket: req.params.bucket,
           Key: key,
@@ -63,7 +67,7 @@ export function uploadRouter(buildClient: ClientFactory): Router {
       }
       res.json({ ok: true, uploaded: results });
     } finally {
-      for (const p of cleanups) fs.unlink(p, () => undefined);
+      for (const f of files) fs.unlink(f.path, () => undefined);
     }
   }));
 

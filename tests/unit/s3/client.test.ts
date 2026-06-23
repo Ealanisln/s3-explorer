@@ -67,6 +67,33 @@ describe('endpointBlockReason', () => {
     expect(endpointBlockReason('http://minio-abc123:9000')).toBeNull();
   });
 
+  // SSRF hardening: a bare string match on '169.254.169.254' was bypassable by
+  // alternate IP encodings that the OS resolver still routes to IMDS. We now
+  // canonicalize numeric IPv4 and check the whole link-local /16.
+  it('blocks IMDS via decimal / octal / hex IPv4 encodings', () => {
+    expect(endpointBlockReason('http://2852039166')).toBe('cloud metadata endpoint'); // 169.254.169.254
+    expect(endpointBlockReason('http://0251.0376.0251.0376')).toBe('cloud metadata endpoint'); // octal
+    expect(endpointBlockReason('http://0xA9.0xFE.0xA9.0xFE')).toBe('cloud metadata endpoint'); // hex
+    expect(endpointBlockReason('http://0xA9FEA9FE')).toBe('cloud metadata endpoint'); // single hex
+  });
+
+  it('blocks IMDS via IPv4-mapped IPv6', () => {
+    expect(endpointBlockReason('http://[::ffff:169.254.169.254]')).toBe('cloud metadata endpoint');
+  });
+
+  it('blocks the whole IPv4 link-local /16, not just .169.254', () => {
+    expect(endpointBlockReason('http://169.254.0.1')).toBe('cloud metadata endpoint');
+    expect(endpointBlockReason('http://169.254.255.255')).toBe('cloud metadata endpoint');
+  });
+
+  it('still allows RFC1918 / loopback / Docker hostnames (internal S3 is by design)', () => {
+    expect(endpointBlockReason('http://10.0.0.5:9000')).toBeNull();
+    expect(endpointBlockReason('http://192.168.1.10:9000')).toBeNull();
+    expect(endpointBlockReason('http://127.0.0.1:9000')).toBeNull();
+    expect(endpointBlockReason('http://172.16.0.3:9000')).toBeNull();
+    expect(endpointBlockReason('http://minio-abc123:9000')).toBeNull();
+  });
+
   it('returns null for empty / unparseable input (lets the SDK reject)', () => {
     expect(endpointBlockReason(undefined)).toBeNull();
     expect(endpointBlockReason('not a url')).toBeNull();

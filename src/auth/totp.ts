@@ -6,6 +6,14 @@ import { audit } from './audit';
 // Must be 64 hex chars (32 bytes). If absent, an ephemeral key is generated
 // and existing secrets become undecryptable on next restart — production MUST
 // set this.
+// Fail closed in production: an ephemeral key there silently makes every
+// existing encrypted TOTP secret undecryptable on the next restart, locking all
+// users out of 2FA. Refuse to boot rather than warn-and-continue. Dev keeps the
+// ephemeral fallback for convenience.
+if (!process.env.TOTP_ENCRYPTION_KEY && process.env.NODE_ENV === 'production') {
+  throw new Error('[auth] TOTP_ENCRYPTION_KEY must be set in production. Generate: openssl rand -hex 32');
+}
+
 const TOTP_KEY_HEX = process.env.TOTP_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
 const TOTP_KEY = Buffer.from(TOTP_KEY_HEX, 'hex');
 if (TOTP_KEY.length !== 32) {
