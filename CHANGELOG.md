@@ -4,6 +4,51 @@ Todos los cambios notables del proyecto se documentan acá. El formato sigue
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) y el proyecto se rige por
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-06-23
+
+Migración interna a TypeScript + SQLite (desde el viejo `server.js`/`auth.js` +
+`users.json`), más features del explorador y endurecimiento de seguridad.
+
+### Added
+- Explorador de dos paneles: navegación independiente con historial back/forward
+  por panel (Alt+←/→), "abrir en segundo panel", y botón de cerrar (×) en
+  **cualquiera** de los dos paneles (cerrar el izquierdo migra el contenido del
+  derecho a la vista única).
+- Navegación sincronizada estilo FileZilla (modelo anchor-delta) que funciona
+  aunque los paneles estén en buckets / conexiones distintas.
+- Subida con resolución de conflictos: modal Reemplazar / Renombrar (auto-sufijo
+  estilo macOS/Windows) / Saltar, con tamaño entrante vs existente + preview del
+  nombre renombrado. Funciona también con versionado ON.
+- CRUD de carpetas: crear, renombrar, eliminar (delete-marker o purga) y
+  restaurar, con conteo previo y barra de progreso.
+- Búsqueda con alcance por prefijo y matcheo de nombres de carpeta (BFS).
+- Colapso de la barra lateral a tira de iconos.
+- `SECURITY.md`: política de divulgación, modelo de seguridad, checklist de
+  hardening de deploy, mapa OWASP Top 10 y tradeoffs aceptados.
+- Opt-in `S3_ALLOW_HOSTS` (allowlist de endpoints S3, la postura SSRF más fuerte).
+
+### Changed
+- **Backend reescrito en TypeScript** bajo `src/`, compilado con `tsc -b`.
+  Persistencia migrada de `users.json` a **SQLite** (`app.db`) con migraciones
+  versionadas. Suite de tests con **vitest** (unit + integration).
+- Códigos de recuperación: 40 → **128 bits** (el verificador acepta ambos
+  formatos para no romper los ya emitidos).
+- Assets estáticos servidos con `Cache-Control: no-cache` (revalidación por
+  ETag) para que los builds nuevos no queden cacheados.
+
+### Security
+- **SSRF:** el bloqueo de metadata ahora canonicaliza la IP y cubre todo el
+  rango link-local `169.254.0.0/16`, cerrando bypasses por codificación
+  decimal/octal/hex e IPv4-mapped-IPv6.
+- **TOTP:** sin replay — un código usado no se puede reutilizar dentro de su
+  ventana de ~30s (`last_totp_step`, migración 003).
+- **Fail-closed** en producción si faltan `SESSION_SECRET` / `TOTP_ENCRYPTION_KEY`.
+- Cleanup garantizado de archivos temporales de upload aunque `buildClient` falle.
+
+### Fixed
+- Marcado visual de carpetas eliminadas (badge DELETED) y opción de restaurar.
+- Prevención de que una segunda conexión sobrescriba la primera.
+
 ## [1.1.0] - 2026-05-13
 
 Rediseño visual completo del SPA al "Claude house style" — paleta cálida
