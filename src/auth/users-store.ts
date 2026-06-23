@@ -21,6 +21,7 @@ interface UserRow {
   must_change_password: number;
   created_at: string;
   last_login_at: string | null;
+  last_totp_step: number;
 }
 
 function rowToUser(row: UserRow): User {
@@ -35,6 +36,7 @@ function rowToUser(row: UserRow): User {
     mustChangePassword: !!row.must_change_password,
     createdAt: row.created_at,
     lastLoginAt: row.last_login_at,
+    lastTotpStep: row.last_totp_step ?? 0,
   };
 }
 
@@ -45,11 +47,11 @@ const stmtInsertUser = db.prepare(`
   INSERT INTO users (
     username, password_hash, totp_secret, totp_confirmed,
     recovery_codes_hashed, role, disabled, must_change_password,
-    created_at, last_login_at
+    created_at, last_login_at, last_totp_step
   ) VALUES (
     @username, @passwordHash, @totpSecret, @totpConfirmed,
     @recoveryCodesHashed, @role, @disabled, @mustChangePassword,
-    @createdAt, @lastLoginAt
+    @createdAt, @lastLoginAt, @lastTotpStep
   )
 `);
 const stmtCountUsers = db.prepare('SELECT COUNT(*) AS c FROM users');
@@ -75,7 +77,8 @@ type Patchable =
   | 'role'
   | 'disabled'
   | 'mustChangePassword'
-  | 'lastLoginAt';
+  | 'lastLoginAt'
+  | 'lastTotpStep';
 
 const COLUMN_MAP: Record<Patchable, string> = {
   passwordHash: 'password_hash',
@@ -86,6 +89,7 @@ const COLUMN_MAP: Record<Patchable, string> = {
   disabled: 'disabled',
   mustChangePassword: 'must_change_password',
   lastLoginAt: 'last_login_at',
+  lastTotpStep: 'last_totp_step',
 };
 
 function patchToBindings(patch: Partial<User>): { setClauses: string[]; values: unknown[] } {
@@ -137,6 +141,7 @@ export function createUser(user: User): boolean {
       mustChangePassword: user.mustChangePassword ? 1 : 0,
       createdAt: user.createdAt,
       lastLoginAt: user.lastLoginAt ?? null,
+      lastTotpStep: user.lastTotpStep ?? 0,
     });
     return false;
   } catch (e) {
@@ -174,6 +179,7 @@ export function createUser(user: User): boolean {
     mustChangePassword: false,
     createdAt: new Date().toISOString(),
     lastLoginAt: null,
+    lastTotpStep: 0,
   };
   createUser(user);
   audit('admin_bootstrapped', { username: ADMIN_USER });

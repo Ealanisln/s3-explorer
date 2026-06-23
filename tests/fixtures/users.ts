@@ -37,6 +37,7 @@ export function createTestUser(seed: TestUserSeed): TestUser {
     mustChangePassword: !!seed.mustChangePassword,
     createdAt: new Date().toISOString(),
     lastLoginAt: null,
+    lastTotpStep: 0,
   };
   const conflict = createUser(user);
   if (conflict) throw new Error(`createTestUser: ${seed.username} already exists`);

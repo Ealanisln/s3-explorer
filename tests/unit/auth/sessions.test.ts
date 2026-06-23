@@ -43,6 +43,7 @@ const baseUser: User = {
   mustChangePassword: false,
   createdAt: new Date().toISOString(),
   lastLoginAt: null,
+  lastTotpStep: 0,
 };
 
 describe('sessions', () => {
