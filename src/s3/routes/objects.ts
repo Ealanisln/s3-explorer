@@ -679,8 +679,13 @@ export function objectsRouter(buildClient: ClientFactory): Router {
     const limited = keys.slice(0, 100);
     const results = await Promise.all(limited.map(async (key) => {
       try {
-        await s3.send(new HeadObjectCommand({ Bucket: req.params.bucket, Key: key }));
-        return { key, exists: true };
+        const head = await s3.send(new HeadObjectCommand({ Bucket: req.params.bucket, Key: key }));
+        return {
+          key,
+          exists: true,
+          size: typeof head.ContentLength === 'number' ? head.ContentLength : null,
+          lastModified: head.LastModified ? head.LastModified.toISOString() : null,
+        };
       } catch (e) {
         const err = e as { name?: string; $metadata?: { httpStatusCode?: number } };
         const status = err.$metadata?.httpStatusCode;

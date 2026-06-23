@@ -364,8 +364,11 @@ describe('POST /api/object/:bucket/rename', () => {
 });
 
 describe('POST /api/objects/:bucket/exists', () => {
-  it('returns exists=true for found keys, exists=false for 404 (NotFound name)', async () => {
-    s3.on(HeadObjectCommand, { Key: 'present' }).resolves({});
+  it('returns exists=true (with size + lastModified) for found keys, exists=false for 404', async () => {
+    s3.on(HeadObjectCommand, { Key: 'present' }).resolves({
+      ContentLength: 4242,
+      LastModified: new Date('2026-04-15T10:00:00Z'),
+    });
     s3.on(HeadObjectCommand, { Key: 'gone' }).rejects(
       Object.assign(new Error('not found'), {
         name: 'NotFound',
@@ -378,9 +381,19 @@ describe('POST /api/objects/:bucket/exists', () => {
       .set(TEST_S3_HEADERS)
       .send({ keys: ['present', 'gone'] });
     expect(res.body.results).toEqual([
-      { key: 'present', exists: true },
+      { key: 'present', exists: true, size: 4242, lastModified: '2026-04-15T10:00:00.000Z' },
       { key: 'gone', exists: false },
     ]);
+  });
+
+  it('returns size=null / lastModified=null when HeadObject omits those fields', async () => {
+    s3.on(HeadObjectCommand).resolves({});
+    const res = await request(app)
+      .post('/api/objects/b/exists')
+      .set('Cookie', cookie)
+      .set(TEST_S3_HEADERS)
+      .send({ keys: ['x'] });
+    expect(res.body.results[0]).toEqual({ key: 'x', exists: true, size: null, lastModified: null });
   });
 
   it('fails open: an unexpected error becomes exists=false (not a 500 for the whole request)', async () => {

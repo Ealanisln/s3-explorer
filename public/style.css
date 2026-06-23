@@ -868,59 +868,32 @@ body.is-resizing * { user-select: none !important; }
 .dual-only-visible { display: none; }
 .panes-wrap.dual .dual-only-visible { display: inline-grid; }
 
-/* Synced-nav toggle button — sits next to the dual-toggle. Same outline
-   treatment when off, accent-filled when on so the user can tell at a
-   glance the panes are linked. */
+/* Synced-nav toggle button — sits next to the dual-toggle. Outline when
+   off, accent-filled pill (icon + "SYNC ON" label) when on so the user
+   can tell at a glance the panes are linked. */
 .btn-sync-nav { color: var(--text-dim); }
 .btn-sync-nav:hover { color: var(--text); background: var(--surface-3); }
-.btn-sync-nav.active {
+/* Scoped under .panes-wrap.dual so this beats the
+   `.panes-wrap.dual .dual-only-visible { display: inline-grid }` rule
+   (same specificity tier but more selectors). Otherwise the grid layout
+   wins and the svg + label stack vertically inside the same cell. */
+.panes-wrap.dual .btn-sync-nav.active {
   color: var(--accent);
   background: var(--accent-soft);
   border: 1px solid var(--accent);
-}
-
-/* Floating "sync ON" indicator chip. Hidden by default; revealed when
-   <body> picks up the `synced-nav` class (set by setSyncNav). Positioned
-   top-center of the main grid column so it doesn't depend on which pane
-   is active or whether dual mode is on. */
-.synced-nav-chip {
-  position: fixed;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 6px 5px 12px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  font-size: 12px;
+  gap: 6px;
+  width: auto;
+  padding: 0 10px;
+}
+.btn-sync-nav-label {
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  z-index: 20;
-  box-shadow: var(--shadow-md);
-  pointer-events: auto;
-}
-.synced-nav-chip svg { color: var(--accent); }
-.synced-nav-chip .chip-dismiss {
-  display: inline-grid;
-  place-items: center;
-  width: 20px; height: 20px;
-  margin-left: 2px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--accent);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: background var(--t-fast);
-}
-.synced-nav-chip .chip-dismiss:hover { background: var(--accent-soft-2); }
-@media (max-width: 768px) {
-  .synced-nav-chip { top: 8px; font-size: 11px; padding: 4px 4px 4px 10px; }
+  line-height: 1;
+  text-decoration: none;
 }
 
 /* Dedicated "close this pane" button in the toolbar actions cluster.
@@ -2026,19 +1999,33 @@ tr.deleted .badge-deleted {
 }
 .overwrite-item {
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 14px;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  row-gap: 2px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--divider);
-  align-items: center;
+  align-items: start;
 }
 .overwrite-item:last-child { border-bottom: 0; }
 .overwrite-item:hover { background: var(--surface-2); }
+.overwrite-icon { grid-row: 1 / 3; align-self: center; }
 .overwrite-name {
   color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.overwrite-size { color: var(--text-mute); font-size: 11.5px; }
+.overwrite-meta {
+  color: var(--text-mute);
+  font-size: 11.5px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.overwrite-meta .sep { opacity: .6; }
+.overwrite-rename-preview {
+  color: var(--accent);
+  font-size: 11.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* ============================================================
    Scrollbar

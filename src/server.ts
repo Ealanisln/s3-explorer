@@ -36,7 +36,16 @@ export function createApp(): Express {
 
   app.use(express.static(path.join(__dirname, '..', 'public'), {
     setHeaders(res, filepath) {
-      if (filepath.endsWith('.html')) {
+      // no-cache means "revalidate on every request" — combined with the
+      // ETag / Last-Modified express.static already sets, the browser
+      // sends If-None-Match and gets a 304 when unchanged. No actual
+      // bandwidth penalty, but new builds land immediately without
+      // requiring a Ctrl+F5. We do this for every text asset the SPA
+      // pulls so a CSS / JS change isn't stuck behind heuristic caching.
+      if (filepath.endsWith('.html')
+        || filepath.endsWith('.css')
+        || filepath.endsWith('.js')
+        || filepath.endsWith('.mjs')) {
         res.setHeader('Cache-Control', 'no-cache');
       }
     },

@@ -19,11 +19,10 @@
 // Back / forward buttons do NOT propagate — per-pane history stays
 // independent so the stacks don't get tangled.
 
-import { State, getPane, setActivePane } from '../state.js';
+import { State, getPane, setActivePane, subscribe } from '../state.js';
 import type { PaneId } from '../state.js';
-import { $, paneEl } from '../util/dom.js';
+import { paneEl } from '../util/dom.js';
 import { toast } from '../util/toast.js';
-import { mountIcons } from '../util/icons.js';
 
 const LS_KEY = 's3x-synced-nav';
 
@@ -46,18 +45,33 @@ function otherPane(paneId: PaneId): PaneId {
 }
 
 function applyEnabledClass(): void {
-  document.body.classList.toggle('synced-nav', State.syncNav.enabled);
-  const chip = document.getElementById('synced-nav-chip');
-  if (chip) chip.style.display = State.syncNav.enabled ? 'inline-flex' : 'none';
-  // Both pane toolbars carry a clone of the toggle button (data-el). Refresh
-  // the active class + tooltip on every one.
+  // Sync requires dual mode — without it there's no "other pane" to mirror
+  // into. State.syncNav.enabled may stay true across a dual-mode toggle so
+  // it auto-resumes when the right pane comes back; only the visible
+  // affordances are gated on dualMode.
+  const visible = State.syncNav.enabled && State.dualMode;
+  document.body.classList.toggle('synced-nav', visible);
   for (const p of ['left', 'right'] as PaneId[]) {
     const btn = paneEl('btn-sync-nav', p) as HTMLButtonElement | null;
     if (!btn) continue;
-    btn.classList.toggle('active', State.syncNav.enabled);
-    btn.title = State.syncNav.enabled
+    btn.classList.toggle('active', visible);
+    btn.title = visible
       ? `Navegación sincronizada ON · anclajes: ${State.syncNav.leftAnchor || '/'} ↔ ${State.syncNav.rightAnchor || '/'}`
       : 'Activar navegación sincronizada';
+    // Show "SYNC ON" text inline with the icon when active. Removing it
+    // when inactive returns the button to icon-only width. The icon
+    // <svg> is the first child (mounted from <i data-icon="link">);
+    // wipe any trailing text node siblings before deciding what to add.
+    const icon = btn.querySelector('svg');
+    if (!icon) continue;
+    // Remove any non-svg children (i.e. previous label spans / text).
+    [...btn.childNodes].forEach((n) => { if (n !== icon) n.parentNode?.removeChild(n); });
+    if (visible) {
+      const label = document.createElement('span');
+      label.className = 'btn-sync-nav-label';
+      label.textContent = 'SYNC ON';
+      btn.appendChild(label);
+    }
   }
 }
 
@@ -65,6 +79,10 @@ function applyEnabledClass(): void {
 // other modules (e.g. openFolderInOtherPane).
 export function setSyncNav(enabled: boolean): void {
   if (enabled === State.syncNav.enabled) return;
+  if (enabled && !State.dualMode) {
+    toast('Activa el segundo panel antes de sincronizar', 'info', 3000);
+    return;
+  }
   if (enabled) {
     // Capture anchors at the current prefixes.
     State.syncNav.leftAnchor = getPane('left').prefix;
@@ -182,10 +200,8 @@ export function initSyncNavToggle(): void {
     };
   }
 
-  // Wire the floating chip's dismiss link.
-  const chipDismiss = document.getElementById('synced-nav-chip-dismiss');
-  if (chipDismiss) {
-    chipDismiss.onclick = (): void => setSyncNav(false);
-  }
-  mountIcons($('synced-nav-chip'));
+  // Hide/show the button label + active styling when the user opens or closes
+  // the second pane. The state itself stays enabled so sync auto-resumes
+  // when the right pane returns.
+  subscribe('dualMode', applyEnabledClass);
 }

@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
 <title>S3 Explorer</title>
 <!--
   FOUC-prevention. Sets `<html data-theme>` BEFORE the stylesheet paints
@@ -123,14 +124,6 @@
 
   <!-- Two-pane wrapper. The right pane is cloned at runtime from the left by
        panes/init.ts when dual mode is enabled; it stays hidden otherwise. -->
-  <!-- Floating chip shown when sync nav is on. Hidden by default; CSS reveals
-       it via `body.synced-nav .synced-nav-chip { display: ... }`. -->
-  <div id="synced-nav-chip" class="synced-nav-chip" style="display:none">
-    <i data-icon="link" data-icon-size="12"></i>
-    <span>Sync ON</span>
-    <button class="chip-dismiss" id="synced-nav-chip-dismiss" title="Desactivar sincronización" aria-label="Desactivar sincronización"><i data-icon="close" data-icon-size="10"></i></button>
-  </div>
-
   <div class="panes-wrap" id="panes-wrap">
     <section class="pane active" data-pane="left">
       <header class="toolbar">
@@ -325,13 +318,13 @@
   <div class="modal">
     <header><h3>Conflicto de archivos</h3></header>
     <div class="modal-body">
-      <div class="warn-block">
+      <div class="warn-block" id="overwrite-warn-block">
         <i data-icon="warn" data-icon-size="18" style="color:var(--warn); flex-shrink:0; margin-top:1px"></i>
         <div style="flex:1">
           <strong id="overwrite-conflict-count">N</strong> archivo(s) ya existen en
-          <code id="overwrite-dest"></code> y el versionado de este bucket está
-          <strong style="color:var(--danger)">desactivado</strong>.
-          Sobrescribir es <strong>irreversible</strong>.
+          <code id="overwrite-dest"></code>. El versionado de este bucket está
+          <strong style="color:var(--danger)">desactivado</strong>:
+          reemplazar es <strong>irreversible</strong>.
         </div>
       </div>
       <div class="overwrite-list" id="overwrite-list"></div>
@@ -339,8 +332,9 @@
     </div>
     <footer>
       <button type="button" class="btn" id="btn-overwrite-cancel">Cancelar todo</button>
-      <button type="button" class="btn" id="btn-overwrite-skip">Subir solo los nuevos</button>
-      <button type="button" class="btn btn-danger-solid" id="btn-overwrite-all">Sobrescribir todos</button>
+      <button type="button" class="btn" id="btn-overwrite-skip">Saltar conflictos</button>
+      <button type="button" class="btn btn-danger-solid" id="btn-overwrite-all">Reemplazar todos</button>
+      <button type="button" class="btn btn-primary" id="btn-overwrite-rename">Renombrar y subir</button>
     </footer>
   </div>
 </div>
@@ -456,6 +450,10 @@
     </nav>
     <div class="modal-tab-content" data-tab-panel="password">
       <form id="form-change-password">
+        <!-- Hidden username field so the browser / password managers can
+             associate the password change with an account (a11y + autofill
+             guidance). Populated from the session in account.ts. -->
+        <input type="text" name="username" id="change-pw-username" autocomplete="username" hidden aria-hidden="true" tabindex="-1"/>
         <label>Contraseña actual <input name="current" type="password" required autocomplete="current-password"/></label>
         <label>Nueva contraseña <input name="next" type="password" required minlength="8" autocomplete="new-password"/></label>
         <p class="test-result" id="account-pw-msg"></p>
@@ -494,8 +492,8 @@
       <div style="margin-top:12px">
         <button type="button" class="btn" id="btn-toggle-create-user" data-expand="form-create-user"><i data-icon="plus"></i> Nuevo usuario</button>
         <form id="form-create-user" hidden style="display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:8px; align-items:end; margin-top:14px; padding:14px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px">
-          <label>Usuario <input name="username" required pattern="[a-zA-Z0-9_.\-]{2,32}"/></label>
-          <label>Contraseña inicial <input name="password" type="password" required minlength="8"/></label>
+          <label>Usuario <input name="username" required pattern="[a-zA-Z0-9_.\-]{2,32}" autocomplete="off"/></label>
+          <label>Contraseña inicial <input name="password" type="password" required minlength="8" autocomplete="new-password"/></label>
           <label>Rol
             <select name="role">
               <option value="user">Usuario</option>

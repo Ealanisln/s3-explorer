@@ -10,7 +10,18 @@ function escapeHtml(s: string): string {
 }
 
 export function initAccountForms(): void {
+  // Keep the hidden username field in the change-password form synced with
+  // the logged-in user so password managers associate the credential with
+  // the right account (and the browser's a11y warning goes away).
+  const syncPwUsername = (): void => {
+    const el = document.getElementById('change-pw-username') as HTMLInputElement | null;
+    const u = getCurrentUser();
+    if (el && u) el.value = u.username;
+  };
+  syncPwUsername();
+
   ($('form-change-password') as HTMLFormElement).onsubmit = async (e: Event): Promise<void> => {
+    syncPwUsername();
     e.preventDefault();
     const f = e.target as HTMLFormElement;
     const msg = $('account-pw-msg');
