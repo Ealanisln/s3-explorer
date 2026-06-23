@@ -897,11 +897,11 @@ body.is-resizing * { user-select: none !important; }
 }
 
 /* Dedicated "close this pane" button in the toolbar actions cluster.
-   Hidden by default. Visible ONLY on the RIGHT pane and ONLY when dual
-   mode is on — closing the left pane would be ambiguous, and the button
-   is meaningless in single-pane mode (nothing to close). */
+   Hidden in single-pane mode (nothing to close). Visible on BOTH panes in
+   dual mode so the user can close whichever one they want — closing the
+   left pane migrates the right pane's content into the single view. */
 .btn-close-pane { display: none; }
-.panes-wrap.dual .pane[data-pane="right"] .btn-close-pane { display: inline-grid; }
+.panes-wrap.dual .btn-close-pane { display: inline-grid; }
 .btn-close-pane:hover { color: var(--danger); background: var(--danger-soft); }
 
 /* ============================================================
