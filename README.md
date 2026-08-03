@@ -1,206 +1,132 @@
 # S3 Explorer
 
-Consola web tipo MinIO para administrar buckets en cualquier almacenamiento compatible con S3 (AWS S3, MinIO, Vultr, Wasabi, Backblaze B2, Cloudflare R2, DigitalOcean Spaces).
+**A MinIO-like web console for any S3-compatible storage.**
 
-**Funcionalidades:**
-- Multi-conexión: cada usuario define sus propios endpoints y credenciales.
-- Bóveda local cifrada (AES-256-GCM) — las credenciales S3 nunca se guardan en el servidor.
-- Explorador de dos paneles: navegación independiente, "abrir en segundo panel", navegación sincronizada estilo FileZilla, y cierre de cualquiera de los dos paneles.
-- Subida con resolución de conflictos: reemplazar / renombrar (auto-sufijo) / saltar cuando el archivo ya existe.
-- CRUD de carpetas: crear, renombrar, eliminar (con delete-marker o purga) y restaurar.
-- Búsqueda recursiva en streaming con agrupación por carpetas y alcance por prefijo.
-- Versionado con vista de versiones anteriores, restaurar, mostrar eliminados.
-- Preview inline para imágenes, video, audio, PDF, código.
-- Enlaces temporales firmados (5min / 1h / 24h).
-- Login con usuario + contraseña + TOTP (Google Authenticator); códigos de recuperación de 128 bits; sin replay de TOTP.
-- Gestión de usuarios desde la UI (admin).
-- Audit log JSON line a stdout.
+Self-hosted, multi-user file explorer for object storage. Each user brings their own S3 endpoints and credentials — the server never stores S3 keys. Built with Node.js + TypeScript + Express, a dependency-light vanilla TypeScript SPA, and SQLite. Ships as a two-container Docker Compose stack (app + Caddy with automatic TLS).
 
----
+<!-- Badges: add CI / license / release badges once the repo is public -->
 
-## Requisitos
+## Features
 
-- Servidor Linux con Docker y Docker Compose v2.
-- Puertos 80 y 443 abiertos.
-- Para Let's Encrypt automático: dominio público con DNS apuntando al servidor.
-- Para deploy interno: nombre de host accesible en la red corporativa.
-- **Full Disk Encryption (FDE)** en el host de producción (LUKS / dm-crypt en Linux, BitLocker en Windows). El volumen `users_data` contiene hashes bcrypt y secrets TOTP cifrados; aún así, FDE es defensa-en-profundidad contra robo físico u offline-clone del disco. Sin FDE, asumir que cualquier persona con acceso físico al servidor puede leer los datos en reposo.
+**Explorer**
 
----
+- **Multi-connection** — each user defines their own endpoints and credentials, and can connect to several providers at once.
+- **Client-side encrypted vault** — S3 credentials are encrypted in the browser with AES-256-GCM (key derived via PBKDF2, 250k iterations, from a user passphrase) and stored in `localStorage`. Credentials reach the server only as transient per-request headers and are never persisted or logged.
+- **Dual-pane explorer** — independent navigation per pane, per-pane back/forward history (Alt+←/→), "open in second pane", FileZilla-style synchronized navigation, and the ability to close either pane.
+- **Transfers between connections** — recursive copy/move of folders across buckets and even across different providers, with concurrency and safety caps.
+- **Uploads with conflict resolution** — replace / rename (auto-suffix) / skip when the file already exists.
+- **Folder CRUD** — create, rename, delete (delete-marker or purge) and restore; deleted folders are flagged with a badge.
+- **Streaming recursive search** — NDJSON streaming results grouped by folder, scoped to the current prefix, with folder-name matching and a per-user SQLite FTS5 index for fast key search.
+- **Object versioning** — browse previous versions, restore, and show deleted objects. Suspending versioning is rejected server-side to prevent accidental data loss.
+- **Inline previews** — images, video, audio, PDF, and code.
+- **Presigned share links** — temporary signed URLs (5 min / 1 h / 24 h presets, configurable caps).
 
-## Instalación
+**Security**
 
-### 1. Clonar el repositorio
+- **TOTP two-factor authentication** — mandatory enrollment on first login (works with Google Authenticator, Authy, 1Password, etc.), with replay prevention: a used TOTP code cannot be reused within its validity window.
+- **argon2id password hashing** (legacy bcrypt hashes are verified and transparently upgraded on login) and optional Have-I-Been-Pwned breach checks (k-anonymity) for new passwords.
+- **128-bit single-use recovery codes**, bcrypt-hashed at rest.
+- **Login rate limiting** — 5 attempts / 15 min per username + IP on both password and TOTP steps.
+- **SSRF / cloud-metadata protection** — user-supplied S3 endpoints are validated; IMDS and other cloud metadata endpoints (`169.254.0.0/16` in any IP encoding, GCP/Azure metadata hosts) are blocked by default, with optional endpoint deny/allow lists.
+- **Hardened by default** — strict CSP with no inline scripts, host/origin allowlists (CSRF + DNS-rebinding defense), HMAC-signed httpOnly cookies, read-only container with `cap_drop: ALL`, and TOTP secrets encrypted at rest (AES-256-GCM).
+- **Admin user management UI** and a JSON-line audit log on stdout.
+
+> **Note:** the UI is currently in Spanish. Internationalization contributions are welcome.
+
+## Works with
+
+Any S3-compatible endpoint, including:
+
+- AWS S3
+- MinIO
+- Vultr Object Storage
+- Cloudflare R2
+- Backblaze B2
+- Wasabi, DigitalOcean Spaces, and others
+
+## Screenshots
+
+<!-- TODO: add screenshots (login + TOTP enrollment, dual-pane explorer, version browser, search) -->
+
+## Quick start
+
+### Docker Compose (recommended)
+
+Requires Docker with Compose v2, ports 80/443 open, and (for automatic Let's Encrypt) a public DNS name pointing at the host.
 
 ```bash
-git clone git@gitlab.com:<grupo>/s3-explorer.git
+git clone <repo-url> s3-explorer
 cd s3-explorer
-```
-
-> Si es la primera vez en el servidor: configura tu identidad git y la llave SSH antes:
-> ```bash
-> git config --global user.name "Nombre Apellido"
-> git config --global user.email "usuario@empresa.com"
-> ssh-keygen -t ed25519 -C "deploy@s3-explorer-prod"  # pega la pub key en GitLab → Settings → SSH Keys
-> ```
-
-### 2. Crear el archivo `.env`
-
-```bash
 cp .env.example .env
-```
 
-Genera los 3 secretos requeridos:
-
-```bash
+# Generate the required secrets and paste them into .env:
 echo "ADMIN_PASS=$(openssl rand -base64 24 | tr -d '+/=' | head -c 20)"
 echo "SESSION_SECRET=$(openssl rand -hex 32)"
 echo "TOTP_ENCRYPTION_KEY=$(openssl rand -hex 32)"
-```
 
-Pega esos 3 valores en `.env`. Configura también el dominio y usuario admin:
-
-```env
-DOMAIN=s3.empresa.com           # tu FQDN
-ADMIN_USER=admin                # usuario inicial (cámbialo si quieres)
-```
-
-Los valores de `SESSION_TTL_SECONDS`, `MAX_UPLOAD_BYTES`, y `CHECK_HIBP` ya tienen defaults razonables — modifícalos solo si necesitas cambios específicos.
-
-> ⚠️ **No rotes `TOTP_ENCRYPTION_KEY` después del primer enrolamiento.** Si lo cambias, todos los usuarios pierden su TOTP y el admin tiene que resetearles desde la UI. Guarda este valor en tu password manager corporativo.
-
-### 3. Modo de TLS
-
-**A) Dominio público con Let's Encrypt automático** (recomendado para internet):
-
-- Asegúrate que el DNS A/AAAA de `DOMAIN` apunte al servidor.
-- Caddy negocia el certificado automáticamente al arrancar.
-- Renueva los certificados solo.
-
-No requiere acción extra.
-
-**B) Dominio interno con CA local de Caddy** (intranet sin DNS público):
-
-Edita `Caddyfile` y descomenta la línea `tls internal`:
-
-```caddyfile
-{$DOMAIN} {
-    tls internal
-    ...
-}
-```
-
-Luego de levantar, exporta el root cert y distribúyelo a los usuarios (Group Policy, MDM, manual):
-
-```bash
-docker exec s3-explorer-caddy cat /data/caddy/pki/authorities/local/root.crt > caddy-root.crt
-```
-
-Cada usuario instala `caddy-root.crt` en su SO como CA confiable (Windows: doble click → Equipo local → Entidades de certificación raíz de confianza).
-
-### 4. Levantar el stack
-
-```bash
+# Set DOMAIN (and ADMIN_USER if you want) in .env, then:
 docker compose up -d --build
-```
-
-Verifica:
-
-```bash
-docker compose ps
 docker compose logs -f s3-explorer
 ```
 
-Debes ver:
+Open `https://<your-domain>`, log in with `ADMIN_USER` / `ADMIN_PASS`, enroll TOTP, and save your recovery codes.
 
-```
-admin_bootstrapped username=admin
-S3 Explorer listening on http://0.0.0.0:4569
-  - Auth: username + password + TOTP
-  - Max upload: 500 MB
-```
+TLS modes (see `Caddyfile`):
 
-### 5. Deploy en Coolify (alternativa a docker compose)
+- **Public domain** — Caddy provisions and renews Let's Encrypt certificates automatically. No extra action.
+- **Intranet** — uncomment `tls internal` in the `Caddyfile`; Caddy generates a local CA whose root certificate you distribute to users.
 
-Coolify v4 por defecto despliega aplicaciones en modo **"Dockerfile-only application"** y **NO interpreta el `docker-compose.yml`** del repo (ignora `volumes:`, `environment:`, el contenedor de Caddy y la red). Si esa es la ruta que vas a usar, hay que configurar dos cosas en el UI antes del primer redeploy o perderás los TOTP enrolados cada vez:
+> **Do not rotate `TOTP_ENCRYPTION_KEY` after the first enrollment.** Rotating it makes every enrolled TOTP secret undecryptable; the admin would have to reset TOTP for all users. Keep it in your password manager.
 
-1. **Environment Variables → Add:**
-   - `DATA_DIR=/data` — sin esto la app cae al fallback `__dirname/../../data` que resuelve a `/app/data` (dentro de la imagen, se rehace en cada build).
-   - El resto de variables del `.env` (`ADMIN_USER`, `ADMIN_PASS`, `SESSION_SECRET`, `TOTP_ENCRYPTION_KEY`, `DOMAIN`, `ALLOWED_HOSTS`, `ALLOWED_ORIGINS`, etc.) — Coolify NO las lee del `.env` del repo.
+### Plain Node (no Docker)
 
-2. **Persistent Storage → + Add → Volume Mount:**
-   - **Volume Name:** `s3-explorer-data`
-   - **Destination Path in container:** `/data`
-   - **Source Path:** vacío (managed volume)
-
-Verificación post-deploy:
+Requires Node.js 20+.
 
 ```bash
-# El mount debe ser un named volume, NO un hash random
-docker inspect <coolify-container> --format '{{json .Mounts}}'
-# Esperado: "Name": "s3-explorer-data", no "Name": "9a73c926f..."
-
-# /data debe contener la DB SQLite tras el primer login
-docker exec <coolify-container> ls /data
-# Esperado: app.db  app.db-shm  app.db-wal
+npm install
+npm run build              # tsc -b → dist/ + public/dist/
+SESSION_SECRET=$(openssl rand -hex 32) \
+TOTP_ENCRYPTION_KEY=$(openssl rand -hex 32) \
+ADMIN_USER=admin ADMIN_PASS=change-me \
+DATA_DIR=./data \
+npm start                  # listens on http://127.0.0.1:4569
 ```
 
-Si quieres usar el stack completo de `docker-compose.yml` (con Caddy + healthcheck + cap_drop + read-only FS), cambia el deploy type en Coolify a **"Docker Compose"** en lugar de "Dockerfile". En ese caso el bloque `volumes:` y `environment:` del compose sí surten efecto y este paso 5 no aplica.
+Without a reverse proxy in front you should set `SECURE_COOKIE=0` for plain-HTTP local testing only — always run behind HTTPS in production.
 
----
+## Configuration
 
-## Primer login (admin)
+All configuration is environment-driven (see `.env.example` for generation commands and extended notes).
 
-1. Abre `https://<tu-dominio>` en el navegador.
-2. Login con `ADMIN_USER` / `ADMIN_PASS` del `.env`.
-3. La app te lleva al **enrolamiento TOTP**: escanea el QR con Google Authenticator, Authy, 1Password, o Microsoft Authenticator. Ingresa el código de 6 dígitos para confirmar.
-4. **Guarda los 8 códigos de recuperación** en un lugar seguro (1Password, papel impreso). Son tu salvavidas si pierdes el celular. No se vuelven a mostrar.
-5. Ya estás dentro.
+| Variable | Default | Description |
+|---|---|---|
+| `DOMAIN` | — | Public or internal FQDN (required by the Compose stack; used for Caddy TLS and the host/origin allowlists) |
+| `ADMIN_USER` | — | Initial admin username (honored only on first boot, while no users exist) |
+| `ADMIN_PASS` | — | Initial admin password (change it from the UI after first login) |
+| `SESSION_SECRET` | ephemeral random | HMAC-SHA256 key for signing session cookies. **Must be set in production** (the app refuses to start without it when `NODE_ENV=production`). Generate: `openssl rand -hex 32` |
+| `TOTP_ENCRYPTION_KEY` | ephemeral random | AES-256-GCM key (64 hex chars) encrypting TOTP secrets at rest. **Must be set in production**; never rotate after enrollment. Generate: `openssl rand -hex 32` |
+| `SESSION_TTL_SECONDS` | `14400` (4 h) | Absolute session lifetime from login |
+| `MAX_UPLOAD_BYTES` | `524288000` (500 MB) | Per-file upload limit |
+| `CHECK_HIBP` | `1` | Check new passwords against Have I Been Pwned (k-anonymity; fails open if unreachable) |
+| `ALLOWED_HOSTS` | `localhost:4569,...` | Accepted `Host` headers (DNS-rebinding defense). The Compose stack sets it from `${DOMAIN}` |
+| `ALLOWED_ORIGINS` | `https://${DOMAIN}` (compose) | Accepted `Origin` values (CSRF defense) |
+| `MAX_PRESIGN_SECONDS` | `86400` (24 h) | Upper cap for presigned-link TTL |
+| `DEFAULT_PRESIGN_SECONDS` | `300` (5 min) | Presigned-link TTL when the client does not specify one |
+| `DATA_DIR` | `/data` (Docker) | Where the SQLite DB (`app.db`) and per-user search index live. Must be a persistent volume |
+| `DB_PATH` | `${DATA_DIR}/app.db` | Override the SQLite database path |
+| `HOST` | `127.0.0.1` | Bind address (`0.0.0.0` inside Docker) |
+| `PORT` | `4569` | HTTP port |
+| `SECURE_COOKIE` | `1` | Set the `Secure` flag on cookies (requires HTTPS) |
+| `TRUST_PROXY` | unset | Set to `1` behind a reverse proxy so rate limiting and audit logs see real client IPs |
+| `TRANSFER_CONCURRENCY` | `4` | Parallel workers per recursive folder transfer (max 16) |
+| `TRANSFER_MAX_PREFIX_ITEMS` | `100000` | Safety cap: refuse to transfer prefixes with more objects than this |
+| `BLOCK_METADATA_ENDPOINTS` | `1` | Block cloud metadata endpoints (IMDS, GCP, Azure) as S3 endpoints |
+| `S3_DENY_HOSTS` | empty | Extra comma-separated hostnames to deny as S3 endpoints |
+| `S3_ALLOW_HOSTS` | empty | Opt-in allowlist: when set, **only** these hostnames are accepted as S3 endpoints (strongest SSRF posture) |
 
----
+### Minimum IAM permissions (AWS)
 
-## Crear usuarios para el equipo
-
-Como admin, click en el ícono **👥** abajo en la barra lateral.
-
-1. **Crear usuario:** username + contraseña inicial (mín. 8 chars) + rol (User / Admin).
-2. Comparte por canal seguro (1Password Send, Bitwarden Send) la contraseña inicial al usuario.
-3. El usuario en su primer login:
-   - Es forzado a cambiar la contraseña.
-   - Enrola su TOTP.
-   - Guarda sus códigos de recuperación.
-
-**Acciones disponibles por usuario:**
-- 🔑 Resetear TOTP (lo obliga a re-enrolar).
-- 🔒 Resetear contraseña (lo obliga a cambiarla en el siguiente login).
-- ⏸ Deshabilitar (su sesión actual expira en máximo `SESSION_TTL_SECONDS`).
-- ▶ Re-habilitar.
-
----
-
-## Crear una conexión S3 (cada usuario)
-
-En la barra lateral, **+** junto a "Conexiones":
-
-| Campo | Notas |
-|---|---|
-| Nombre | Cualquier alias |
-| Endpoint | URL completa o vacío para AWS S3 oficial |
-| Región | `us-east-1` default; ajusta según el proveedor |
-| Path-style | ON para MinIO/Vultr/etc., OFF para AWS |
-| Access Key / Secret Key | Credenciales del proveedor |
-| Session Token | Solo si usas STS temporal |
-| **Buckets** | Opcional. Si tu IAM no permite `s3:ListAllMyBuckets`, lista aquí los buckets uno por línea. |
-
-Botón **Probar** valida antes de guardar. Si especificaste buckets, valida con `HeadBucket`. Si no, con `ListBuckets`.
-
-**La primera vez** que guardes una conexión, la app te pide crear una **passphrase de bóveda**. Esta passphrase cifra tus conexiones localmente con AES-256-GCM derivado de PBKDF2 (250k iteraciones). **No se envía al servidor.** Si la olvidas, debes recrear tus conexiones.
-
----
-
-## Permisos IAM mínimos (AWS)
-
-Para que un usuario pueda usar la app sin `s3:ListAllMyBuckets`:
+Users without `s3:ListAllMyBuckets` can list their buckets explicitly in the connection form. The minimum per-bucket policy is:
 
 ```json
 {
@@ -208,234 +134,34 @@ Para que un usuario pueda usar la app sin `s3:ListAllMyBuckets`:
   "Statement": [{
     "Effect": "Allow",
     "Action": [
-      "s3:ListBucket",
-      "s3:ListBucketVersions",
-      "s3:GetObject",
-      "s3:GetObjectVersion",
+      "s3:ListBucket", "s3:ListBucketVersions",
+      "s3:GetObject", "s3:GetObjectVersion",
       "s3:PutObject",
-      "s3:DeleteObject",
-      "s3:DeleteObjectVersion",
-      "s3:GetBucketVersioning",
-      "s3:PutBucketVersioning"
+      "s3:DeleteObject", "s3:DeleteObjectVersion",
+      "s3:GetBucketVersioning", "s3:PutBucketVersioning"
     ],
-    "Resource": [
-      "arn:aws:s3:::mi-bucket-1",
-      "arn:aws:s3:::mi-bucket-1/*",
-      "arn:aws:s3:::mi-bucket-2",
-      "arn:aws:s3:::mi-bucket-2/*"
-    ]
+    "Resource": ["arn:aws:s3:::my-bucket", "arn:aws:s3:::my-bucket/*"]
   }]
 }
 ```
 
-En MinIO/Vultr/etc. usa la política equivalente del proveedor.
-
----
-
-## Variables de entorno
-
-| Variable | Default | Descripción |
-|---|---|---|
-| `DOMAIN` | — | FQDN público o interno (requerido) |
-| `ADMIN_USER` | — | Usuario admin inicial (solo se usa al primer arranque) |
-| `ADMIN_PASS` | — | Contraseña admin inicial (cámbiala desde la UI tras el primer login) |
-| `SESSION_SECRET` | aleatorio efímero | Clave HMAC para firmar cookies. **DEBE estar set en producción.** Generar: `openssl rand -hex 32` |
-| `TOTP_ENCRYPTION_KEY` | aleatorio efímero | Clave AES-256-GCM (64 hex chars) para cifrar TOTP secrets en `users.json`. **DEBE estar set en producción** o los TOTP enrolados se invalidan al reiniciar. Generar: `openssl rand -hex 32` |
-| `SESSION_TTL_SECONDS` | `14400` (4h) | TTL absoluto de la sesión desde el login |
-| `MAX_UPLOAD_BYTES` | `524288000` (500 MB) | Límite por archivo subido |
-| `ALLOWED_HOSTS` | `localhost:4569,...` | Host headers aceptados (CSRF/DNS rebinding). Docker compose lo setea con `${DOMAIN}` |
-| `ALLOWED_ORIGINS` | `https://${DOMAIN}` | Origins aceptados |
-| `MAX_PRESIGN_SECONDS` | `86400` (24h) | Tope máximo del TTL de enlaces firmados |
-| `DEFAULT_PRESIGN_SECONDS` | `300` (5min) | TTL default si el cliente no especifica |
-| `DATA_DIR` | `/data` | Donde se guarda la DB SQLite (`app.db`) y el índice de archivos. Debe apuntar a un volumen persistente. |
-| `SECURE_COOKIE` | `1` | Pone `Secure` flag en cookies (requiere HTTPS) |
-| `TRUST_PROXY` | `1` | Confía en headers X-Forwarded-* del reverse proxy |
-
----
-
-## Flujo de desarrollo (GitLab)
-
-El repo está en GitLab y vive con flujo de **merge requests** (no se commitea directo a `main`).
-
-### Para hacer un cambio
+## Development
 
 ```bash
-git checkout main && git pull
-git checkout -b feat/mi-cambio       # o fix/, chore/, security/
-# ... edita archivos ...
-git add .
-git commit -m "feat: descripción corta del cambio"
-git push -u origin feat/mi-cambio
+npm install
+npm run build          # tsc -b → dist/ (server) + public/dist/ (SPA)
+npm run typecheck      # tsc -b --noEmit
+npm test               # vitest run (unit + integration, mocked S3)
+npm run test:unit
+npm run test:integration
+npm run test:coverage
+npm run watch          # incremental rebuild
 ```
 
-GitLab muestra un link "Create merge request" en el push output. Ábrelo, asigna reviewer.
+Layout: server code in `src/` (Express, better-sqlite3 with versioned migrations, AWS SDK v3), frontend in `public/src/` (framework-less TypeScript SPA, no bundler), tests in `tests/`. See `CLAUDE.md` for an architecture walkthrough and `SECURITY.md` for the security model, deployment hardening checklist, and vulnerability reporting.
 
-### Reglas de CI (configurar una vez en GitLab)
+CI runs typecheck, the vitest suite, and secret scanning (gitleaks) on every push and pull request.
 
-**Project Settings → Merge Requests:**
-- ✅ "Pipelines must succeed"
-- ✅ "All threads must be resolved"
-- ✅ "Squash commits when merging" (opcional, deja un historial limpio)
-- ✅ Method: "Merge commit with semi-linear history"
+## License
 
-**Project Settings → Repository → Protected branches → `main`:**
-- "Allowed to merge": Maintainers
-- "Allowed to push": **No one** (forzar MR)
-
-Con esto, ni siquiera el creator del repo puede pisar `main` directo — todo pasa por MR + CI.
-
-### Pipelines CI
-
-El archivo `.gitlab-ci.yml` define 6 jobs en 3 stages:
-
-| Stage | Job | Qué hace |
-|---|---|---|
-| `quality` | `secrets` | gitleaks busca secretos accidentales en la diff |
-| `quality` | `audit` | `npm audit --audit-level=high` |
-| `quality` | `lint` | Syntax check JS + hadolint del Dockerfile |
-| `quality` | `caddyfile` | `caddy validate` del Caddyfile |
-| `build` | `image-scan` | Build de la imagen + Trivy CVE scan (HIGH/CRITICAL) |
-| `gate` | `ci-gate` | Resumen final — úsalo como required-check en MRs |
-
-Corren en cada push y cada MR. La duración típica es ~3-5 min. El stage `build` necesita Docker-in-Docker (disponible en shared runners de GitLab.com gratis).
-
-### Renovate (auto-update de dependencias)
-
-`renovate.json` ya está en el repo. Para activarlo en GitLab.com:
-
-1. Crea cuenta gratis en https://www.mend.io/free-developer-tools/renovate/ (Mend hospeda Renovate Bot para GitLab.com)
-2. Autoriza la app, selecciona el proyecto
-3. Renovate abre el primer MR de "Configure Renovate" — mergéalo
-4. A partir de ahí, cada lunes Renovate abre MRs con updates de npm, Docker base images, GitLab CI components y digests
-
-Para self-hosted GitLab: instala el Renovate runner en uno de sus runners (~30 min).
-
-### Deploy en el servidor de producción
-
-```bash
-# Primera vez:
-git clone git@gitlab.com:<grupo>/s3-explorer.git
-cd s3-explorer
-cp .env.example .env
-# ... edita .env con secretos ...
-docker compose up -d --build
-
-# Actualizaciones (después de merge a main):
-git pull origin main
-docker compose up -d --build
-docker compose logs -f --tail=50
-```
-
-> Tu `.env` está gitignored y nunca viaja en commits. Cada servidor tiene su propio `.env` que NO se versiona.
-
----
-
-## Operaciones
-
-### Ver logs
-
-```bash
-docker compose logs -f s3-explorer       # solo la app
-docker compose logs -f caddy             # solo el proxy/TLS
-docker compose logs --tail=100 -f        # ambos
-```
-
-El audit log son JSON lines en stdout de s3-explorer:
-
-```json
-{"t":"...","event":"login_ok","username":"juan","ip":"10.0.0.5","jti":"abc..."}
-{"t":"...","event":"totp_fail","username":"juan","ip":"10.0.0.5"}
-{"t":"...","event":"user_created","by":"admin","username":"juan","role":"user"}
-{"t":"...","event":"versioning_enabled","username":"admin","bucket":"my-bucket"}
-```
-
-Si tienes ELK/Loki/Splunk, redirige stdout para auditoría centralizada.
-
-### Backup de usuarios
-
-```bash
-docker compose cp s3-explorer:/data/users.json ./users-backup-$(date +%F).json
-```
-
-El archivo contiene `bcrypt` hashes de passwords y los secrets TOTP de cada usuario. **Trátalo como secret** (cifra en reposo, no lo commitees).
-
-### Backup de certificados Caddy (Let's Encrypt)
-
-```bash
-docker run --rm -v s3-explorer_caddy_data:/data -v $(pwd):/backup alpine tar czf /backup/caddy-data-$(date +%F).tar.gz -C /data .
-```
-
-Si pierdes este volumen, Caddy re-emite certs automáticamente (sin downtime perceptible pero cuenta contra el rate-limit de Let's Encrypt).
-
-### Reiniciar / actualizar
-
-```bash
-git pull
-docker compose up -d --build
-```
-
-Reiniciar **invalida todas las sesiones activas** (la lista de revocación está en memoria). Los usuarios deben volver a logearse.
-
-### Detener / borrar todo
-
-```bash
-docker compose down              # detiene, conserva datos
-docker compose down -v           # detiene + borra users.json, certs Caddy (DESTRUCTIVO)
-```
-
----
-
-## Troubleshooting
-
-**"Host not allowed"** al entrar al sitio
-→ `ALLOWED_HOSTS` en el server no incluye tu dominio. Verifica `DOMAIN` en `.env`. Docker compose pasa `ALLOWED_HOSTS=${DOMAIN}` automáticamente.
-
-**Caddy reinicia en loop con "wrong argument count for email"**
-→ Versión vieja del Caddyfile con `email {$ACME_EMAIL}` cuando ACME_EMAIL está vacío. Asegúrate que tu Caddyfile no tiene esa línea (debe estar comentada o eliminada).
-
-**Cliente ve "InvalidAccessKeyId" o `not authorized for s3:ListAllMyBuckets`**
-→ La IAM del cliente no tiene `s3:ListAllMyBuckets`. Edita la conexión y agrega los buckets manualmente en el campo "Buckets" (uno por línea).
-
-**Usuario olvidó passphrase de bóveda**
-→ La passphrase es local; el servidor no la tiene. El usuario debe entrar a su navegador, abrir DevTools → Application → Local Storage → borrar `s3-explorer-vault-v1` y recrear sus conexiones desde cero.
-
-**Usuario perdió celular con TOTP**
-→ Si tiene códigos de recuperación, usa uno (8 disponibles, uno por uso). Si no, el admin entra a "Usuarios" y le hace **Resetear TOTP**: en el siguiente login se le pide re-enrolar.
-
-**Quiero matar todas las sesiones ahora (incidente de seguridad)**
-→ `docker compose restart s3-explorer`. La in-memory revocation list se pierde pero `SESSION_SECRET` permanece, así que las cookies viejas siguen siendo firmas válidas. Para invalidar de verdad: regenera `SESSION_SECRET` en `.env` y reinicia. Todos relogean.
-
-**El stack está en healthy pero https da 502**
-→ Caddy aún no tiene cert. Mira `docker compose logs caddy` — probablemente DNS o puerto 80 bloqueado. Mientras se resuelve, Caddy sirve HTTP en 80 con un challenge ACME activo.
-
-**Quiero rotar `SESSION_SECRET`**
-→ Cambia el valor en `.env`, `docker compose up -d --force-recreate s3-explorer`. Todas las sesiones existentes quedan inválidas y los usuarios relogean.
-
----
-
-## Modelo de seguridad
-
-| Capa | Mecanismo | Qué protege |
-|---|---|---|
-| Transport | TLS via Caddy (Let's Encrypt o CA local) | Snooping del Wi-Fi/LAN |
-| Auth | Username + password (bcrypt cost 11) + TOTP (HMAC-SHA1) | Acceso no autorizado al app |
-| Sesión | Cookie firmada HMAC-SHA256, httpOnly, secure, sameSite=strict, TTL absoluto | Robo de cookie (XSS, MitM) |
-| CSRF | Origin/Host allowlist | Sites maliciosos haciendo requests |
-| Content | CSP estricto + nosniff + X-Frame-Options DENY | XSS / clickjacking |
-| Bóveda S3 | AES-256-GCM con clave PBKDF2 de passphrase del usuario, almacenada solo en navegador | Volcado de localStorage / acceso al perfil del navegador |
-| Versionado | Backend rechaza desactivarlo | Pérdida accidental de datos |
-| Inline preview | Force `text/plain` para HTML/SVG/JS/XML | XSS de same-origin via blobs |
-| Rate limit | Login y TOTP: 5 intentos / 15 min / IP+user | Brute force |
-
-**Lo que NO protege:**
-- Acceso físico al equipo del usuario con sesión activa → atacante puede operar como el user (la passphrase de bóveda se cachea en memoria del browser hasta cerrar la pestaña).
-- Compromiso del servidor → atacante puede leer `users.json` (passwords hasheados, secrets TOTP en claro).
-- Phishing — si el usuario teclea su password+TOTP en un sitio falso, el atacante puede entrar antes que expire el código (30s).
-
-Para entornos de alto riesgo, considera FIDO2/WebAuthn (no implementado).
-
----
-
-## Licencia
-
-[Define según tu organización]
+[MIT](LICENSE) © 2026 Emmanuel Alanis

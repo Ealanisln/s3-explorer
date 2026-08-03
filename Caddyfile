@@ -2,7 +2,7 @@
 # S3 Explorer — Caddy reverse proxy with automatic TLS
 # =============================================================================
 # DOMAIN env var controls TLS mode:
-#   - Public FQDN (e.g. s3.empresa.com) → Caddy auto-provisions Let's Encrypt.
+#   - Public FQDN (e.g. s3.example.com) → Caddy auto-provisions Let's Encrypt.
 #     Requires: DNS A/AAAA record pointing here + ports 80/443 reachable.
 #   - Internal-only host (e.g. s3.intranet.local) → comment out the global
 #     email block below and uncomment "tls internal" inside the site block.
@@ -13,7 +13,7 @@
 {
 	# Optional: ACME email for Let's Encrypt cert-expiry notifications.
 	# Add manually if you want notifications, e.g.:
-	#   email ti@empresa.com
+	#   email admin@example.com
 	#
 	# Uncomment for staging Let's Encrypt while testing (avoids rate limits):
 	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
