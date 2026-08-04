@@ -1301,6 +1301,11 @@ tr.deleted .badge-deleted {
   text-transform: uppercase;
   color: var(--text-mute);
 }
+/* The author `display: block` below would override the UA's display:none for
+   [hidden] inputs (e.g. the autofill-only username field in the password
+   form), rendering a ghost field. */
+.modal form input[hidden] { display: none !important; }
+
 .modal form input[type=text],
 .modal form input[type=password],
 .modal form input:not([type]),
