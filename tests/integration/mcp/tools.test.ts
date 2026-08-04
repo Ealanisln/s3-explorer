@@ -44,8 +44,8 @@ function clientFor(token: string): S3xClient {
     s3: {
       endpoint: 'https://test-minio.local',
       region: 'us-east-1',
-      accessKey: 'AKIATEST',
-      secretKey: 'secretTESTvalue',
+      accessKey: 'test-access-key',
+      secretKey: 'test-secret-key-value',
       pathStyle: 'true',
     },
   });

@@ -10,8 +10,8 @@ function validEnv(): NodeJS.ProcessEnv {
   return {
     S3X_BASE_URL: 'http://127.0.0.1:4569',
     S3X_API_TOKEN: 's3x_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-    S3X_S3_ACCESS_KEY_ID: 'AKIATEST',
-    S3X_S3_SECRET_ACCESS_KEY: 'super-secret-value',
+    S3X_S3_ACCESS_KEY_ID: 'test-access-key',
+    S3X_S3_SECRET_ACCESS_KEY: 'test-secret-key-value',
   };
 }
 
