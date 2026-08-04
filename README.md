@@ -8,6 +8,8 @@ Self-hosted, multi-user file explorer for object storage. Each user brings their
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/Ealanisln/s3-explorer)](https://github.com/Ealanisln/s3-explorer/releases)
 
+![S3 Explorer — Your buckets. Your server. Your keys.](docs/brand/01-github-og-1280x640.png)
+
 ## Features
 
 **Explorer**
