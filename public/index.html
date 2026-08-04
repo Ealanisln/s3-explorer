@@ -16,6 +16,10 @@
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+<!-- i18n: elements carry data-i18n / data-i18n-html / data-i18n-placeholder /
+     data-i18n-title / data-i18n-aria-label keys resolved by
+     public/src/i18n/index.ts at boot and on language switch. The Spanish text
+     in the markup stays as the pre-boot fallback. -->
 
 <!-- ============================================================
      Auth overlay — covers entire viewport until user is logged in
@@ -26,60 +30,60 @@
       <div class="brand-mark">S3</div>
       <div>
         <div class="brand-title">S3 Explorer</div>
-        <div class="brand-sub">Inicio de sesión</div>
+        <div class="brand-sub" data-i18n="auth.brandSub">Inicio de sesión</div>
       </div>
     </div>
 
     <!-- Login step 1: password -->
     <form id="auth-login-form" class="auth-form" style="display:none">
-      <label>Usuario <input name="username" autocomplete="username" required autofocus/></label>
-      <label>Contraseña <input name="password" type="password" autocomplete="current-password" required/></label>
+      <label><span data-i18n="auth.username">Usuario</span> <input name="username" autocomplete="username" required autofocus/></label>
+      <label><span data-i18n="auth.password">Contraseña</span> <input name="password" type="password" autocomplete="current-password" required/></label>
       <p class="test-result err" id="auth-login-error"></p>
-      <button type="submit" class="btn btn-primary auth-submit">Continuar</button>
+      <button type="submit" class="btn btn-primary auth-submit" data-i18n="auth.continue">Continuar</button>
     </form>
 
     <!-- Login step 2: TOTP -->
     <form id="auth-totp-form" class="auth-form" style="display:none">
-      <p class="hint" style="margin-top:0">Ingresa el código de 6 dígitos de tu app de autenticación (Google Authenticator, Authy, 1Password) o un código de recuperación.</p>
-      <label>Código <input name="code" autocomplete="one-time-code" inputmode="text" required autofocus placeholder="123456 o xxxxx-xxxxx"/></label>
+      <p class="hint" style="margin-top:0" data-i18n="auth.totpHint">Ingresa el código de 6 dígitos de tu app de autenticación (Google Authenticator, Authy, 1Password) o un código de recuperación.</p>
+      <label><span data-i18n="auth.code">Código</span> <input name="code" autocomplete="one-time-code" inputmode="text" required autofocus placeholder="123456 o xxxxx-xxxxx" data-i18n-placeholder="auth.codePlaceholder"/></label>
       <p class="test-result err" id="auth-totp-error"></p>
-      <button type="submit" class="btn btn-primary auth-submit">Iniciar sesión</button>
-      <button type="button" class="btn auth-back" id="auth-totp-back">← Cancelar</button>
+      <button type="submit" class="btn btn-primary auth-submit" data-i18n="auth.signIn">Iniciar sesión</button>
+      <button type="button" class="btn auth-back" id="auth-totp-back" data-i18n="auth.backCancel">← Cancelar</button>
     </form>
 
     <!-- TOTP enrollment -->
     <div id="auth-enroll" class="auth-form" style="display:none">
-      <p class="hint" style="margin-top:0">
+      <p class="hint" style="margin-top:0" data-i18n="auth.enrollIntro">
         Para proteger tu cuenta, debes activar autenticación de dos factores.
         Escanea este código QR con tu app de autenticación.
       </p>
       <div id="enroll-qr" class="enroll-qr"></div>
       <p class="hint">
-        ¿No puedes escanear? Ingresa este código manualmente:
+        <span data-i18n="auth.enrollManual">¿No puedes escanear? Ingresa este código manualmente:</span>
         <code id="enroll-secret" class="enroll-secret"></code>
       </p>
       <form id="auth-enroll-confirm-form">
-        <label>Código de verificación <input name="code" required autocomplete="one-time-code" inputmode="numeric" pattern="\d{6}" placeholder="123456"/></label>
+        <label><span data-i18n="auth.verifyCode">Código de verificación</span> <input name="code" required autocomplete="one-time-code" inputmode="numeric" pattern="\d{6}" placeholder="123456"/></label>
         <p class="test-result err" id="auth-enroll-error"></p>
-        <button type="submit" class="btn btn-primary auth-submit">Confirmar y activar</button>
-        <button type="button" class="btn auth-back" id="btn-regen-qr"><i data-icon="refresh"></i> Generar QR nuevo (si ya escaneaste mal)</button>
+        <button type="submit" class="btn btn-primary auth-submit" data-i18n="auth.confirmActivate">Confirmar y activar</button>
+        <button type="button" class="btn auth-back" id="btn-regen-qr"><i data-icon="refresh"></i> <span data-i18n="auth.regenQr">Generar QR nuevo (si ya escaneaste mal)</span></button>
       </form>
     </div>
 
     <!-- Recovery codes shown after enrollment -->
     <div id="auth-recovery" class="auth-form" style="display:none">
-      <h3 style="margin: 0 0 8px"><i data-icon="shield_check" data-icon-size="18" style="color:var(--success); vertical-align:middle; margin-right:6px"></i>TOTP activado</h3>
-      <p class="hint" style="margin-top:0">
+      <h3 style="margin: 0 0 8px"><i data-icon="shield_check" data-icon-size="18" style="color:var(--success); vertical-align:middle; margin-right:6px"></i><span data-i18n="auth.totpEnabled">TOTP activado</span></h3>
+      <p class="hint" style="margin-top:0" data-i18n-html="auth.recoveryIntroHtml">
         <strong>Guarda estos códigos de recuperación en un lugar seguro</strong> (1Password, papel impreso).
         Cada uno se puede usar una sola vez si pierdes el acceso a tu app de autenticación.
         <strong>No los verás de nuevo.</strong>
       </p>
       <div id="recovery-codes-list" class="recovery-codes"></div>
-      <button type="button" class="btn" id="btn-copy-recovery" style="margin-bottom:8px">Copiar todos al portapapeles</button>
+      <button type="button" class="btn" id="btn-copy-recovery" style="margin-bottom:8px" data-i18n="auth.copyAllCodes">Copiar todos al portapapeles</button>
       <label class="check-confirm">
-        <input type="checkbox" id="chk-recovery-saved"/> He guardado los códigos en un lugar seguro
+        <input type="checkbox" id="chk-recovery-saved"/> <span data-i18n="auth.savedCodesConfirm">He guardado los códigos en un lugar seguro</span>
       </label>
-      <button type="button" class="btn btn-primary auth-submit" id="btn-recovery-continue" disabled>Continuar</button>
+      <button type="button" class="btn btn-primary auth-submit" id="btn-recovery-continue" disabled data-i18n="common.continue">Continuar</button>
     </div>
   </div>
 </div>
@@ -93,31 +97,32 @@
         <div class="brand-title">S3 Explorer</div>
         <div class="brand-sub">MinIO-style console</div>
       </div>
-      <button class="btn-icon sidebar-collapse-btn" id="btn-sidebar-collapse" title="Colapsar barra lateral" aria-label="Colapsar barra lateral"><i data-icon="chevron_left"></i></button>
+      <button class="btn-icon sidebar-collapse-btn" id="btn-sidebar-collapse" title="Colapsar barra lateral" aria-label="Colapsar barra lateral" data-i18n-title="sidebar.collapse" data-i18n-aria-label="sidebar.collapse"><i data-icon="chevron_left"></i></button>
     </div>
 
     <div class="section">
       <div class="section-header">
-        <span>Conexiones</span>
-        <button class="btn-icon" id="btn-add-conn" title="Nueva conexión"><i data-icon="plus"></i></button>
+        <span data-i18n="sidebar.connections">Conexiones</span>
+        <button class="btn-icon" id="btn-add-conn" title="Nueva conexión" data-i18n-title="sidebar.newConnection"><i data-icon="plus"></i></button>
       </div>
       <ul id="connections" class="conn-tree"></ul>
     </div>
 
 
     <div class="sidebar-foot">
-      <span id="conn-status" class="status">Sin conexión</span>
+      <span id="conn-status" class="status" data-i18n="sidebar.noConnection">Sin conexión</span>
       <button class="btn-icon" id="btn-theme" title="Tema: automático (sigue al sistema)" style="margin-left:auto"><i data-icon="sun"></i></button>
-      <button class="btn-icon" id="btn-lock" title="Bloquear bóveda"><i data-icon="lock"></i></button>
+      <button class="btn-icon" id="btn-lang" title="Idioma: Español (clic para cambiar a inglés)" data-i18n-title="lang.toggle">ES</button>
+      <button class="btn-icon" id="btn-lock" title="Bloquear bóveda" data-i18n-title="vault.lockTitle"><i data-icon="lock"></i></button>
     </div>
-    <div class="resize-handle resize-handle-sidebar" data-resize="sidebar" aria-label="Redimensionar barra lateral" title="Arrastrar para redimensionar"></div>
+    <div class="resize-handle resize-handle-sidebar" data-resize="sidebar" aria-label="Redimensionar barra lateral" title="Arrastrar para redimensionar" data-i18n-aria-label="sidebar.resize" data-i18n-title="sidebar.dragToResize"></div>
     <div class="sidebar-user" id="sidebar-user" style="display:none">
       <span class="user-name" id="user-name"></span>
       <span class="user-role" id="user-role"></span>
       <div class="user-actions">
-        <button class="btn-icon" id="btn-my-account" title="Mi cuenta"><i data-icon="sliders"></i></button>
-        <button class="btn-icon" id="btn-admin-users" title="Usuarios" style="display:none"><i data-icon="users"></i></button>
-        <button class="btn-icon" id="btn-logout" title="Cerrar sesión"><i data-icon="logout"></i></button>
+        <button class="btn-icon" id="btn-my-account" title="Mi cuenta" data-i18n-title="sidebar.myAccount"><i data-icon="sliders"></i></button>
+        <button class="btn-icon" id="btn-admin-users" title="Usuarios" style="display:none" data-i18n-title="users.title"><i data-icon="users"></i></button>
+        <button class="btn-icon" id="btn-logout" title="Cerrar sesión" data-i18n-title="auth.logoutTitle"><i data-icon="logout"></i></button>
       </div>
     </div>
   </aside>
@@ -127,48 +132,48 @@
   <div class="panes-wrap" id="panes-wrap">
     <section class="pane active" data-pane="left">
       <header class="toolbar">
-        <button class="btn-icon mobile-only" id="btn-menu" title="Menú" aria-label="Abrir menú"><i data-icon="menu"></i></button>
+        <button class="btn-icon mobile-only" id="btn-menu" title="Menú" aria-label="Abrir menú" data-i18n-title="common.menu" data-i18n-aria-label="toolbar.openMenu"><i data-icon="menu"></i></button>
         <div class="nav-buttons">
-          <button class="btn-icon nav-btn" data-el="btn-nav-back" title="Atrás (Alt + ←)" aria-label="Atrás" disabled><i data-icon="chevron_left"></i></button>
-          <button class="btn-icon nav-btn" data-el="btn-nav-fwd" title="Adelante (Alt + →)" aria-label="Adelante" disabled><i data-icon="chevron_right"></i></button>
+          <button class="btn-icon nav-btn" data-el="btn-nav-back" title="Atrás (Alt + ←)" aria-label="Atrás" data-i18n-title="toolbar.back" data-i18n-aria-label="toolbar.backAria" disabled><i data-icon="chevron_left"></i></button>
+          <button class="btn-icon nav-btn" data-el="btn-nav-fwd" title="Adelante (Alt + →)" aria-label="Adelante" data-i18n-title="toolbar.forward" data-i18n-aria-label="toolbar.forwardAria" disabled><i data-icon="chevron_right"></i></button>
         </div>
         <div class="crumbs" data-el="breadcrumbs"></div>
         <div class="search-box">
-          <input type="text" data-el="search-input" placeholder="Buscar... (Enter = todo el bucket)" disabled />
-          <button data-el="btn-search-clear" class="btn-icon" title="Limpiar" style="display:none"><i data-icon="close"></i></button>
+          <input type="text" data-el="search-input" placeholder="Buscar... (Enter = todo el bucket)" data-i18n-placeholder="toolbar.searchPlaceholder" disabled />
+          <button data-el="btn-search-clear" class="btn-icon" title="Limpiar" data-i18n-title="common.clear" style="display:none"><i data-icon="close"></i></button>
         </div>
         <div class="actions">
           <label class="toggle-deleted" data-el="toggle-deleted" style="display:none">
-            <input type="checkbox" class="chk" data-el="chk-deleted"/> Mostrar eliminados
+            <input type="checkbox" class="chk" data-el="chk-deleted"/> <span data-i18n="toolbar.showDeleted">Mostrar eliminados</span>
           </label>
           <button data-el="btn-versioning" class="btn" style="display:none"><i data-icon="lock"></i> Versionado: ?</button>
           <span data-el="index-status-badge" class="index-status-badge" style="display:none"></span>
-          <button data-el="btn-reindex" class="btn" title="Reconstruir el índice de búsqueda FTS5 para este bucket"><i data-icon="reindex"></i> Reindexar</button>
-          <button data-el="btn-new-folder" class="btn" disabled><i data-icon="folder_plus"></i> Nueva carpeta</button>
-          <button data-el="btn-upload" class="btn btn-primary" disabled><i data-icon="upload"></i> Subir archivos</button>
+          <button data-el="btn-reindex" class="btn" title="Reconstruir el índice de búsqueda FTS5 para este bucket" data-i18n-title="toolbar.reindexTitle"><i data-icon="reindex"></i> <span data-i18n="toolbar.reindex">Reindexar</span></button>
+          <button data-el="btn-new-folder" class="btn" disabled><i data-icon="folder_plus"></i> <span data-i18n="toolbar.newFolder">Nueva carpeta</span></button>
+          <button data-el="btn-upload" class="btn btn-primary" disabled><i data-icon="upload"></i> <span data-i18n="toolbar.upload">Subir archivos</span></button>
           <input type="file" data-el="file-input" multiple hidden />
-          <button data-el="btn-refresh" class="btn-icon" title="Refrescar"><i data-icon="refresh"></i></button>
-          <button class="btn-icon btn-sync-nav dual-only-visible" data-el="btn-sync-nav" title="Activar navegación sincronizada" aria-label="Sincronizar navegación entre paneles"><i data-icon="link"></i></button>
-          <button id="btn-toggle-dual" class="btn-icon dual-only-trigger" title="Vista de dos paneles" aria-label="Vista de dos paneles"><i data-icon="split"></i></button>
-          <button class="btn-icon btn-close-pane" data-el="btn-close-pane" title="Cerrar este panel" aria-label="Cerrar panel"><i data-icon="close"></i></button>
+          <button data-el="btn-refresh" class="btn-icon" title="Refrescar" data-i18n-title="common.refresh"><i data-icon="refresh"></i></button>
+          <button class="btn-icon btn-sync-nav dual-only-visible" data-el="btn-sync-nav" title="Activar navegación sincronizada" aria-label="Sincronizar navegación entre paneles" data-i18n-title="toolbar.syncNavTitle" data-i18n-aria-label="toolbar.syncNavAria"><i data-icon="link"></i></button>
+          <button id="btn-toggle-dual" class="btn-icon dual-only-trigger" title="Vista de dos paneles" aria-label="Vista de dos paneles" data-i18n-title="toolbar.dualView" data-i18n-aria-label="toolbar.dualView"><i data-icon="split"></i></button>
+          <button class="btn-icon btn-close-pane" data-el="btn-close-pane" title="Cerrar este panel" aria-label="Cerrar panel" data-i18n-title="toolbar.closePane" data-i18n-aria-label="toolbar.closePaneAria"><i data-icon="close"></i></button>
         </div>
       </header>
       <div data-el="search-banner" class="search-banner" style="display:none"></div>
 
       <div class="content" data-el="content">
         <div class="empty" data-el="empty">
-          <h2>Bienvenido a S3 Explorer</h2>
-          <p>Crea una conexión para empezar a navegar tus archivos en cualquier almacenamiento compatible con S3 (AWS S3, MinIO, Wasabi, Backblaze B2, Cloudflare R2, etc.).</p>
-          <button class="btn btn-primary" id="btn-first-conn"><i data-icon="plus"></i> Agregar conexión</button>
+          <h2 data-i18n="app.welcomeTitle">Bienvenido a S3 Explorer</h2>
+          <p data-i18n="app.welcomeBody">Crea una conexión para empezar a navegar tus archivos en cualquier almacenamiento compatible con S3 (AWS S3, MinIO, Wasabi, Backblaze B2, Cloudflare R2, etc.).</p>
+          <button class="btn btn-primary" id="btn-first-conn"><i data-icon="plus"></i> <span data-i18n="app.addConnection">Agregar conexión</span></button>
         </div>
         <div class="dropzone" data-el="dropzone"></div>
         <table class="grid" data-el="grid" style="display:none">
           <thead>
             <tr>
               <th class="col-check"><input type="checkbox" class="chk" data-el="check-all"/></th>
-              <th class="sortable" data-sort="name">Nombre <span class="sort-indicator"></span></th>
-              <th class="col-size sortable" data-sort="size">Tamaño <span class="sort-indicator"></span></th>
-              <th class="col-date sortable" data-sort="modified">Modificado <span class="sort-indicator"></span></th>
+              <th class="sortable" data-sort="name"><span data-i18n="common.name">Nombre</span> <span class="sort-indicator"></span></th>
+              <th class="col-size sortable" data-sort="size"><span data-i18n="common.size">Tamaño</span> <span class="sort-indicator"></span></th>
+              <th class="col-date sortable" data-sort="modified"><span data-i18n="common.modified">Modificado</span> <span class="sort-indicator"></span></th>
               <th class="col-act"></th>
             </tr>
           </thead>
@@ -176,13 +181,13 @@
         </table>
         <div class="batch-bar" data-el="batch-bar" style="display:none">
           <span data-el="batch-info"></span>
-          <button class="btn btn-danger" data-el="btn-batch-delete"><i data-icon="trash"></i> Eliminar seleccionados</button>
+          <button class="btn btn-danger" data-el="btn-batch-delete"><i data-icon="trash"></i> <span data-i18n="grid.deleteSelected">Eliminar seleccionados</span></button>
         </div>
       </div>
 
       <!-- Object Info Panel — one per pane (cloned with the pane). -->
       <aside class="info-panel" data-el="info-panel">
-        <div class="resize-handle resize-handle-info" data-resize="info" aria-label="Redimensionar panel" title="Arrastrar para redimensionar"></div>
+        <div class="resize-handle resize-handle-info" data-resize="info" aria-label="Redimensionar panel" title="Arrastrar para redimensionar" data-i18n-aria-label="sidebar.resize" data-i18n-title="sidebar.dragToResize"></div>
         <header>
           <div class="info-title">
             <span class="ft-badge def" data-el="info-icon">·</span>
@@ -191,32 +196,32 @@
               <div class="info-path" data-el="info-path"></div>
             </div>
           </div>
-          <button class="btn-icon" data-el="info-close" title="Cerrar"><i data-icon="close"></i></button>
+          <button class="btn-icon" data-el="info-close" title="Cerrar" data-i18n-title="common.close"><i data-icon="close"></i></button>
         </header>
 
         <div class="info-actions">
-          <button class="btn btn-primary" data-el="info-preview"><i data-icon="eye"></i> Vista previa</button>
-          <button class="btn" data-el="info-download"><i data-icon="download"></i> Descargar</button>
-          <button class="btn" data-el="info-share"><i data-icon="link"></i> Enlace temporal</button>
-          <button class="btn" data-el="info-versions"><i data-icon="history"></i> Versiones</button>
-          <button class="btn" data-el="info-rename"><i data-icon="rename"></i> Renombrar</button>
-          <button class="btn btn-danger" data-el="info-delete"><i data-icon="trash"></i> Eliminar</button>
+          <button class="btn btn-primary" data-el="info-preview"><i data-icon="eye"></i> <span data-i18n="info.preview">Vista previa</span></button>
+          <button class="btn" data-el="info-download"><i data-icon="download"></i> <span data-i18n="common.download">Descargar</span></button>
+          <button class="btn" data-el="info-share"><i data-icon="link"></i> <span data-i18n="info.tempLink">Enlace temporal</span></button>
+          <button class="btn" data-el="info-versions"><i data-icon="history"></i> <span data-i18n="info.versions">Versiones</span></button>
+          <button class="btn" data-el="info-rename"><i data-icon="rename"></i> <span data-i18n="common.rename">Renombrar</span></button>
+          <button class="btn btn-danger" data-el="info-delete"><i data-icon="trash"></i> <span data-i18n="common.delete">Eliminar</span></button>
         </div>
 
         <div class="info-section">
-          <h4>Object Info</h4>
+          <h4 data-i18n="info.objectInfo">Object Info</h4>
           <dl data-el="info-meta">
-            <div><dt>Tamaño</dt><dd data-k="size">—</dd></div>
-            <div><dt>Modificado</dt><dd data-k="modified">—</dd></div>
+            <div><dt data-i18n="common.size">Tamaño</dt><dd data-k="size">—</dd></div>
+            <div><dt data-i18n="common.modified">Modificado</dt><dd data-k="modified">—</dd></div>
             <div><dt>Content-Type</dt><dd data-k="content-type">—</dd></div>
             <div><dt>ETag</dt><dd data-k="etag" class="mono">—</dd></div>
             <div><dt>Storage Class</dt><dd data-k="storage-class">—</dd></div>
-            <div><dt>Versión</dt><dd data-k="version-id" class="mono">—</dd></div>
+            <div><dt data-i18n="common.version">Versión</dt><dd data-k="version-id" class="mono">—</dd></div>
           </dl>
         </div>
 
         <div class="info-section" data-el="info-user-meta-wrap" style="display:none">
-          <h4>Metadata personalizada</h4>
+          <h4 data-i18n="info.customMetadata">Metadata personalizada</h4>
           <dl data-el="info-user-meta"></dl>
         </div>
       </aside>
@@ -227,18 +232,18 @@
 <!-- Modal: Passphrase / Vault -->
 <div class="modal-backdrop" id="modal-passphrase" style="display:none">
   <div class="modal">
-    <header><h3 id="passphrase-title">Bóveda de credenciales</h3></header>
+    <header><h3 id="passphrase-title" data-i18n="vault.title">Bóveda de credenciales</h3></header>
     <form id="form-passphrase">
-      <p class="hint" id="passphrase-hint" style="margin-top:0">
+      <p class="hint" id="passphrase-hint" style="margin-top:0" data-i18n="vault.hintDefault">
         Tus conexiones S3 se cifran localmente con AES-256-GCM derivado de una contraseña que solo tú conoces.
         Esta contraseña no se envía al servidor. Si la olvidas, deberás reingresar tus conexiones.
       </p>
-      <label>Contraseña <input name="passphrase" type="password" required autofocus autocomplete="off"/></label>
-      <label id="passphrase-confirm-wrap">Confirmar <input name="confirm" type="password" autocomplete="off"/></label>
+      <label><span data-i18n="vault.passphrase">Contraseña</span> <input name="passphrase" type="password" required autofocus autocomplete="off"/></label>
+      <label id="passphrase-confirm-wrap"><span data-i18n="vault.confirm">Confirmar</span> <input name="confirm" type="password" autocomplete="off"/></label>
       <p class="test-result err" id="passphrase-error"></p>
       <footer>
-        <button type="button" class="btn" id="btn-passphrase-reset" style="margin-right:auto; display:none">Olvidé mi contraseña — borrar bóveda</button>
-        <button type="submit" class="btn btn-primary">Desbloquear</button>
+        <button type="button" class="btn" id="btn-passphrase-reset" style="margin-right:auto; display:none" data-i18n="vault.forgot">Olvidé mi contraseña — borrar bóveda</button>
+        <button type="submit" class="btn btn-primary" data-i18n="vault.unlockBtn">Desbloquear</button>
       </footer>
     </form>
   </div>
@@ -247,32 +252,32 @@
 <!-- Modal: Connection -->
 <div class="modal-backdrop" id="modal-conn" style="display:none">
   <div class="modal">
-    <header><h3 id="conn-modal-title">Nueva conexión S3</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
+    <header><h3 id="conn-modal-title" data-i18n="conn.modalTitleNew">Nueva conexión S3</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
     <form id="form-conn">
       <input type="hidden" name="id" />
       <div class="import-row">
-        <button type="button" class="btn" id="btn-import-conn"><i data-icon="upload"></i> Importar desde archivo (.cfg / .env)</button>
+        <button type="button" class="btn" id="btn-import-conn"><i data-icon="upload"></i> <span data-i18n="conn.import">Importar desde archivo (.cfg / .env)</span></button>
         <input type="file" id="import-conn-file" accept=".cfg,.env,.vultrcfg,.awscfg,.miniocfg,.r2cfg,.txt,*" hidden />
         <span class="test-result" id="import-result"></span>
       </div>
-      <label>Nombre <input name="name" required placeholder="Mi MinIO local"/></label>
-      <label>Endpoint <input name="endpoint" placeholder="https://s3.amazonaws.com  o  http://localhost:9000"/></label>
-      <p class="hint">Déjalo vacío para AWS S3 oficial. Para MinIO/otros, ingresa la URL completa.</p>
+      <label><span data-i18n="common.name">Nombre</span> <input name="name" required placeholder="Mi MinIO local" data-i18n-placeholder="conn.namePlaceholder"/></label>
+      <label>Endpoint <input name="endpoint" placeholder="https://s3.amazonaws.com  o  http://localhost:9000" data-i18n-placeholder="conn.endpointPlaceholder"/></label>
+      <p class="hint" data-i18n="conn.endpointHint">Déjalo vacío para AWS S3 oficial. Para MinIO/otros, ingresa la URL completa.</p>
       <div class="row">
-        <label>Región <input name="region" value="us-east-1"/></label>
-        <label class="check"><input type="checkbox" name="pathStyle" checked/> Path-style (MinIO)</label>
+        <label><span data-i18n="conn.region">Región</span> <input name="region" value="us-east-1"/></label>
+        <label class="check"><input type="checkbox" name="pathStyle" checked/> <span data-i18n="conn.pathStyle">Path-style (MinIO)</span></label>
       </div>
       <label>Access Key <input name="accessKey" required autocomplete="off"/></label>
       <label>Secret Key <input name="secretKey" type="password" required autocomplete="off"/></label>
-      <label>Session Token (opcional) <input name="sessionToken" autocomplete="off"/></label>
-      <label>Buckets (opcional, uno por línea)
+      <label><span data-i18n="conn.sessionToken">Session Token (opcional)</span> <input name="sessionToken" autocomplete="off"/></label>
+      <label><span data-i18n="conn.bucketsLabel">Buckets (opcional, uno por línea)</span>
         <textarea name="buckets" rows="3" placeholder="mi-bucket-1&#10;mi-bucket-2" style="font-family:inherit; font-size:14px; padding:9px 12px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); width:100%; resize:vertical"></textarea>
       </label>
-      <p class="hint">Déjalo vacío para autodetectar todos los buckets. Especifícalos si tu IAM no permite <code>s3:ListAllMyBuckets</code>.</p>
+      <p class="hint" data-i18n-html="conn.bucketsHintHtml">Déjalo vacío para autodetectar todos los buckets. Especifícalos si tu IAM no permite <code>s3:ListAllMyBuckets</code>.</p>
       <footer>
-        <button type="button" class="btn" id="btn-test-conn">Probar</button>
+        <button type="button" class="btn" id="btn-test-conn" data-i18n="conn.test">Probar</button>
         <span id="test-result" class="test-result"></span>
-        <button type="submit" class="btn btn-primary">Guardar</button>
+        <button type="submit" class="btn btn-primary" data-i18n="common.save">Guardar</button>
       </footer>
     </form>
   </div>
@@ -281,11 +286,11 @@
 <!-- Modal: Bucket create -->
 <div class="modal-backdrop" id="modal-bucket" style="display:none">
   <div class="modal">
-    <header><h3>Crear bucket</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
+    <header><h3 data-i18n="bucket.createTitle">Crear bucket</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
     <form id="form-bucket">
-      <label>Nombre <input name="name" required pattern="[a-z0-9.\-]{3,63}" placeholder="mi-bucket"/></label>
-      <p class="hint">Solo minúsculas, números, puntos y guiones (3-63 caracteres).</p>
-      <footer><button type="submit" class="btn btn-primary">Crear</button></footer>
+      <label><span data-i18n="common.name">Nombre</span> <input name="name" required pattern="[a-z0-9.\-]{3,63}" placeholder="mi-bucket" data-i18n-placeholder="bucket.namePlaceholder"/></label>
+      <p class="hint" data-i18n="bucket.nameHint">Solo minúsculas, números, puntos y guiones (3-63 caracteres).</p>
+      <footer><button type="submit" class="btn btn-primary" data-i18n="common.create">Crear</button></footer>
     </form>
   </div>
 </div>
@@ -293,10 +298,10 @@
 <!-- Modal: Folder -->
 <div class="modal-backdrop" id="modal-folder" style="display:none">
   <div class="modal">
-    <header><h3>Nueva carpeta</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
+    <header><h3 data-i18n="folder.createTitle">Nueva carpeta</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
     <form id="form-folder">
-      <label>Nombre <input name="name" required placeholder="documentos"/></label>
-      <footer><button type="submit" class="btn btn-primary">Crear</button></footer>
+      <label><span data-i18n="common.name">Nombre</span> <input name="name" required placeholder="documentos" data-i18n-placeholder="folder.createPlaceholder"/></label>
+      <footer><button type="submit" class="btn btn-primary" data-i18n="common.create">Crear</button></footer>
     </form>
   </div>
 </div>
@@ -304,11 +309,11 @@
 <!-- Modal: Rename -->
 <div class="modal-backdrop" id="modal-rename" style="display:none">
   <div class="modal">
-    <header><h3>Renombrar</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
+    <header><h3 data-i18n="rename.title">Renombrar</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
     <form id="form-rename">
       <input type="hidden" name="sourceKey"/>
-      <label>Nuevo nombre <input name="newName" required/></label>
-      <footer><button type="submit" class="btn btn-primary">Renombrar</button></footer>
+      <label><span data-i18n="rename.newName">Nuevo nombre</span> <input name="newName" required/></label>
+      <footer><button type="submit" class="btn btn-primary" data-i18n="common.rename">Renombrar</button></footer>
     </form>
   </div>
 </div>
@@ -316,8 +321,11 @@
 <!-- Modal: Overwrite confirmation (versioning OFF) -->
 <div class="modal-backdrop" id="modal-overwrite" style="display:none">
   <div class="modal">
-    <header><h3>Conflicto de archivos</h3></header>
+    <header><h3 data-i18n="overwrite.title">Conflicto de archivos</h3></header>
     <div class="modal-body">
+      <!-- The warn-block inner markup is fully rewritten at open time by
+           objects/upload.ts (localized there); this static content is only a
+           pre-boot fallback. -->
       <div class="warn-block" id="overwrite-warn-block">
         <i data-icon="warn" data-icon-size="18" style="color:var(--warn); flex-shrink:0; margin-top:1px"></i>
         <div style="flex:1">
@@ -331,10 +339,10 @@
       <p class="hint" id="overwrite-new-info" style="margin:12px 0 4px"></p>
     </div>
     <footer>
-      <button type="button" class="btn" id="btn-overwrite-cancel">Cancelar todo</button>
-      <button type="button" class="btn" id="btn-overwrite-skip">Saltar conflictos</button>
-      <button type="button" class="btn btn-danger-solid" id="btn-overwrite-all">Reemplazar todos</button>
-      <button type="button" class="btn btn-primary" id="btn-overwrite-rename">Renombrar y subir</button>
+      <button type="button" class="btn" id="btn-overwrite-cancel" data-i18n="overwrite.cancelAll">Cancelar todo</button>
+      <button type="button" class="btn" id="btn-overwrite-skip" data-i18n="overwrite.skip">Saltar conflictos</button>
+      <button type="button" class="btn btn-danger-solid" id="btn-overwrite-all" data-i18n="overwrite.replaceAll">Reemplazar todos</button>
+      <button type="button" class="btn btn-primary" id="btn-overwrite-rename" data-i18n="overwrite.renameUpload">Renombrar y subir</button>
     </footer>
   </div>
 </div>
@@ -345,8 +353,8 @@
     <header>
       <h3 id="preview-title">Preview</h3>
       <div class="header-actions">
-        <button class="btn" id="btn-share">Enlace</button>
-        <button class="btn btn-primary" id="btn-download">Descargar</button>
+        <button class="btn" id="btn-share" data-i18n="common.link">Enlace</button>
+        <button class="btn btn-primary" id="btn-download" data-i18n="common.download">Descargar</button>
         <button class="btn-icon" data-close><i data-icon="close"></i></button>
       </div>
     </header>
@@ -354,7 +362,7 @@
     <div class="preview-meta">
       <div id="preview-info"></div>
       <div>
-        <button class="btn" id="btn-show-versions">Ver versiones</button>
+        <button class="btn" id="btn-show-versions" data-i18n="preview.showVersions">Ver versiones</button>
       </div>
     </div>
     <div id="versions-panel" class="versions-panel" style="display:none"></div>
@@ -366,21 +374,21 @@
 <!-- Modal: Transfer confirm — picks copy / move before kicking off the SSE run -->
 <div class="modal-backdrop" id="modal-transfer-confirm" style="display:none">
   <div class="modal">
-    <header><h3 id="transfer-confirm-title">Transferir archivos</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
+    <header><h3 id="transfer-confirm-title" data-i18n="transfer.title">Transferir archivos</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
     <div style="padding:18px">
       <p class="hint" style="margin-top:0">
-        <span id="transfer-confirm-count">0</span> elemento(s) desde
+        <span id="transfer-confirm-count">0</span> <span data-i18n="transfer.itemsFrom">elemento(s) desde</span>
         <code id="transfer-confirm-source"></code>
-        hacia
+        <span data-i18n="transfer.to">hacia</span>
         <code id="transfer-confirm-dest"></code>.
       </p>
       <p class="hint" id="transfer-confirm-cross" style="display:none; color:var(--warn)">
-        <i data-icon="warn" style="vertical-align:middle; margin-right:4px"></i>Transferencia entre conexiones distintas — los bytes pasan por el servidor.
+        <i data-icon="warn" style="vertical-align:middle; margin-right:4px"></i><span data-i18n="transfer.crossWarn">Transferencia entre conexiones distintas — los bytes pasan por el servidor.</span>
       </p>
       <footer style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; margin-top:16px">
-        <button type="button" class="btn" id="btn-transfer-cancel">Cancelar</button>
-        <button type="button" class="btn" id="btn-transfer-do-copy">Copiar</button>
-        <button type="button" class="btn btn-primary" id="btn-transfer-do-move">Mover</button>
+        <button type="button" class="btn" id="btn-transfer-cancel" data-i18n="common.cancel">Cancelar</button>
+        <button type="button" class="btn" id="btn-transfer-do-copy" data-i18n="transfer.copyBtn">Copiar</button>
+        <button type="button" class="btn btn-primary" id="btn-transfer-do-move" data-i18n="transfer.moveBtn">Mover</button>
       </footer>
     </div>
   </div>
@@ -390,15 +398,15 @@
 <div class="modal-backdrop" id="modal-transfer-progress" style="display:none">
   <div class="modal modal-lg">
     <header>
-      <h3 id="transfer-progress-title">Transferencia en curso</h3>
+      <h3 id="transfer-progress-title" data-i18n="transfer.progressTitle">Transferencia en curso</h3>
       <div class="header-actions">
-        <button class="btn" id="btn-transfer-abort">Cancelar</button>
+        <button class="btn" id="btn-transfer-abort" data-i18n="common.cancel">Cancelar</button>
         <button class="btn-icon" id="btn-transfer-close" style="display:none" data-close><i data-icon="close"></i></button>
       </div>
     </header>
     <div style="padding:18px">
       <div class="transfer-progress-bar"><div id="transfer-progress-fill"></div></div>
-      <p class="hint" id="transfer-progress-summary" style="margin:8px 0 4px">Preparando…</p>
+      <p class="hint" id="transfer-progress-summary" style="margin:8px 0 4px" data-i18n="progress.preparing">Preparando…</p>
       <div class="transfer-item-list" id="transfer-item-list"></div>
     </div>
   </div>
@@ -410,13 +418,13 @@
     <header>
       <h3 id="folder-delete-title">Eliminando carpeta</h3>
       <div class="header-actions">
-        <button class="btn" id="btn-folder-delete-abort">Cancelar</button>
+        <button class="btn" id="btn-folder-delete-abort" data-i18n="common.cancel">Cancelar</button>
         <button class="btn-icon" id="btn-folder-delete-close" style="display:none" data-close><i data-icon="close"></i></button>
       </div>
     </header>
     <div style="padding:18px">
       <div class="transfer-progress-bar"><div id="folder-delete-progress-fill"></div></div>
-      <p class="hint" id="folder-delete-summary" style="margin:8px 0 4px">Preparando…</p>
+      <p class="hint" id="folder-delete-summary" style="margin:8px 0 4px" data-i18n="progress.preparing">Preparando…</p>
       <p class="hint" id="folder-delete-current" style="margin:6px 0 4px; color:var(--text-dim); font-size:11.5px; font-family:var(--font-mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis"></p>
     </div>
   </div>
@@ -425,15 +433,15 @@
 <!-- Modal: Folder rename — simple input, submission delegated to the existing transfer endpoint -->
 <div class="modal-backdrop" id="modal-folder-rename" style="display:none">
   <div class="modal">
-    <header><h3>Renombrar carpeta</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
+    <header><h3 data-i18n="folder.renameTitle">Renombrar carpeta</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
     <form id="form-folder-rename">
-      <p class="hint" style="margin-top:0">Actual: <code id="folder-rename-current"></code></p>
-      <label>Nuevo nombre <input name="newName" required autocomplete="off" placeholder="mi-carpeta"/></label>
-      <p class="hint">Sin barras (<code>/</code>). Renombrar mueve todo el contenido — sobre carpetas grandes puede tardar.</p>
+      <p class="hint" style="margin-top:0"><span data-i18n="folder.renameCurrent">Actual:</span> <code id="folder-rename-current"></code></p>
+      <label><span data-i18n="folder.newName">Nuevo nombre</span> <input name="newName" required autocomplete="off" placeholder="mi-carpeta" data-i18n-placeholder="folder.renamePlaceholder"/></label>
+      <p class="hint" data-i18n-html="folder.renameHintHtml">Sin barras (<code>/</code>). Renombrar mueve todo el contenido — sobre carpetas grandes puede tardar.</p>
       <p class="test-result err" id="folder-rename-error"></p>
       <footer>
-        <button type="button" class="btn" data-close>Cancelar</button>
-        <button type="submit" class="btn btn-primary">Renombrar</button>
+        <button type="button" class="btn" data-close data-i18n="common.cancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary" data-i18n="common.rename">Renombrar</button>
       </footer>
     </form>
   </div>
@@ -442,12 +450,12 @@
 <!-- Modal: My account -->
 <div class="modal-backdrop" id="modal-account" style="display:none">
   <div class="modal">
-    <header><h3>Mi cuenta</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
+    <header><h3 data-i18n="account.title">Mi cuenta</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
     <nav class="modal-tabs" data-tabs="account">
-      <button type="button" class="modal-tab active" data-tab="password">Contraseña</button>
-      <button type="button" class="modal-tab" data-tab="totp">Segundo factor</button>
-      <button type="button" class="modal-tab" data-tab="recovery">Recuperación</button>
-      <button type="button" class="modal-tab" data-tab="tokens">Tokens de API</button>
+      <button type="button" class="modal-tab active" data-tab="password" data-i18n="account.tabPassword">Contraseña</button>
+      <button type="button" class="modal-tab" data-tab="totp" data-i18n="account.tabTotp">Segundo factor</button>
+      <button type="button" class="modal-tab" data-tab="recovery" data-i18n="account.tabRecovery">Recuperación</button>
+      <button type="button" class="modal-tab" data-tab="tokens" data-i18n="account.tabTokens">Tokens de API</button>
     </nav>
     <div class="modal-tab-content" data-tab-panel="password">
       <form id="form-change-password">
@@ -455,63 +463,63 @@
              associate the password change with an account (a11y + autofill
              guidance). Populated from the session in account.ts. -->
         <input type="text" name="username" id="change-pw-username" autocomplete="username" hidden aria-hidden="true" tabindex="-1"/>
-        <label>Contraseña actual <input name="current" type="password" required autocomplete="current-password"/></label>
-        <label>Nueva contraseña <input name="next" type="password" required minlength="8" autocomplete="new-password"/></label>
+        <label><span data-i18n="account.currentPassword">Contraseña actual</span> <input name="current" type="password" required autocomplete="current-password"/></label>
+        <label><span data-i18n="account.newPassword">Nueva contraseña</span> <input name="next" type="password" required minlength="8" autocomplete="new-password"/></label>
         <p class="test-result" id="account-pw-msg"></p>
-        <button type="submit" class="btn btn-primary">Actualizar contraseña</button>
+        <button type="submit" class="btn btn-primary" data-i18n="account.updatePassword">Actualizar contraseña</button>
       </form>
     </div>
     <div class="modal-tab-content" data-tab-panel="totp" hidden>
       <p style="display:flex; align-items:center; gap:10px; margin:0 0 12px">
         <i data-icon="shield_check" data-icon-size="18" style="color:var(--success)"></i>
-        <strong style="color:var(--text)">TOTP activado</strong>
+        <strong style="color:var(--text)" data-i18n="auth.totpEnabled">TOTP activado</strong>
       </p>
-      <p class="hint" style="margin-top:0">
+      <p class="hint" style="margin-top:0" data-i18n="account.totpProtectedHint">
         Tu cuenta está protegida con autenticación de dos factores. Si pierdes el acceso a tu app de autenticación, usa un código de recuperación (pestaña "Recuperación").
       </p>
-      <p class="hint">
+      <p class="hint" data-i18n="account.totpChangeHint">
         Para cambiar la app o el dispositivo, contacta a un administrador para reiniciar tu enrollment.
       </p>
     </div>
     <div class="modal-tab-content" data-tab-panel="recovery" hidden>
-      <p class="hint" style="margin-top:0">Regenerar invalida los anteriores. Asegúrate de guardar los nuevos.</p>
-      <button type="button" class="btn" id="btn-regen-recovery"><i data-icon="refresh"></i> Regenerar códigos</button>
+      <p class="hint" style="margin-top:0" data-i18n="account.recoveryRegenHint">Regenerar invalida los anteriores. Asegúrate de guardar los nuevos.</p>
+      <button type="button" class="btn" id="btn-regen-recovery"><i data-icon="refresh"></i> <span data-i18n="account.regenCodes">Regenerar códigos</span></button>
       <div id="new-recovery-codes" class="recovery-codes" style="margin-top:12px"></div>
     </div>
     <div class="modal-tab-content" data-tab-panel="tokens" hidden>
-      <p class="hint" style="margin-top:0">
+      <p class="hint" style="margin-top:0" data-i18n-html="tokens.hintHtml">
         Tokens de acceso personal para agentes y herramientas. Se envían como
         <code>Authorization: Bearer s3x_…</code>. Alcance «lectura» solo consulta;
         «escritura» también permite subir, borrar y transferir.
       </p>
       <table class="grid" style="margin-bottom:12px">
-        <thead><tr><th>Nombre</th><th>Alcance</th><th>Creado</th><th>Expira</th><th>Último uso</th><th></th></tr></thead>
+        <thead><tr><th data-i18n="common.name">Nombre</th><th data-i18n="tokens.thScope">Alcance</th><th data-i18n="tokens.thCreated">Creado</th><th data-i18n="tokens.thExpires">Expira</th><th data-i18n="tokens.thLastUsed">Último uso</th><th></th></tr></thead>
         <tbody id="tokens-tbody"></tbody>
       </table>
-      <button type="button" class="btn" id="btn-toggle-create-token" data-expand="form-create-token"><i data-icon="plus"></i> Nuevo token</button>
+      <button type="button" class="btn" id="btn-toggle-create-token" data-expand="form-create-token"><i data-icon="plus"></i> <span data-i18n="tokens.newToken">Nuevo token</span></button>
       <form id="form-create-token" hidden style="display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:8px; align-items:end; margin-top:14px; padding:14px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px">
-        <label>Nombre <input name="name" required maxlength="64" autocomplete="off" placeholder="mi-agente"/></label>
-        <label>Alcance
+        <label><span data-i18n="common.name">Nombre</span> <input name="name" required maxlength="64" autocomplete="off" placeholder="mi-agente"/></label>
+        <label><span data-i18n="tokens.scope">Alcance</span>
           <select name="scope">
-            <option value="read">Lectura</option>
-            <option value="write">Escritura</option>
+            <option value="read" data-i18n="tokens.scopeRead">Lectura</option>
+            <option value="write" data-i18n="tokens.scopeWrite">Escritura</option>
           </select>
         </label>
-        <label>Expiración
+        <label><span data-i18n="tokens.expiration">Expiración</span>
           <select name="expires">
-            <option value="30">30 días</option>
-            <option value="90">90 días</option>
-            <option value="">Sin expirar</option>
+            <option value="30" data-i18n="tokens.expires30">30 días</option>
+            <option value="90" data-i18n="tokens.expires90">90 días</option>
+            <option value="" data-i18n="tokens.noExpiry">Sin expirar</option>
           </select>
         </label>
-        <button type="submit" class="btn btn-primary">Crear</button>
+        <button type="submit" class="btn btn-primary" data-i18n="common.create">Crear</button>
       </form>
       <p class="test-result" id="create-token-msg"></p>
       <div id="new-token-box" hidden style="margin-top:12px">
-        <p class="hint" style="color:var(--warn); margin-top:0">Guárdalo ahora — no se volverá a mostrar.</p>
+        <p class="hint" style="color:var(--warn); margin-top:0" data-i18n="tokens.saveNow">Guárdalo ahora — no se volverá a mostrar.</p>
         <div class="recovery-codes" style="display:flex; align-items:center; gap:10px">
           <div class="code" id="new-token-value" style="flex:1; overflow-wrap:anywhere"></div>
-          <button type="button" class="btn" id="btn-copy-token"><i data-icon="copy"></i> Copiar</button>
+          <button type="button" class="btn" id="btn-copy-token"><i data-icon="copy"></i> <span data-i18n="common.copy">Copiar</span></button>
         </div>
       </div>
     </div>
@@ -521,24 +529,24 @@
 <!-- Modal: Users admin -->
 <div class="modal-backdrop" id="modal-users" style="display:none">
   <div class="modal modal-lg">
-    <header><h3>Usuarios</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
+    <header><h3 data-i18n="users.title">Usuarios</h3><button class="btn-icon" data-close><i data-icon="close"></i></button></header>
     <div class="modal-body">
       <table class="grid" style="margin-bottom:16px">
-        <thead><tr><th>Usuario</th><th>Rol</th><th>TOTP</th><th>Último login</th><th>Estado</th><th></th></tr></thead>
+        <thead><tr><th data-i18n="users.thUser">Usuario</th><th data-i18n="users.thRole">Rol</th><th>TOTP</th><th data-i18n="users.thLastLogin">Último login</th><th data-i18n="users.thStatus">Estado</th><th></th></tr></thead>
         <tbody id="users-tbody"></tbody>
       </table>
       <div style="margin-top:12px">
-        <button type="button" class="btn" id="btn-toggle-create-user" data-expand="form-create-user"><i data-icon="plus"></i> Nuevo usuario</button>
+        <button type="button" class="btn" id="btn-toggle-create-user" data-expand="form-create-user"><i data-icon="plus"></i> <span data-i18n="users.newUser">Nuevo usuario</span></button>
         <form id="form-create-user" hidden style="display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:8px; align-items:end; margin-top:14px; padding:14px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px">
-          <label>Usuario <input name="username" required pattern="[a-zA-Z0-9_.\-]{2,32}" autocomplete="off"/></label>
-          <label>Contraseña inicial <input name="password" type="password" required minlength="8" autocomplete="new-password"/></label>
-          <label>Rol
+          <label><span data-i18n="users.thUser">Usuario</span> <input name="username" required pattern="[a-zA-Z0-9_.\-]{2,32}" autocomplete="off"/></label>
+          <label><span data-i18n="users.initialPassword">Contraseña inicial</span> <input name="password" type="password" required minlength="8" autocomplete="new-password"/></label>
+          <label><span data-i18n="users.role">Rol</span>
             <select name="role">
-              <option value="user">Usuario</option>
-              <option value="admin">Admin</option>
+              <option value="user" data-i18n="users.roleUser">Usuario</option>
+              <option value="admin" data-i18n="users.roleAdmin">Admin</option>
             </select>
           </label>
-          <button type="submit" class="btn btn-primary">Crear</button>
+          <button type="submit" class="btn btn-primary" data-i18n="common.create">Crear</button>
         </form>
         <p class="test-result" id="create-user-msg"></p>
       </div>
