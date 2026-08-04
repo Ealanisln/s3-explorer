@@ -1,6 +1,6 @@
 {
   "name": "s3-explorer",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "MinIO-like web console for any S3-compatible storage",
   "author": "Emmanuel Alanis (https://github.com/Ealanisln)",
   "contributors": [
