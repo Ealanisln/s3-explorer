@@ -34,11 +34,31 @@ export interface PendingPayload {
   exp: number;
 }
 
+// ----- Personal Access Tokens (PATs) -----
+
+export type TokenScope = 'read' | 'write';
+
+export interface ApiToken {
+  id: number;
+  username: string;
+  name: string;
+  scope: TokenScope;
+  createdAt: string;
+  expiresAt: string | null;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+}
+
 // Augment Express's Request so route handlers can read req.user / req.session
 // after the auth middleware has run, without per-file casts.
 declare module 'express-serve-static-core' {
   interface Request {
     user?: User;
     session?: SessionPayload;
+    // Set only when the request authenticated with a Bearer PAT (never for
+    // session cookies). Session users keep full access; requireScope() only
+    // constrains requests that carry a tokenScope.
+    tokenScope?: TokenScope;
+    apiToken?: Pick<ApiToken, 'id' | 'name' | 'scope'>;
   }
 }

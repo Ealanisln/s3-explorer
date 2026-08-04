@@ -27,3 +27,10 @@ export const createUserSchema = z.object({
 export const resetPasswordSchema = z.object({
   newPassword: z.string().min(8).max(1024),
 });
+
+export const createTokenSchema = z.object({
+  name: z.string().trim().min(1).max(64),
+  scope: z.enum(['read', 'write']),
+  // 30 / 90 days, or null/omitted for a token that never expires.
+  expiresInDays: z.union([z.literal(30), z.literal(90)]).nullish(),
+});

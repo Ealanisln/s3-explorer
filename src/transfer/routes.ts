@@ -10,6 +10,7 @@ import {
   type ProgressEvent,
 } from './transfer';
 import { audit } from '../auth/audit';
+import { requireScope } from '../auth/token-auth';
 
 // Defaults for prefix-based (recursive) transfers. Read once at module load.
 const TRANSFER_CONCURRENCY = Math.max(
@@ -34,7 +35,7 @@ export function transferRouter(): Router {
   // The endpoint always expects two header sets (x-s3-source-* and x-s3-dest-*).
   // When both point at the same endpoint+access-key, the orchestrator uses
   // server-side CopyObject; otherwise it streams bytes via the proxy.
-  r.post('/transfer', validateBody(transferSchema), async (req: Request, res: Response): Promise<void> => {
+  r.post('/transfer', requireScope('write'), validateBody(transferSchema), async (req: Request, res: Response): Promise<void> => {
     const body = req.body as TransferRequest;
 
     // Build clients up-front so credential / endpoint errors return a normal

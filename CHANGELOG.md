@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Personal Access Tokens (PATs) for machine/agent API access: `Authorization:
+  Bearer s3x_...` on `/api/*` as an alternative to the session cookie, with
+  `read` / `write` scopes enforced route-by-route, optional expiry (30/90
+  days or never), a cap of 10 active tokens per user, and a "Tokens de API"
+  section under "Mi cuenta" (create with one-time display, list, revoke).
+  Only the SHA-256 hash of a token is stored; failed token authentications
+  are rate limited per IP (10 / 15 min) and audited. Tokens are not accepted
+  on `/auth/*` — token and user management remain session-only. Groundwork
+  for the upcoming MCP server.
+
 ## [1.2.0] - 2026-08-03
 
 First public release. Versions prior to this one were developed in a private

@@ -447,6 +447,7 @@
       <button type="button" class="modal-tab active" data-tab="password">Contraseña</button>
       <button type="button" class="modal-tab" data-tab="totp">Segundo factor</button>
       <button type="button" class="modal-tab" data-tab="recovery">Recuperación</button>
+      <button type="button" class="modal-tab" data-tab="tokens">Tokens de API</button>
     </nav>
     <div class="modal-tab-content" data-tab-panel="password">
       <form id="form-change-password">
@@ -476,6 +477,43 @@
       <p class="hint" style="margin-top:0">Regenerar invalida los anteriores. Asegúrate de guardar los nuevos.</p>
       <button type="button" class="btn" id="btn-regen-recovery"><i data-icon="refresh"></i> Regenerar códigos</button>
       <div id="new-recovery-codes" class="recovery-codes" style="margin-top:12px"></div>
+    </div>
+    <div class="modal-tab-content" data-tab-panel="tokens" hidden>
+      <p class="hint" style="margin-top:0">
+        Tokens de acceso personal para agentes y herramientas. Se envían como
+        <code>Authorization: Bearer s3x_…</code>. Alcance «lectura» solo consulta;
+        «escritura» también permite subir, borrar y transferir.
+      </p>
+      <table class="grid" style="margin-bottom:12px">
+        <thead><tr><th>Nombre</th><th>Alcance</th><th>Creado</th><th>Expira</th><th>Último uso</th><th></th></tr></thead>
+        <tbody id="tokens-tbody"></tbody>
+      </table>
+      <button type="button" class="btn" id="btn-toggle-create-token" data-expand="form-create-token"><i data-icon="plus"></i> Nuevo token</button>
+      <form id="form-create-token" hidden style="display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:8px; align-items:end; margin-top:14px; padding:14px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px">
+        <label>Nombre <input name="name" required maxlength="64" autocomplete="off" placeholder="mi-agente"/></label>
+        <label>Alcance
+          <select name="scope">
+            <option value="read">Lectura</option>
+            <option value="write">Escritura</option>
+          </select>
+        </label>
+        <label>Expiración
+          <select name="expires">
+            <option value="30">30 días</option>
+            <option value="90">90 días</option>
+            <option value="">Sin expirar</option>
+          </select>
+        </label>
+        <button type="submit" class="btn btn-primary">Crear</button>
+      </form>
+      <p class="test-result" id="create-token-msg"></p>
+      <div id="new-token-box" hidden style="margin-top:12px">
+        <p class="hint" style="color:var(--warn); margin-top:0">Guárdalo ahora — no se volverá a mostrar.</p>
+        <div class="recovery-codes" style="display:flex; align-items:center; gap:10px">
+          <div class="code" id="new-token-value" style="flex:1; overflow-wrap:anywhere"></div>
+          <button type="button" class="btn" id="btn-copy-token"><i data-icon="copy"></i> Copiar</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>

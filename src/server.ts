@@ -51,7 +51,10 @@ export function createApp(): Express {
     },
   }));
 
-  app.use('/api', auth.requireAuth, auth.requireTotpEnrolled, auth.requirePasswordCurrent);
+  // Session cookie chain OR Bearer PAT (Authorization: Bearer s3x_...).
+  // Token-authenticated requests skip the TOTP/password gates but are
+  // constrained by requireScope('write') on mutating routes.
+  app.use('/api', auth.apiAuth);
 
   function buildClient(req: Request): S3Client {
     return rawBuildClient(req, {
