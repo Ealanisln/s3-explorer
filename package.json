@@ -8,6 +8,9 @@
     "Jose Luis Bravo (https://github.com/jlvobra)"
   ],
   "main": "dist/server.js",
+  "bin": {
+    "s3-explorer-mcp": "dist/mcp/cli.js"
+  },
   "scripts": {
     "start": "node dist/server.js",
     "dev": "npm run build && node dist/server.js",
@@ -25,6 +28,7 @@
     "@aws-sdk/client-s3": "^3.658.1",
     "@aws-sdk/lib-storage": "^3.658.1",
     "@aws-sdk/s3-request-presigner": "^3.658.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@node-rs/argon2": "^2.0.2",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^12.10.0",

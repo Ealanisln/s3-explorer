@@ -8,6 +8,7 @@ S3 Explorer is a Node 20 + TypeScript + Express application with a framework-les
 
 - [README.md](README.md): Features, quick start (Docker Compose or plain Node), configuration reference, and minimum IAM policy.
 - [docs/api.md](docs/api.md): HTTP API reference — auth flow, session model, and every `/auth/*` and `/api/*` endpoint with parameters and error shape.
+- [docs/mcp.md](docs/mcp.md): MCP server — lets AI agents operate S3-compatible storage through the S3 Explorer API; setup for Claude Code / Claude Desktop, environment variables, tool reference, and security notes.
 - [AGENTS.md](AGENTS.md): Contributor guide for AI agents and humans — dev setup, build/test commands, architecture map, code conventions, and security invariants that must not be weakened.
 - [SECURITY.md](SECURITY.md): Security policy, threat model, deployment hardening checklist, and vulnerability reporting.
 - [CHANGELOG.md](CHANGELOG.md): Release history.

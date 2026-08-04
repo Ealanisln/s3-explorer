@@ -32,6 +32,7 @@ npx vitest run tests/integration/api/objects.test.ts   # single file
 - `src/auth/` — login, sessions (HMAC cookie + SQLite revocation), TOTP, recovery codes, personal access tokens (`tokens-store.ts` + `token-auth.ts`, scoped `read`/`write` via `requireScope` declared route-by-route), rate limiting, admin routes, audit log.
 - `src/s3/` — `client.ts` builds a per-request S3Client from `x-s3-*` headers (SSRF guard lives here); `routes/` for buckets, objects, presign, upload, search.
 - `src/index/` — per-user SQLite FTS5 key index; `src/transfer/` — SSE-streamed cross-connection copy/move.
+- `src/mcp/` — stdio MCP server (`s3-explorer-mcp` bin → `dist/mcp/cli.js`) exposing the HTTP API as agent tools; env-driven config (`S3X_*`), Bearer PAT auth + per-request `x-s3-*` headers. See `docs/mcp.md`.
 - `src/http/` — security headers/CSP, `wrap()` + `sanitizeError` error handling, zod validation.
 - `src/db/migrations/` — versioned schema; add `00N_name.ts` and register it in `src/db/migrations.ts`.
 - `public/src/` — SPA (no framework, no bundler); `public/index.html` loads `/dist/main.js` as an ES module.

@@ -8,6 +8,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- MCP (Model Context Protocol) server (`s3-explorer-mcp`, stdio): lets AI
+  agents such as Claude Code and Claude Desktop operate any S3-compatible
+  storage through the S3 Explorer HTTP API, authenticating with a Personal
+  Access Token. Six tools — `list_buckets`, `browse`, `search_files`
+  (NDJSON stream aggregated to ≤200 results), `presign_url`, `upload_file`
+  (local file, size-guarded), `delete_object` (delete-marker or full purge).
+  Configured entirely via `S3X_*` environment variables that mirror the
+  per-request `x-s3-*` credential header contract; write tools require a
+  `write`-scope token. See `docs/mcp.md`.
 - Personal Access Tokens (PATs) for machine/agent API access: `Authorization:
   Bearer s3x_...` on `/api/*` as an alternative to the session cookie, with
   `read` / `write` scopes enforced route-by-route, optional expiry (30/90
