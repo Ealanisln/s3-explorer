@@ -10,6 +10,7 @@ import { confirmDialog } from '../util/dialog.js';
 import { toast } from '../util/toast.js';
 import { setVaultKey } from '../vault/persistence.js';
 import { State } from '../state.js';
+import { t, localizeServerError } from '../i18n/index.js';
 import type { CurrentUser } from '../types.js';
 
 let currentUser: CurrentUser | null = null;
@@ -83,7 +84,7 @@ export async function authInit(): Promise<boolean> {
       hideAuthOverlay();
       renderUserChip();
       openModal('modal-account');
-      toast('Debes cambiar tu contraseña inicial antes de continuar.', 'info', 6000);
+      toast(t('auth.mustChangePassword'), 'info', 6000);
       return true;
     }
     hideAuthOverlay();
@@ -102,8 +103,8 @@ export async function startEnrollment(regenerate = false): Promise<void> {
   try {
     const url = regenerate ? '/auth/totp/setup?regenerate=1' : '/auth/totp/setup';
     const res = await fetch(url, { method: 'POST', credentials: 'same-origin' });
-    const data = await res.json() as { otpauth: string; qrSvg: string; secret: string; message?: string };
-    if (!res.ok) throw new Error(data.message || 'Error');
+    const data = await res.json() as { otpauth: string; qrSvg: string; secret: string; message?: string; code?: string };
+    if (!res.ok) throw new Error(localizeServerError(data));
     $('enroll-qr').innerHTML = data.qrSvg;
     $('enroll-secret').textContent = data.secret;
     setTimeout(() =>
@@ -126,9 +127,9 @@ function showRecoveryCodes(codes: string[]): void {
   $('btn-copy-recovery').onclick = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(codes.join('\n'));
-      toast('Códigos copiados', 'success');
+      toast(t('auth.codesCopied'), 'success');
     } catch {
-      toast('No se pudo copiar; selecciona y copia manualmente.', 'error');
+      toast(t('auth.copyFailed'), 'error');
     }
   };
   $('chk-recovery-saved').onchange = (e: Event): void => {
@@ -167,8 +168,8 @@ export function initAuthForms(d?: AuthBootstrapDeps): void {
           password: (f.elements.namedItem('password') as HTMLInputElement).value,
         }),
       });
-      const data = await res.json() as { step?: string; message?: string };
-      if (!res.ok) throw new Error(data.message || 'Error');
+      const data = await res.json() as { step?: string; message?: string; code?: string };
+      if (!res.ok) throw new Error(localizeServerError(data));
       if (data.step === 'totp') {
         showAuthScreen('totp');
         setTimeout(
@@ -198,8 +199,8 @@ export function initAuthForms(d?: AuthBootstrapDeps): void {
         credentials: 'same-origin',
         body: JSON.stringify({ code: (f.elements.namedItem('code') as HTMLInputElement).value }),
       });
-      const data = await res.json() as { ok?: boolean; message?: string };
-      if (!res.ok) throw new Error(data.message || 'Error');
+      const data = await res.json() as { ok?: boolean; message?: string; code?: string };
+      if (!res.ok) throw new Error(localizeServerError(data));
       (f.elements.namedItem('code') as HTMLInputElement).value = '';
       await authInit();
       await deps.onAuthenticated();
@@ -215,9 +216,9 @@ export function initAuthForms(d?: AuthBootstrapDeps): void {
 
   $('btn-regen-qr').onclick = async (): Promise<void> => {
     const ok = await confirmDialog({
-      title: 'Generar QR nuevo',
-      message: 'Se generará un código QR nuevo. Tu app de autenticación deberá escanearlo de nuevo y el QR anterior dejará de funcionar.',
-      confirmLabel: 'Generar nuevo',
+      title: t('auth.regenQrTitle'),
+      message: t('auth.regenQrMessage'),
+      confirmLabel: t('auth.regenQrConfirm'),
     });
     if (!ok) return;
     await startEnrollment(true);
@@ -235,8 +236,8 @@ export function initAuthForms(d?: AuthBootstrapDeps): void {
         credentials: 'same-origin',
         body: JSON.stringify({ code: (f.elements.namedItem('code') as HTMLInputElement).value }),
       });
-      const data = await res.json() as { ok?: boolean; recoveryCodes?: string[]; message?: string };
-      if (!res.ok) throw new Error(data.message || 'Error');
+      const data = await res.json() as { ok?: boolean; recoveryCodes?: string[]; message?: string; code?: string };
+      if (!res.ok) throw new Error(localizeServerError(data));
       showRecoveryCodes(data.recoveryCodes || []);
     } catch (ex) {
       err.textContent = (ex as Error).message;
@@ -245,9 +246,9 @@ export function initAuthForms(d?: AuthBootstrapDeps): void {
 
   $('btn-logout').onclick = async (): Promise<void> => {
     const ok = await confirmDialog({
-      title: 'Cerrar sesión',
-      message: '¿Cerrar tu sesión en este navegador?',
-      confirmLabel: 'Cerrar sesión',
+      title: t('auth.logoutTitle'),
+      message: t('auth.logoutMessage'),
+      confirmLabel: t('auth.logoutTitle'),
     });
     if (!ok) return;
     try { await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' }); } catch { /* ignore */ }

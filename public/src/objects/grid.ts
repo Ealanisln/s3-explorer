@@ -12,6 +12,7 @@ import { toast, errorIdOpts } from '../util/toast.js';
 import { paneEl, escapeHtml, $, openModal, closeModal } from '../util/dom.js';
 import { confirmDialog, choiceDialog } from '../util/dialog.js';
 import { formatSize, formatDate, fileIcon } from '../util/format.js';
+import { t } from '../i18n/index.js';
 import { mountIcons } from '../util/icons.js';
 import { openPreview } from './preview.js';
 import { openInfoPanel, closeInfoPanel } from './info-panel.js';
@@ -167,7 +168,7 @@ export function showLoadingRow(paneId: PaneId): HTMLTableRowElement {
   const tbody = paneEl('grid-body', paneId);
   tbody.innerHTML = '';
   const tr = document.createElement('tr');
-  tr.innerHTML = '<td colspan="5" style="text-align:center; padding:40px; color:var(--text-dim)">Cargando carpeta…</td>';
+  tr.innerHTML = `<td colspan="5" style="text-align:center; padding:40px; color:var(--text-dim)">${t('grid.loadingFolder')}</td>`;
   tbody.appendChild(tr);
   return tr as HTMLTableRowElement;
 }
@@ -267,8 +268,8 @@ export function renderBreadcrumbs(paneId?: PaneId): void {
       const editBtn = document.createElement('button');
       editBtn.className = 'crumb-edit-btn';
       editBtn.type = 'button';
-      editBtn.title = 'Editar ruta (escribir / pegar)';
-      editBtn.setAttribute('aria-label', 'Editar ruta');
+      editBtn.title = t('crumb.editPath');
+      editBtn.setAttribute('aria-label', t('crumb.editAria'));
       editBtn.innerHTML = '<i data-icon="edit" data-icon-size="13"></i>';
       editBtn.onclick = (): void => enterBreadcrumbEdit(p);
       el.appendChild(editBtn);
@@ -312,20 +313,20 @@ function enterBreadcrumbEdit(paneId: PaneId): void {
     input.value = currentPath;
     input.spellcheck = false;
     input.autocomplete = 'off';
-    input.setAttribute('aria-label', 'Ruta');
+    input.setAttribute('aria-label', t('crumb.pathAria'));
     el.appendChild(input);
 
     const okBtn = document.createElement('button');
     okBtn.type = 'button';
     okBtn.className = 'crumb-edit-action ok';
-    okBtn.title = 'Ir a esta ruta (Enter)';
+    okBtn.title = t('crumb.go');
     okBtn.innerHTML = '<i data-icon="check" data-icon-size="13"></i>';
     el.appendChild(okBtn);
 
     const cancelBtn = document.createElement('button');
     cancelBtn.type = 'button';
     cancelBtn.className = 'crumb-edit-action cancel';
-    cancelBtn.title = 'Cancelar (Esc)';
+    cancelBtn.title = t('crumb.cancelEsc');
     cancelBtn.innerHTML = '<i data-icon="close" data-icon-size="13"></i>';
     el.appendChild(cancelBtn);
 
@@ -400,7 +401,7 @@ type BreadcrumbParseResult =
 // reach.
 function parseBreadcrumbInput(raw: string, availableBuckets: string[]): BreadcrumbParseResult {
   let s = raw.trim();
-  if (!s) return { ok: false, error: 'Ruta vacía' };
+  if (!s) return { ok: false, error: t('crumb.emptyPath') };
 
   // Accept s3://bucket/foo/bar styles.
   s = s.replace(/^s3:\/\//i, '');
@@ -409,7 +410,7 @@ function parseBreadcrumbInput(raw: string, availableBuckets: string[]): Breadcru
   s = s.replace(/\\/g, '/');
   // Drop any number of leading slashes.
   s = s.replace(/^\/+/, '');
-  if (!s) return { ok: false, error: 'Ruta vacía' };
+  if (!s) return { ok: false, error: t('crumb.emptyPath') };
 
   const firstSlash = s.indexOf('/');
   const bucket = firstSlash === -1 ? s : s.slice(0, firstSlash);
@@ -418,14 +419,14 @@ function parseBreadcrumbInput(raw: string, availableBuckets: string[]): Breadcru
   prefix = prefix.replace(/\/{2,}/g, '/');
   if (prefix && !prefix.endsWith('/')) prefix += '/';
 
-  if (!bucket) return { ok: false, error: 'Falta el nombre del bucket' };
+  if (!bucket) return { ok: false, error: t('crumb.missingBucket') };
   // When the active connection has a manual bucket allowlist, enforce it.
   // For auto-discovered buckets (availableBuckets pulled from the pane's
   // loaded list) we trust whatever the user typed but warn if it's clearly
   // not in the cached list — the next loadObjects will surface a real error
   // from S3 if it's wrong.
   if (availableBuckets.length > 0 && !availableBuckets.includes(bucket)) {
-    return { ok: false, error: `El bucket "${bucket}" no existe en esta conexión` };
+    return { ok: false, error: t('crumb.bucketNotInConn', { bucket }) };
   }
 
   return { ok: true, bucket, prefix };
@@ -494,7 +495,7 @@ export function updateBatchBar(paneId?: PaneId): void {
   const pane = getPane(p);
   if (pane.selected.size === 0) { bar.style.display = 'none'; return; }
   bar.style.display = 'flex';
-  paneEl('batch-info', p).textContent = `${pane.selected.size} archivo(s) seleccionado(s)`;
+  paneEl('batch-info', p).textContent = t('grid.selectedCount', { count: pane.selected.size });
 }
 
 // Folder row context menu. Same dropdown shell as showRowMenu but tailored
@@ -515,15 +516,15 @@ function showFolderMenu(e: MouseEvent, folderPrefix: string, paneId: PaneId): vo
   dd.style.visibility = 'hidden';
   const isDeleted = State.deletedPrefixes.has(folderPrefix);
   dd.innerHTML = isDeleted ? `
-    <button data-act="restore">Restaurar carpeta</button>
-    <button data-act="open">Abrir (ver eliminados)</button>
-    <button data-act="open-other">Abrir en segundo panel ▸</button>
-    <button data-act="purge" class="danger">Purgar carpeta…</button>
+    <button data-act="restore">${t('foldermenu.restore')}</button>
+    <button data-act="open">${t('foldermenu.openDeleted')}</button>
+    <button data-act="open-other">${t('foldermenu.openOther')}</button>
+    <button data-act="purge" class="danger">${t('foldermenu.purge')}</button>
   ` : `
-    <button data-act="open">Abrir</button>
-    <button data-act="open-other">Abrir en segundo panel ▸</button>
-    <button data-act="rename">Renombrar</button>
-    <button data-act="delete" class="danger">Eliminar carpeta…</button>
+    <button data-act="open">${t('foldermenu.open')}</button>
+    <button data-act="open-other">${t('foldermenu.openOther')}</button>
+    <button data-act="rename">${t('common.rename')}</button>
+    <button data-act="delete" class="danger">${t('foldermenu.delete')}</button>
   `;
   document.body.appendChild(dd);
   const rect = dd.getBoundingClientRect();
@@ -580,7 +581,7 @@ async function openFolderInOtherPane(folderPrefix: string, sourcePaneId: PaneId)
   const targetPaneId = otherPane(sourcePaneId);
   const source = getPane(sourcePaneId);
   if (!source.activeConnId || !source.activeBucket) {
-    toast('Necesitas tener conexión + bucket abiertos primero', 'info', 4000);
+    toast(t('pane.needConnBucket'), 'info', 4000);
     return;
   }
 
@@ -591,7 +592,7 @@ async function openFolderInOtherPane(folderPrefix: string, sourcePaneId: PaneId)
     setDualMode(true);
     if (!State.dualMode) {
       // Mobile rejected the toggle. Fall back to opening in the current pane.
-      toast('En pantallas chicas no hay segundo panel — abro en este', 'info', 4000);
+      toast(t('pane.mobileNoDual'), 'info', 4000);
       source.prefix = folderPrefix;
       void loadObjects(sourcePaneId);
       return;
@@ -621,7 +622,7 @@ async function openFolderInOtherPane(folderPrefix: string, sourcePaneId: PaneId)
   // "Abrir en segundo panel" is the opposite of "keep them linked" — the
   // user explicitly forced the target pane to a specific location. Cancel
   // sync if it was on; user can re-enable from the new positions.
-  cancelSyncNav('panel destino reasignado');
+  cancelSyncNav(t('sync.destReassigned'));
 
   // Switch focus to the new pane so the user immediately sees they're
   // working in it, and so the URL routing reflects the new location.
@@ -667,9 +668,9 @@ async function deleteFolder(folderPrefix: string, paneId: PaneId): Promise<void>
       `/api/object/${encodeURIComponent(bucket)}/folder/count?prefix=${encodeURIComponent(folderPrefix)}`,
     );
     const num = c.truncated ? `${c.count.toLocaleString()}+` : c.count.toLocaleString();
-    countMsg = `Contiene ${num} archivo(s) (${fmtBytes(c.totalBytes)}${c.truncated ? '+' : ''}).`;
+    countMsg = t('folder.contains', { count: num, size: fmtBytes(c.totalBytes) + (c.truncated ? '+' : '') });
   } catch {
-    countMsg = 'No se pudo contar el contenido — se eliminará lo que haya.';
+    countMsg = t('folder.countFailed');
   }
 
   // Pick delete strategy. On a non-versioned bucket the choice is moot — a
@@ -678,20 +679,20 @@ async function deleteFolder(folderPrefix: string, paneId: PaneId): Promise<void>
   let purgeVersions = false;
   if (pane.versioning === 'Enabled') {
     const choice = await choiceDialog<'marker' | 'purge'>({
-      title: `Eliminar carpeta "${folderName}"`,
-      message: `${countMsg}\n\nEste bucket tiene versionado activo. Elige cómo eliminar:`,
+      title: t('folder.deleteTitle', { name: folderName }),
+      message: t('folder.versionedChoice', { countMsg }),
       choices: [
-        { value: 'marker', label: 'Crear delete markers', hint: 'Recuperable desde "Mostrar eliminados". Los archivos siguen ocupando espacio en S3.', recommended: true },
-        { value: 'purge', label: 'Purgar todas las versiones', hint: 'Borra absolutamente todo. Libera espacio. IRREVERSIBLE.' },
+        { value: 'marker', label: t('folder.optMarkers'), hint: t('folder.optMarkersHint'), recommended: true },
+        { value: 'purge', label: t('folder.optPurge'), hint: t('folder.optPurgeHint') },
       ],
     });
     if (choice === null) return;
     purgeVersions = choice === 'purge';
   } else {
     const ok = await confirmDialog({
-      title: `Eliminar carpeta "${folderName}"`,
-      message: `${countMsg}\n\nEsta acción NO se puede deshacer (el bucket no tiene versionado).`,
-      confirmLabel: 'Eliminar',
+      title: t('folder.deleteTitle', { name: folderName }),
+      message: t('folder.noVersioningWarning', { countMsg }),
+      confirmLabel: t('common.delete'),
       danger: true,
     });
     if (!ok) return;
@@ -699,15 +700,15 @@ async function deleteFolder(folderPrefix: string, paneId: PaneId): Promise<void>
 
   // Open the progress modal.
   $('folder-delete-title').textContent = purgeVersions
-    ? `Purgando "${folderName}"`
-    : `Eliminando "${folderName}"`;
+    ? t('folder.purging', { name: folderName })
+    : t('folder.deleting', { name: folderName });
   ($('btn-folder-delete-close') as HTMLButtonElement).style.display = 'none';
   ($('btn-folder-delete-abort') as HTMLButtonElement).style.display = 'inline-flex';
   ($('btn-folder-delete-abort') as HTMLButtonElement).disabled = false;
-  ($('btn-folder-delete-abort') as HTMLButtonElement).textContent = 'Cancelar';
+  ($('btn-folder-delete-abort') as HTMLButtonElement).textContent = t('common.cancel');
   ($('folder-delete-progress-fill') as HTMLElement).style.width = '0%';
   ($('folder-delete-progress-fill').parentElement as HTMLElement | null)?.classList.add('in-progress');
-  $('folder-delete-summary').textContent = 'Iniciando…';
+  $('folder-delete-summary').textContent = t('progress.starting');
   $('folder-delete-current').textContent = '';
   openModal('modal-folder-delete');
 
@@ -715,7 +716,7 @@ async function deleteFolder(folderPrefix: string, paneId: PaneId): Promise<void>
   ($('btn-folder-delete-abort') as HTMLButtonElement).onclick = (): void => {
     abort.abort();
     ($('btn-folder-delete-abort') as HTMLButtonElement).disabled = true;
-    ($('btn-folder-delete-abort') as HTMLButtonElement).textContent = 'Cancelando…';
+    ($('btn-folder-delete-abort') as HTMLButtonElement).textContent = t('progress.cancelling');
   };
 
   let totalDeleted = 0;
@@ -755,7 +756,7 @@ async function deleteFolder(folderPrefix: string, paneId: PaneId): Promise<void>
         try { ev = JSON.parse(line.slice(5).trim()) as FolderDeleteFrame; } catch { continue; }
 
         if (ev.t === 'fatal') {
-          toast(`Error del servidor: ${ev.message || 'desconocido'}`, 'error',
+          toast(t('api.serverError', { message: ev.message || t('common.unknown') }), 'error',
             ev.errorId ? { errorId: ev.errorId } : undefined);
           continue;
         }
@@ -768,8 +769,12 @@ async function deleteFolder(folderPrefix: string, paneId: PaneId): Promise<void>
           // the fill by a small fraction so there's also some real movement.
           const pct = Math.min(95, (totalDeleted % 1000) / 10 + (totalDeleted > 0 ? 5 : 0));
           ($('folder-delete-progress-fill') as HTMLElement).style.width = pct.toFixed(1) + '%';
-          $('folder-delete-summary').textContent =
-            `${totalDeleted.toLocaleString()} eliminado(s) · ${totalScanned.toLocaleString()} escaneados${totalFailed > 0 ? ` · ${totalFailed} fallidos` : ''}`;
+          $('folder-delete-summary').textContent = t('progress.deletedSummary', {
+            deleted: totalDeleted.toLocaleString(),
+            scanned: totalScanned.toLocaleString(),
+            failed: totalFailed > 0 ? t('progress.failedSuffix', { count: totalFailed }) : '',
+            tail: '',
+          });
           if (ev.currentKey) $('folder-delete-current').textContent = ev.currentKey;
         } else if (ev.t === 'done') {
           totalDeleted = ev.deleted ?? totalDeleted;
@@ -783,7 +788,7 @@ async function deleteFolder(folderPrefix: string, paneId: PaneId): Promise<void>
     const err = e as Error;
     if (err.name === 'AbortError') aborted = true;
     else {
-      toast('Error: ' + err.message, 'error', errorIdOpts(e));
+      toast(t('grid.listError', { message: err.message }), 'error', errorIdOpts(e));
     }
   }
 
@@ -791,9 +796,13 @@ async function deleteFolder(folderPrefix: string, paneId: PaneId): Promise<void>
   ($('folder-delete-progress-fill').parentElement as HTMLElement | null)?.classList.remove('in-progress');
   ($('btn-folder-delete-abort') as HTMLButtonElement).style.display = 'none';
   ($('btn-folder-delete-close') as HTMLButtonElement).style.display = 'inline-flex';
-  const tail = aborted ? ' (cancelado)' : '';
-  $('folder-delete-summary').textContent =
-    `${totalDeleted.toLocaleString()} eliminado(s) · ${totalScanned.toLocaleString()} escaneados${totalFailed > 0 ? ` · ${totalFailed} fallidos` : ''}${tail}`;
+  const tail = aborted ? t('progress.cancelledSuffix') : '';
+  $('folder-delete-summary').textContent = t('progress.deletedSummary', {
+    deleted: totalDeleted.toLocaleString(),
+    scanned: totalScanned.toLocaleString(),
+    failed: totalFailed > 0 ? t('progress.failedSuffix', { count: totalFailed }) : '',
+    tail,
+  });
   $('folder-delete-current').textContent = '';
 
   // Hop one level up if the deleted folder was the open one, otherwise stay
@@ -803,11 +812,11 @@ async function deleteFolder(folderPrefix: string, paneId: PaneId): Promise<void>
   void loadObjects(paneId);
 
   if (totalFailed === 0 && !aborted) {
-    toast(`Carpeta eliminada — ${totalDeleted.toLocaleString()} archivo(s)`, 'success', 5000);
+    toast(t('folder.deletedToast', { count: totalDeleted.toLocaleString() }), 'success', 5000);
   } else if (aborted) {
-    toast('Eliminación cancelada', 'info');
+    toast(t('folder.deleteCancelled'), 'info');
   } else {
-    toast(`Completado con ${totalFailed} error(es)`, 'error');
+    toast(t('progress.completedWithErrors', { count: totalFailed }), 'error');
   }
 }
 
@@ -822,21 +831,21 @@ async function restoreFolder(folderPrefix: string, paneId: PaneId): Promise<void
   const folderName = folderPrefix.replace(/\/$/, '').split('/').pop() || folderPrefix;
 
   const ok = await confirmDialog({
-    title: `Restaurar carpeta "${folderName}"`,
-    message: 'Se eliminarán los delete markers de cada archivo bajo esta carpeta — sus versiones anteriores volverán a ser las actuales.\n\nNo afecta archivos vivos. Si la carpeta no tiene delete markers (bucket sin versionado), no pasa nada.',
-    confirmLabel: 'Restaurar',
+    title: t('folder.restoreTitle', { name: folderName }),
+    message: t('folder.restoreMessage'),
+    confirmLabel: t('common.restore'),
   });
   if (!ok) return;
 
   // Reuse the folder-delete progress modal — same shape, different title.
-  $('folder-delete-title').textContent = `Restaurando "${folderName}"`;
+  $('folder-delete-title').textContent = t('folder.restoring', { name: folderName });
   ($('btn-folder-delete-close') as HTMLButtonElement).style.display = 'none';
   ($('btn-folder-delete-abort') as HTMLButtonElement).style.display = 'inline-flex';
   ($('btn-folder-delete-abort') as HTMLButtonElement).disabled = false;
-  ($('btn-folder-delete-abort') as HTMLButtonElement).textContent = 'Cancelar';
+  ($('btn-folder-delete-abort') as HTMLButtonElement).textContent = t('common.cancel');
   ($('folder-delete-progress-fill') as HTMLElement).style.width = '0%';
   ($('folder-delete-progress-fill').parentElement as HTMLElement | null)?.classList.add('in-progress');
-  $('folder-delete-summary').textContent = 'Iniciando…';
+  $('folder-delete-summary').textContent = t('progress.starting');
   $('folder-delete-current').textContent = '';
   openModal('modal-folder-delete');
 
@@ -844,7 +853,7 @@ async function restoreFolder(folderPrefix: string, paneId: PaneId): Promise<void
   ($('btn-folder-delete-abort') as HTMLButtonElement).onclick = (): void => {
     abort.abort();
     ($('btn-folder-delete-abort') as HTMLButtonElement).disabled = true;
-    ($('btn-folder-delete-abort') as HTMLButtonElement).textContent = 'Cancelando…';
+    ($('btn-folder-delete-abort') as HTMLButtonElement).textContent = t('progress.cancelling');
   };
 
   let totalRestored = 0;
@@ -892,7 +901,7 @@ async function restoreFolder(folderPrefix: string, paneId: PaneId): Promise<void
         let ev: RestoreFrame;
         try { ev = JSON.parse(line.slice(5).trim()) as RestoreFrame; } catch { continue; }
         if (ev.t === 'fatal') {
-          toast(`Error del servidor: ${ev.message || 'desconocido'}`, 'error',
+          toast(t('api.serverError', { message: ev.message || t('common.unknown') }), 'error',
             ev.errorId ? { errorId: ev.errorId } : undefined);
           continue;
         }
@@ -902,8 +911,12 @@ async function restoreFolder(folderPrefix: string, paneId: PaneId): Promise<void
           totalScanned = ev.scanned ?? totalScanned;
           const pct = Math.min(95, (totalRestored % 1000) / 10 + (totalRestored > 0 ? 5 : 0));
           ($('folder-delete-progress-fill') as HTMLElement).style.width = pct.toFixed(1) + '%';
-          $('folder-delete-summary').textContent =
-            `${totalRestored.toLocaleString()} restaurado(s) · ${totalScanned.toLocaleString()} escaneados${totalFailed > 0 ? ` · ${totalFailed} fallidos` : ''}`;
+          $('folder-delete-summary').textContent = t('progress.restoredSummary', {
+            restored: totalRestored.toLocaleString(),
+            scanned: totalScanned.toLocaleString(),
+            failed: totalFailed > 0 ? t('progress.failedSuffix', { count: totalFailed }) : '',
+            tail: '',
+          });
           if (ev.currentKey) $('folder-delete-current').textContent = ev.currentKey;
         } else if (ev.t === 'done') {
           totalRestored = ev.restored ?? totalRestored;
@@ -916,25 +929,29 @@ async function restoreFolder(folderPrefix: string, paneId: PaneId): Promise<void
   } catch (e) {
     const err = e as Error;
     if (err.name === 'AbortError') aborted = true;
-    else toast('Error: ' + err.message, 'error', errorIdOpts(e));
+    else toast(t('grid.listError', { message: err.message }), 'error', errorIdOpts(e));
   }
 
   ($('folder-delete-progress-fill').parentElement as HTMLElement | null)?.classList.remove('in-progress');
   ($('btn-folder-delete-abort') as HTMLButtonElement).style.display = 'none';
   ($('btn-folder-delete-close') as HTMLButtonElement).style.display = 'inline-flex';
-  const tail = aborted ? ' (cancelado)' : '';
-  $('folder-delete-summary').textContent =
-    `${totalRestored.toLocaleString()} restaurado(s) · ${totalScanned.toLocaleString()} escaneados${totalFailed > 0 ? ` · ${totalFailed} fallidos` : ''}${tail}`;
+  const tail = aborted ? t('progress.cancelledSuffix') : '';
+  $('folder-delete-summary').textContent = t('progress.restoredSummary', {
+    restored: totalRestored.toLocaleString(),
+    scanned: totalScanned.toLocaleString(),
+    failed: totalFailed > 0 ? t('progress.failedSuffix', { count: totalFailed }) : '',
+    tail,
+  });
   $('folder-delete-current').textContent = '';
 
   void loadObjects(paneId);
 
   if (totalFailed === 0 && !aborted) {
-    toast(`Carpeta restaurada — ${totalRestored.toLocaleString()} archivo(s)`, 'success', 5000);
+    toast(t('folder.restoredToast', { count: totalRestored.toLocaleString() }), 'success', 5000);
   } else if (aborted) {
-    toast('Restauración cancelada', 'info');
+    toast(t('folder.restoreCancelled'), 'info');
   } else {
-    toast(`Completado con ${totalFailed} error(es)`, 'error');
+    toast(t('progress.completedWithErrors', { count: totalFailed }), 'error');
   }
 }
 
@@ -964,8 +981,8 @@ async function openRenameFolder(folderPrefix: string, paneId: PaneId): Promise<v
     e.preventDefault();
     errEl.textContent = '';
     const newName = input.value.trim().replace(/\/+$/, '');
-    if (!newName) { errEl.textContent = 'El nombre no puede estar vacío.'; return; }
-    if (newName.includes('/')) { errEl.textContent = 'El nombre no puede contener "/"'; return; }
+    if (!newName) { errEl.textContent = t('folder.renameEmpty'); return; }
+    if (newName.includes('/')) { errEl.textContent = t('folder.renameSlash'); return; }
     if (newName === currentName) { closeModal('modal-folder-rename'); return; }
     const destPrefix = parentPrefix + newName + '/';
     // Conflict check: is there already a sibling with that name? The pane's
@@ -974,7 +991,7 @@ async function openRenameFolder(folderPrefix: string, paneId: PaneId): Promise<v
     // parent; that's the common case, and the server-side transfer would
     // happily merge into an existing folder otherwise.
     if (pane.prefix === parentPrefix && pane.prefixes.includes(destPrefix)) {
-      errEl.textContent = `Ya existe una carpeta llamada "${newName}" aquí.`;
+      errEl.textContent = t('folder.renameExists', { name: newName });
       return;
     }
     closeModal('modal-folder-rename');
@@ -1006,23 +1023,23 @@ function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
   dd.style.top = e.clientY + 'px';
   dd.style.visibility = 'hidden';
   const dualEntries = !o.IsDeleteMarker && otherPaneReady(paneId) ? `
-    <button data-act="copy-other">Copiar al otro panel →</button>
-    <button data-act="move-other">Mover al otro panel →</button>
+    <button data-act="copy-other">${t('rowmenu.copyOther')}</button>
+    <button data-act="move-other">${t('rowmenu.moveOther')}</button>
   ` : '';
   dd.innerHTML = o.IsDeleteMarker ? `
-    <button data-act="restore">Restaurar</button>
-    <button data-act="versions">Ver versiones</button>
-    <button data-act="purge" class="danger">Borrar marker</button>
+    <button data-act="restore">${t('common.restore')}</button>
+    <button data-act="versions">${t('rowmenu.versions')}</button>
+    <button data-act="purge" class="danger">${t('rowmenu.purgeMarker')}</button>
   ` : `
-    <button data-act="preview">Vista previa</button>
-    <button data-act="open-new-tab">Abrir en pestaña nueva</button>
-    <button data-act="download">Descargar</button>
-    <button data-act="copy-url">Copiar enlace</button>
-    <button data-act="share">Enlace temporal…</button>
-    <button data-act="versions">Ver versiones</button>
-    <button data-act="rename">Renombrar</button>
+    <button data-act="preview">${t('rowmenu.preview')}</button>
+    <button data-act="open-new-tab">${t('rowmenu.openNewTab')}</button>
+    <button data-act="download">${t('common.download')}</button>
+    <button data-act="copy-url">${t('rowmenu.copyLink')}</button>
+    <button data-act="share">${t('rowmenu.tempLink')}</button>
+    <button data-act="versions">${t('rowmenu.versions')}</button>
+    <button data-act="rename">${t('common.rename')}</button>
     ${dualEntries}
-    <button data-act="delete" class="danger">Eliminar</button>
+    <button data-act="delete" class="danger">${t('common.delete')}</button>
   `;
   document.body.appendChild(dd);
   // Clamp into the viewport: if the dropdown would overflow the right edge,
@@ -1050,9 +1067,9 @@ function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
     if (act === 'restore') await restoreDeleteMarker(o, reload);
     if (act === 'purge') {
       const ok = await confirmDialog({
-        title: 'Borrar delete marker',
-        message: 'Esta acción borra permanentemente el delete marker. ¿Continuar?',
-        confirmLabel: 'Borrar',
+        title: t('marker.purgeTitle'),
+        message: t('marker.purgeMessage'),
+        confirmLabel: t('marker.purgeConfirm'),
         danger: true,
       });
       if (ok) {
@@ -1061,7 +1078,7 @@ function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
             method: 'DELETE',
             body: { key: o.Key, versionId: o.VersionId },
           });
-          toast('Marker borrado', 'success');
+          toast(t('marker.purged'), 'success');
           await reload();
         } catch (e) {
           toast((e as Error).message, 'error', errorIdOpts(e));
@@ -1113,10 +1130,10 @@ function validateFolderDrop(
   if (payload.kind === 'folder') {
     const src = payload.prefix;
     if (samePane && src === destFolderPrefix) {
-      return 'No puedes mover una carpeta dentro de sí misma.';
+      return t('dnd.folderIntoItself');
     }
     if (samePane && destFolderPrefix.startsWith(src)) {
-      return 'No puedes mover una carpeta a una de sus subcarpetas.';
+      return t('dnd.folderIntoSub');
     }
   } else {
     // Files: only block when the dest folder is the file's CURRENT folder —
@@ -1125,7 +1142,7 @@ function validateFolderDrop(
       const parent = k.slice(0, k.lastIndexOf('/') + 1);
       return parent === destFolderPrefix;
     });
-    if (allSameLocation) return 'Los archivos ya están en esa carpeta.';
+    if (allSameLocation) return t('dnd.alreadyThere');
   }
   return null;
 }
@@ -1168,14 +1185,14 @@ function bindRowEvents(tr: HTMLTableRowElement, o: S3Object, paneId: PaneId): vo
   };
   tr.addEventListener('click', (e: Event) => {
     setActivePane(paneId);
-    const t = e.target as HTMLElement;
-    if (t.closest('input,button')) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('input,button')) return;
     if (o.IsDeleteMarker) {
       const fname = (o.Key.split('/').pop() || o.Key);
       void confirmDialog({
-        title: 'Archivo eliminado',
-        message: `"${fname}" está eliminado.\n\n¿Restaurarlo (borrar el delete marker)?`,
-        confirmLabel: 'Restaurar',
+        title: t('marker.deletedTitle'),
+        message: t('marker.deletedMessage', { name: fname }),
+        confirmLabel: t('common.restore'),
       }).then((ok) => {
         if (ok) void restoreDeleteMarker(o, () => loadObjects(paneId));
       });
@@ -1221,8 +1238,8 @@ function renderGridInner(paneId: PaneId): void {
   if (!visiblePrefixes.length && !visibleObjects.length) {
     const tr = document.createElement('tr');
     const msg = term
-      ? `Sin coincidencias en esta carpeta para "${escapeHtml(State.filterTerm)}". <a href="#" data-recursive-search style="color:var(--accent)">Buscar en todo el bucket →</a>`
-      : 'Carpeta vacía. Arrastra archivos aquí o usa "Subir archivos".';
+      ? t('grid.noMatchesHtml', { term: escapeHtml(State.filterTerm) })
+      : t('grid.emptyFolder');
     tr.innerHTML = `<td colspan="5" style="text-align:center; padding:40px; color:var(--text-dim)">${msg}</td>`;
     tbody.appendChild(tr);
     const link = tr.querySelector<HTMLAnchorElement>('[data-recursive-search]');
@@ -1234,7 +1251,7 @@ function renderGridInner(paneId: PaneId): void {
   if (State.listingTruncated) {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td colspan="5" style="background:var(--warn-soft); border-left:3px solid var(--warn); padding:10px 14px; font-size:12px; color:var(--warn)">
-      <i data-icon="warn" style="vertical-align:middle; margin-right:4px"></i>Listado truncado en ${(State.prefixes.length + State.objects.length).toLocaleString()} entradas (${State.listingPages} páginas). Esta carpeta tiene más — usa la búsqueda para localizar elementos específicos.
+      <i data-icon="warn" style="vertical-align:middle; margin-right:4px"></i>${t('grid.truncated', { count: (State.prefixes.length + State.objects.length).toLocaleString(), pages: State.listingPages ?? 1 })}
     </td>`;
     tbody.appendChild(tr);
   }
@@ -1298,7 +1315,7 @@ function renderGridInner(paneId: PaneId): void {
       <td class="cell-name"><span class="ft-badge ${ico.cls}">${escapeHtml(ico.label)}</span><span class="name-text">${escapeHtml(name)}</span>${badge}</td>
       <td class="col-size">${o.IsDeleteMarker ? '—' : formatSize(o.Size)}</td>
       <td class="col-date">${escapeHtml(formatDate(o.LastModified))}</td>
-      <td class="col-act"><button class="menu-btn" data-menu="${escapeHtml(o.Key)}" aria-label="Acciones"><i data-icon="dots_h"></i></button></td>
+      <td class="col-act"><button class="menu-btn" data-menu="${escapeHtml(o.Key)}" aria-label="${t('common.actions')}"><i data-icon="dots_h"></i></button></td>
     `;
     bindRowEvents(tr as HTMLTableRowElement, o, paneId);
     tbody.appendChild(tr);
@@ -1335,8 +1352,8 @@ function renderSearchMode(tbody: HTMLElement, paneId: PaneId): void {
   if (!sortedFolders.length && !sortedFiles.length) {
     const tr = document.createElement('tr');
     const msg = State.searchMeta?.status === 'scanning'
-      ? 'Escaneando... aún sin coincidencias.'
-      : `Sin resultados para "${escapeHtml(State.filterTerm)}".`;
+      ? t('search.scanningNoMatches')
+      : t('search.noResults', { term: escapeHtml(State.filterTerm) });
     tr.innerHTML = `<td colspan="5" style="text-align:center; padding:40px; color:var(--text-dim)">${msg}</td>`;
     tbody.appendChild(tr);
     updateBatchBar(paneId);
@@ -1363,7 +1380,7 @@ function renderSearchFolderRow(tbody: HTMLElement, folderKey: string, info: Sear
     <td class="cell-name">
       <span class="ft-badge folder"><i data-icon="folder" data-icon-size="12"></i></span>
       <div>
-        <div>${escapeHtml(name)}/ <span style="color:var(--text-dim); font-size:11px; margin-left:6px">${info.fileCount} archivos</span></div>
+        <div>${escapeHtml(name)}/ <span style="color:var(--text-dim); font-size:11px; margin-left:6px">${t('search.filesCount', { count: info.fileCount })}</span></div>
         ${parent ? `<div class="path-cell">${escapeHtml(parent)}</div>` : ''}
       </div>
     </td>
@@ -1405,7 +1422,7 @@ function renderSearchFileRow(tbody: HTMLElement, o: S3Object, paneId: PaneId): v
     </td>
     <td class="col-size">${formatSize(o.Size)}</td>
     <td class="col-date">${escapeHtml(formatDate(o.LastModified))}</td>
-    <td class="col-act"><button class="menu-btn" aria-label="Acciones"><i data-icon="dots_h"></i></button></td>
+    <td class="col-act"><button class="menu-btn" aria-label="${t('common.actions')}"><i data-icon="dots_h"></i></button></td>
   `;
   bindRowEvents(tr as HTMLTableRowElement, o, paneId);
   tbody.appendChild(tr);
@@ -1467,7 +1484,7 @@ export async function loadObjects(paneId?: PaneId): Promise<void> {
     pane.selected.clear();
     renderGrid(p);
   } catch (e) {
-    toast('Error: ' + (e as Error).message, 'error', errorIdOpts(e));
+    toast(t('grid.listError', { message: (e as Error).message }), 'error', errorIdOpts(e));
   } finally {
     loader.remove();
   }
@@ -1594,9 +1611,9 @@ export function initBatchBar(paneId: PaneId): void {
     const pane = getPane(paneId);
     const count = pane.selected.size;
     const ok = await confirmDialog({
-      title: 'Eliminar archivos',
-      message: `Se eliminarán ${count} archivo(s). ¿Continuar?`,
-      confirmLabel: `Eliminar ${count}`,
+      title: t('batch.deleteTitle'),
+      message: t('batch.deleteMessage', { count }),
+      confirmLabel: t('batch.deleteConfirm', { count }),
       danger: true,
     });
     if (!ok) return;
@@ -1605,7 +1622,7 @@ export function initBatchBar(paneId: PaneId): void {
         method: 'POST',
         body: { keys: [...pane.selected] },
       });
-      toast('Archivos eliminados', 'success');
+      toast(t('batch.deleted'), 'success');
       pane.selected.clear();
       await loadObjects(paneId);
     } catch (e) {

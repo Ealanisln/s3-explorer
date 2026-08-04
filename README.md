@@ -34,7 +34,7 @@ Self-hosted, multi-user file explorer for object storage. Each user brings their
 - **Personal Access Tokens (API)** — scoped Bearer tokens (`read` / `write`) for agents and scripts, with optional expiry, per-user cap, one-time display (only the SHA-256 hash is stored), instant revocation, and per-IP rate limiting on failed attempts. Tokens never grant access to stored S3 credentials — none are stored server-side.
 - **Admin user management UI** and a JSON-line audit log on stdout.
 
-> **Note:** the UI is currently in Spanish. Internationalization contributions are welcome.
+> **Note:** the UI is bilingual — Spanish and English, auto-detected from the browser language with a manual ES/EN toggle in the sidebar. Additional languages are a welcome contribution: add a dictionary file under `public/src/i18n/` mirroring `es.ts`.
 
 ## MCP server
 

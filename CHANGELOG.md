@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Internationalized SPA UI: Spanish + English dictionaries
+  (`public/src/i18n/`), auto-detected from `localStorage['s3x-lang']` →
+  `navigator.language` (`es*` → Spanish, anything else → English), with a
+  manual ES/EN toggle in the sidebar footer next to the theme toggle. Static
+  HTML re-translates instantly on switch; dynamically rendered content picks
+  up the new language on its next render. Known machine-readable API error
+  `code`s (TOKEN_INVALID, TOKEN_SCOPE, TOKEN_LIMIT, NO_SESSION, USER_INVALID,
+  TOTP_REQUIRED, PASSWORD_CHANGE_REQUIRED, BREACHED, ALREADY_ENROLLED,
+  BAD_CONNECTION_ID) are localized client-side; unknown codes fall back to
+  the server-provided message. Backend responses are unchanged.
+
 ## [1.3.0] - 2026-08-04
 
 ### Added

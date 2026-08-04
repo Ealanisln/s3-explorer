@@ -1,3 +1,5 @@
+import { t } from '../i18n/index.js';
+
 export type ToastKind = 'info' | 'success' | 'error';
 
 export interface ToastOpts {
@@ -29,7 +31,7 @@ export function toast(
     const idEl = document.createElement('div');
     idEl.className = 'toast-error-id';
     idEl.textContent = opts.errorId;
-    idEl.title = 'Click para copiar — referencia para grep de logs server-side';
+    idEl.title = t('toast.copyErrorId');
     idEl.style.cursor = 'pointer';
     idEl.onclick = (): void => {
       navigator.clipboard.writeText(opts.errorId!).catch(() => undefined);

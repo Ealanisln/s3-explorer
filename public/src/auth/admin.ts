@@ -9,6 +9,7 @@ import { toast, errorIdOpts } from '../util/toast.js';
 import { confirmDialog, promptDialog } from '../util/dialog.js';
 import { formatDate } from '../util/format.js';
 import { mountIcons } from '../util/icons.js';
+import { t, localizeServerError } from '../i18n/index.js';
 import { getCurrentUser } from './bootstrap.js';
 
 interface AdminUserRow {
@@ -22,11 +23,11 @@ interface AdminUserRow {
 
 async function loadUsersAdmin(): Promise<void> {
   const tbody = $('users-tbody');
-  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px">Cargando...</td></tr>';
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px">${escapeHtml(t('common.loading'))}</td></tr>`;
   try {
     const res = await fetch('/auth/admin/users', { credentials: 'same-origin' });
-    const data = await res.json() as { users?: AdminUserRow[]; message?: string };
-    if (!res.ok) throw new Error(data.message || 'Error');
+    const data = await res.json() as { users?: AdminUserRow[]; message?: string; code?: string };
+    if (!res.ok) throw new Error(localizeServerError(data));
     const me = getCurrentUser();
     tbody.innerHTML = '';
     for (const u of data.users || []) {
@@ -36,15 +37,15 @@ async function loadUsersAdmin(): Promise<void> {
         <td>${escapeHtml(u.username)}</td>
         <td><span class="user-role ${u.role === 'admin' ? 'admin' : ''}">${u.role.toUpperCase()}</span></td>
         <td>${u.totpEnrolled
-          ? `<span class="pill ok"><span class="dot"></span>activado</span> <span style="color:var(--text-dim);font-size:11px;margin-left:6px">${u.recoveryRemaining} cód.</span>`
-          : '<span class="pill warn"><span class="dot"></span>pendiente</span>'}</td>
-        <td style="font-size:12px;color:var(--text-dim)">${u.lastLoginAt ? escapeHtml(formatDate(u.lastLoginAt)) : 'nunca'}</td>
-        <td>${u.disabled ? '<span style="color:var(--danger)">deshabilitado</span>' : 'activo'}</td>
+          ? `<span class="pill ok"><span class="dot"></span>${t('users.pillEnabled')}</span> <span style="color:var(--text-dim);font-size:11px;margin-left:6px">${t('users.codesAbbrev', { count: u.recoveryRemaining })}</span>`
+          : `<span class="pill warn"><span class="dot"></span>${t('users.pillPending')}</span>`}</td>
+        <td style="font-size:12px;color:var(--text-dim)">${u.lastLoginAt ? escapeHtml(formatDate(u.lastLoginAt)) : t('common.never')}</td>
+        <td>${u.disabled ? `<span style="color:var(--danger)">${t('users.disabled')}</span>` : t('users.active')}</td>
         <td style="text-align:right">
-          ${isMe ? '<span style="color:var(--text-dim);font-size:11px">(tú)</span>' :
-            `<button class="btn-icon" data-act="reset-totp" data-user="${escapeHtml(u.username)}" title="Resetear TOTP" aria-label="Resetear TOTP"><i data-icon="key"></i></button>
-             <button class="btn-icon" data-act="reset-pw" data-user="${escapeHtml(u.username)}" title="Resetear contraseña" aria-label="Resetear contraseña"><i data-icon="lock"></i></button>
-             <button class="btn-icon" data-act="${u.disabled ? 'enable' : 'disable'}" data-user="${escapeHtml(u.username)}" title="${u.disabled ? 'Habilitar' : 'Deshabilitar'}" aria-label="${u.disabled ? 'Habilitar' : 'Deshabilitar'}"><i data-icon="${u.disabled ? 'power' : 'lock'}"></i></button>`}
+          ${isMe ? `<span style="color:var(--text-dim);font-size:11px">${t('users.you')}</span>` :
+            `<button class="btn-icon" data-act="reset-totp" data-user="${escapeHtml(u.username)}" title="${t('users.resetTotp')}" aria-label="${t('users.resetTotp')}"><i data-icon="key"></i></button>
+             <button class="btn-icon" data-act="reset-pw" data-user="${escapeHtml(u.username)}" title="${t('users.resetPassword')}" aria-label="${t('users.resetPassword')}"><i data-icon="lock"></i></button>
+             <button class="btn-icon" data-act="${u.disabled ? 'enable' : 'disable'}" data-user="${escapeHtml(u.username)}" title="${u.disabled ? t('users.enable') : t('users.disable')}" aria-label="${u.disabled ? t('users.enable') : t('users.disable')}"><i data-icon="${u.disabled ? 'power' : 'lock'}"></i></button>`}
         </td>
       `;
       tbody.appendChild(tr);
@@ -63,33 +64,33 @@ async function handleUserAction(act: string, username: string): Promise<void> {
   let url = '';
   let confirmTitle = '';
   let confirmMsg = '';
-  let confirmLabel = 'Aceptar';
+  let confirmLabel = t('common.accept');
   let danger = false;
   if (act === 'disable') {
-    confirmTitle = 'Deshabilitar usuario';
-    confirmMsg = `Se deshabilitará a "${username}". No podrá iniciar sesión hasta que lo vuelvas a habilitar.`;
-    confirmLabel = 'Deshabilitar';
+    confirmTitle = t('users.disableTitle');
+    confirmMsg = t('users.disableMessage', { name: username });
+    confirmLabel = t('users.disable');
     danger = true;
     url = `/auth/admin/users/${encodeURIComponent(username)}/disable`;
   } else if (act === 'enable') {
-    confirmTitle = 'Habilitar usuario';
-    confirmMsg = `Se habilitará a "${username}" para iniciar sesión nuevamente.`;
-    confirmLabel = 'Habilitar';
+    confirmTitle = t('users.enableTitle');
+    confirmMsg = t('users.enableMessage', { name: username });
+    confirmLabel = t('users.enable');
     url = `/auth/admin/users/${encodeURIComponent(username)}/enable`;
   } else if (act === 'reset-totp') {
-    confirmTitle = 'Resetear TOTP';
-    confirmMsg = `Se borrará el segundo factor de "${username}". Tendrá que re-enrolar su app de autenticación en su próximo login.`;
-    confirmLabel = 'Resetear TOTP';
+    confirmTitle = t('users.resetTotp');
+    confirmMsg = t('users.resetTotpMessage', { name: username });
+    confirmLabel = t('users.resetTotp');
     danger = true;
     url = `/auth/admin/users/${encodeURIComponent(username)}/reset-totp`;
   } else if (act === 'reset-pw') {
     const np = await promptDialog({
-      title: 'Reset de contraseña',
-      message: `Nueva contraseña inicial para "${username}". El usuario deberá cambiarla en su próximo inicio de sesión.`,
+      title: t('users.resetPwTitle'),
+      message: t('users.resetPwMessage', { name: username }),
       inputType: 'password',
-      placeholder: 'Mínimo 8 caracteres',
-      confirmLabel: 'Aplicar',
-      validate: (v) => (v.length < 8 ? 'La contraseña debe tener al menos 8 caracteres.' : null),
+      placeholder: t('users.resetPwPlaceholder'),
+      confirmLabel: t('users.resetPwApply'),
+      validate: (v) => (v.length < 8 ? t('users.resetPwTooShort') : null),
     });
     if (np === null) return;
     body = { newPassword: np };
@@ -108,8 +109,8 @@ async function handleUserAction(act: string, username: string): Promise<void> {
       credentials: 'same-origin',
       body: body ? JSON.stringify(body) : undefined,
     });
-    const data = await res.json() as { ok?: boolean; message?: string };
-    if (!res.ok) throw new Error(data.message || 'Error');
+    const data = await res.json() as { ok?: boolean; message?: string; code?: string };
+    if (!res.ok) throw new Error(localizeServerError(data));
     toast('OK', 'success');
     loadUsersAdmin();
   } catch (ex) {
@@ -139,9 +140,9 @@ export function initAdminUsers(): void {
           role: (f.elements.namedItem('role') as HTMLSelectElement).value,
         }),
       });
-      const data = await res.json() as { ok?: boolean; message?: string };
-      if (!res.ok) throw new Error(data.message || 'Error');
-      msg.textContent = `✓ Usuario "${(f.elements.namedItem('username') as HTMLInputElement).value}" creado. Deberá cambiar contraseña en primer login.`;
+      const data = await res.json() as { ok?: boolean; message?: string; code?: string };
+      if (!res.ok) throw new Error(localizeServerError(data));
+      msg.textContent = t('users.created', { name: (f.elements.namedItem('username') as HTMLInputElement).value });
       msg.className = 'test-result ok';
       f.reset();
       loadUsersAdmin();

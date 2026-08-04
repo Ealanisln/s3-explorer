@@ -5,6 +5,9 @@ import { toast, errorIdOpts } from '../util/toast.js';
 import { confirmDialog } from '../util/dialog.js';
 import { formatDate } from '../util/format.js';
 import { mountIcons } from '../util/icons.js';
+// `i18nT` alias exists because the token-table loop below binds `t` to each
+// token row, shadowing the translate function inside that template literal.
+import { t, t as i18nT, localizeServerError } from '../i18n/index.js';
 import { setCurrentUser, getCurrentUser } from './bootstrap.js';
 
 function escapeHtml(s: string): string {
@@ -39,9 +42,9 @@ export function initAccountForms(): void {
           newPassword: (f.elements.namedItem('next') as HTMLInputElement).value,
         }),
       });
-      const data = await res.json() as { ok?: boolean; message?: string };
-      if (!res.ok) throw new Error(data.message || 'Error');
-      msg.textContent = '✓ Contraseña actualizada';
+      const data = await res.json() as { ok?: boolean; message?: string; code?: string };
+      if (!res.ok) throw new Error(localizeServerError(data));
+      msg.textContent = t('account.passwordUpdated');
       msg.className = 'test-result ok';
       f.reset();
       const u = getCurrentUser();
@@ -54,18 +57,18 @@ export function initAccountForms(): void {
 
   $('btn-regen-recovery').onclick = async (): Promise<void> => {
     const ok = await confirmDialog({
-      title: 'Regenerar códigos de recuperación',
-      message: 'Tus códigos actuales quedarán inválidos al generar los nuevos. Asegúrate de guardar los nuevos en un lugar seguro.',
-      confirmLabel: 'Regenerar',
+      title: t('account.regenTitle'),
+      message: t('account.regenMessage'),
+      confirmLabel: t('account.regenConfirm'),
     });
     if (!ok) return;
     try {
       const res = await fetch('/auth/me/recovery', { method: 'POST', credentials: 'same-origin' });
-      const data = await res.json() as { recoveryCodes?: string[]; message?: string };
-      if (!res.ok) throw new Error(data.message || 'Error');
+      const data = await res.json() as { recoveryCodes?: string[]; message?: string; code?: string };
+      if (!res.ok) throw new Error(localizeServerError(data));
       const list = $('new-recovery-codes');
       list.innerHTML = (data.recoveryCodes || []).map((c) => `<div class="code">${escapeHtml(c)}</div>`).join('');
-      toast('Códigos regenerados. Guárdalos ahora.', 'success', 8000);
+      toast(t('account.codesRegenerated'), 'success', 8000);
     } catch (ex) {
       toast((ex as Error).message, 'error', errorIdOpts(ex));
     }
@@ -88,14 +91,14 @@ interface ApiTokenRow {
 
 async function loadTokens(): Promise<void> {
   const tbody = $('tokens-tbody');
-  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px">Cargando...</td></tr>';
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px">${escapeHtml(t('common.loading'))}</td></tr>`;
   try {
     const res = await fetch('/auth/tokens', { credentials: 'same-origin' });
-    const data = await res.json() as { tokens?: ApiTokenRow[]; message?: string };
-    if (!res.ok) throw new Error(data.message || 'Error');
+    const data = await res.json() as { tokens?: ApiTokenRow[]; message?: string; code?: string };
+    if (!res.ok) throw new Error(localizeServerError(data));
     tbody.innerHTML = '';
     if (!data.tokens || data.tokens.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px">Sin tokens. Crea uno para conectar un agente o script.</td></tr>';
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px">${escapeHtml(t('tokens.empty'))}</td></tr>`;
       return;
     }
     const now = Date.now();
@@ -104,16 +107,16 @@ async function loadTokens(): Promise<void> {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${escapeHtml(t.name)}</td>
-        <td><span class="pill ${t.scope === 'write' ? 'warn' : 'ok'}"><span class="dot"></span>${t.scope === 'write' ? 'escritura' : 'lectura'}</span></td>
+        <td><span class="pill ${t.scope === 'write' ? 'warn' : 'ok'}"><span class="dot"></span>${t.scope === 'write' ? i18nT('tokens.pillWrite') : i18nT('tokens.pillRead')}</span></td>
         <td style="font-size:12px;color:var(--text-dim)">${escapeHtml(formatDate(t.createdAt))}</td>
-        <td style="font-size:12px;color:var(--text-dim)">${t.expiresAt ? escapeHtml(formatDate(t.expiresAt)) : 'nunca'}</td>
-        <td style="font-size:12px;color:var(--text-dim)">${t.lastUsedAt ? escapeHtml(formatDate(t.lastUsedAt)) : 'nunca'}</td>
+        <td style="font-size:12px;color:var(--text-dim)">${t.expiresAt ? escapeHtml(formatDate(t.expiresAt)) : i18nT('common.never')}</td>
+        <td style="font-size:12px;color:var(--text-dim)">${t.lastUsedAt ? escapeHtml(formatDate(t.lastUsedAt)) : i18nT('common.never')}</td>
         <td style="text-align:right">
           ${t.revokedAt
-    ? '<span style="color:var(--danger);font-size:12px">revocado</span>'
+    ? `<span style="color:var(--danger);font-size:12px">${i18nT('tokens.revoked')}</span>`
     : expired
-      ? '<span style="color:var(--text-dim);font-size:12px">expirado</span>'
-      : `<button class="btn-icon" data-act="revoke-token" data-id="${t.id}" data-name="${escapeHtml(t.name)}" title="Revocar" aria-label="Revocar"><i data-icon="trash"></i></button>`}
+      ? `<span style="color:var(--text-dim);font-size:12px">${i18nT('tokens.expired')}</span>`
+      : `<button class="btn-icon" data-act="revoke-token" data-id="${t.id}" data-name="${escapeHtml(t.name)}" title="${i18nT('tokens.revoke')}" aria-label="${i18nT('tokens.revoke')}"><i data-icon="trash"></i></button>`}
         </td>
       `;
       tbody.appendChild(tr);
@@ -129,9 +132,9 @@ async function loadTokens(): Promise<void> {
 
 async function revokeTokenAction(id: string, name: string): Promise<void> {
   const ok = await confirmDialog({
-    title: 'Revocar token',
-    message: `El token "${name}" dejará de funcionar de inmediato. Cualquier agente o script que lo use perderá el acceso.`,
-    confirmLabel: 'Revocar',
+    title: t('tokens.revokeTitle'),
+    message: t('tokens.revokeMessage', { name }),
+    confirmLabel: t('tokens.revoke'),
     danger: true,
   });
   if (!ok) return;
@@ -140,9 +143,9 @@ async function revokeTokenAction(id: string, name: string): Promise<void> {
       method: 'DELETE',
       credentials: 'same-origin',
     });
-    const data = await res.json() as { ok?: boolean; message?: string };
-    if (!res.ok) throw new Error(data.message || 'Error');
-    toast('Token revocado', 'success');
+    const data = await res.json() as { ok?: boolean; message?: string; code?: string };
+    if (!res.ok) throw new Error(localizeServerError(data));
+    toast(t('tokens.revokedToast'), 'success');
     loadTokens();
   } catch (ex) {
     toast((ex as Error).message, 'error', errorIdOpts(ex));
@@ -174,13 +177,13 @@ function initApiTokens(): void {
           expiresInDays: expiresRaw ? Number(expiresRaw) : null,
         }),
       });
-      const data = await res.json() as { token?: string; message?: string };
-      if (!res.ok || !data.token) throw new Error(data.message || 'Error');
+      const data = await res.json() as { token?: string; message?: string; code?: string };
+      if (!res.ok || !data.token) throw new Error(localizeServerError(data));
       f.reset();
       f.hidden = true;
       $('new-token-value').textContent = data.token;
       ($('new-token-box') as HTMLDivElement).hidden = false;
-      toast('Token creado. Guárdalo ahora — no se volverá a mostrar.', 'success', 8000);
+      toast(t('tokens.createdToast'), 'success', 8000);
       loadTokens();
     } catch (ex) {
       msg.textContent = (ex as Error).message;
@@ -193,9 +196,9 @@ function initApiTokens(): void {
     if (!value) return;
     try {
       await navigator.clipboard.writeText(value);
-      toast('Token copiado al portapapeles', 'success');
+      toast(t('tokens.copied'), 'success');
     } catch {
-      toast('No se pudo copiar. Selecciona y copia el token manualmente.', 'error');
+      toast(t('tokens.copyFailed'), 'error');
     }
   };
 }

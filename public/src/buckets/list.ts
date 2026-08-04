@@ -11,6 +11,7 @@ import { State, getPane } from '../state.js';
 import type { PaneId } from '../state.js';
 import { api } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
+import { t } from '../i18n/index.js';
 import { paneEl, paneElMaybe } from '../util/dom.js';
 import { confirmDialog } from '../util/dialog.js';
 import { loadObjects } from '../objects/grid.js';
@@ -76,21 +77,19 @@ export async function loadVersioning(paneId?: PaneId): Promise<void> {
       (paneEl('chk-deleted', p) as HTMLInputElement).checked = false;
     }
     if (status === 'Enabled') {
-      btn.textContent = 'Versionado: ON 🔒';
-      btn.title = 'Versionado activado (permanente desde esta app — para suspenderlo usa awscli)';
+      btn.textContent = t('versioning.on');
+      btn.title = t('versioning.onTitle');
       btn.disabled = true;
       btn.onclick = null;
     } else {
-      btn.textContent = 'Activar versionado';
-      btn.title = 'Activar versionado en este bucket (no se puede desactivar después desde esta app)';
+      btn.textContent = t('versioning.enable');
+      btn.title = t('versioning.enableBtnTitle');
       btn.disabled = false;
       btn.onclick = async (): Promise<void> => {
         const ok = await confirmDialog({
-          title: 'Activar versionado',
-          message: `Se activará versionado en "${pane.activeBucket}".\n\n`
-            + 'IMPORTANTE: una vez activado, NO podrás desactivarlo desde esta app. '
-            + 'Si necesitas suspenderlo, deberás usar awscli o la consola del proveedor.',
-          confirmLabel: 'Activar versionado',
+          title: t('versioning.enable'),
+          message: t('versioning.enableMessage', { bucket: pane.activeBucket || '' }),
+          confirmLabel: t('versioning.enable'),
         });
         if (!ok) return;
         try {
@@ -98,7 +97,7 @@ export async function loadVersioning(paneId?: PaneId): Promise<void> {
             method: 'PUT',
             body: { enabled: true },
           });
-          toast('Versionado activado', 'success');
+          toast(t('versioning.enabled'), 'success');
           await loadVersioning(p);
         } catch (e) {
           toast((e as Error).message, 'error', errorIdOpts(e));

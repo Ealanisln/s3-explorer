@@ -12,6 +12,7 @@ import { paneConn, getPane } from '../state.js';
 import type { PaneId } from '../state.js';
 import { $, openModal, closeModal, escapeHtml } from '../util/dom.js';
 import { toast, errorIdOpts } from '../util/toast.js';
+import { t } from '../i18n/index.js';
 import type { Connection } from '../types.js';
 import { loadObjects } from '../objects/grid.js';
 
@@ -62,24 +63,19 @@ function basename(key: string): string {
 // but they rendered inconsistently in some browsers — text labels are
 // bullet-proof and screen-reader-friendly out of the box.)
 type StatusKey = 'pending' | 'active' | 'done' | 'error';
-const STATUS_TEXT_COPY: Record<StatusKey, string> = {
-  pending: 'Pendiente',
-  active: 'Copiando…',
-  done: 'Copiado',
-  error: 'Error',
-};
-const STATUS_TEXT_MOVE: Record<StatusKey, string> = {
-  pending: 'Pendiente',
-  active: 'Moviendo…',
-  done: 'Movido',
-  error: 'Error',
-};
+// Built lazily (functions, not consts) so each row paints in the CURRENT
+// language rather than the boot-time one.
+function statusText(status: StatusKey, mode: 'copy' | 'move'): string {
+  if (status === 'pending') return t('transfer.pending');
+  if (status === 'error') return t('common.error');
+  if (mode === 'move') return status === 'active' ? t('transfer.moving') : t('transfer.moved');
+  return status === 'active' ? t('transfer.copying') : t('transfer.copied');
+}
 
 function setRowStatus(row: HTMLElement, status: StatusKey, mode: 'copy' | 'move'): void {
   const cell = row.querySelector('.status');
   if (!cell) return;
-  const map = mode === 'move' ? STATUS_TEXT_MOVE : STATUS_TEXT_COPY;
-  cell.textContent = map[status];
+  cell.textContent = statusText(status, mode);
 }
 
 function buildItems(req: TransferRequest): { key: string; destKey: string }[] {
@@ -115,7 +111,7 @@ function openConfirmModal(deps: ConfirmDeps): Promise<'copy' | 'move' | null> {
   // Switch the count slot to show either "N archivos" or "carpeta foo/".
   // The HTML element exists in both modes; we just rewrite its content.
   if (deps.folderLabel !== undefined) {
-    $('transfer-confirm-count').textContent = `carpeta ${deps.folderLabel} (descubrir contenido al confirmar)`;
+    $('transfer-confirm-count').textContent = t('transfer.folderLabel', { name: deps.folderLabel });
   } else {
     $('transfer-confirm-count').textContent = String(deps.count);
   }
@@ -172,7 +168,7 @@ function openProgressModal(opts: {
   $('transfer-progress-title').textContent = opts.initialTitle;
   ($('btn-transfer-close') as HTMLButtonElement).style.display = 'none';
   ($('btn-transfer-abort') as HTMLButtonElement).style.display = 'inline-flex';
-  ($('btn-transfer-abort') as HTMLButtonElement).textContent = 'Cancelar';
+  ($('btn-transfer-abort') as HTMLButtonElement).textContent = t('common.cancel');
   ($('btn-transfer-abort') as HTMLButtonElement).disabled = false;
   ($('transfer-progress-fill') as HTMLElement).style.width = '0%';
   // Sweep animation while transfer is active. CSS toggles via the
@@ -184,7 +180,7 @@ function openProgressModal(opts: {
   const byKey = new Map<string, HTMLElement>();
   const total = opts.knownItems ? opts.knownItems.length : null;
   $('transfer-progress-summary').textContent = opts.isFolderMode
-    ? 'Descubriendo carpeta…'
+    ? t('transfer.discoveringFolder')
     : `0 / ${total ?? '?'}`;
   if (opts.knownItems) {
     for (const it of opts.knownItems) {
@@ -198,7 +194,7 @@ function openProgressModal(opts: {
   ($('btn-transfer-abort') as HTMLButtonElement).onclick = (): void => {
     abort.abort();
     ($('btn-transfer-abort') as HTMLButtonElement).disabled = true;
-    ($('btn-transfer-abort') as HTMLButtonElement).textContent = 'Cancelando…';
+    ($('btn-transfer-abort') as HTMLButtonElement).textContent = t('progress.cancelling');
   };
 
   return {
@@ -244,12 +240,17 @@ function finishProgressModal(state: ProgressState, aborted: boolean): void {
   ($('btn-transfer-close') as HTMLButtonElement).style.display = 'inline-flex';
   // Stop the sweep animation; bar stays at its final width.
   ($('transfer-progress-fill').parentElement as HTMLElement | null)?.classList.remove('in-progress');
-  const verb = state.mode === 'move' ? 'movidos' : 'copiados';
-  const tail = aborted ? ' (cancelado)' : '';
+  const verb = state.mode === 'move' ? t('transfer.verbMoved') : t('transfer.verbCopied');
+  const tail = aborted ? t('progress.cancelledSuffix') : '';
   const totalSuffix = state.total !== null && state.total !== state.ok + state.failed
-    ? ` (de ${state.total.toLocaleString()})` : '';
-  $('transfer-progress-summary').textContent =
-    `${state.ok.toLocaleString()} ${verb} · ${state.failed.toLocaleString()} fallidos${totalSuffix}${tail}`;
+    ? t('transfer.ofTotal', { total: state.total.toLocaleString() }) : '';
+  $('transfer-progress-summary').textContent = t('transfer.summary', {
+    ok: state.ok.toLocaleString(),
+    verb,
+    failed: state.failed.toLocaleString(),
+    total: totalSuffix,
+    tail,
+  });
 }
 
 // ── SSE frame handling ────────────────────────────────────────────────────
@@ -271,13 +272,12 @@ function applyFrame(state: ProgressState, ev: SseFrame): void {
   const list = $('transfer-item-list');
   if (ev.t === 'discovering') {
     // Folder mode: backend is still walking ListObjectsV2. Tell the user.
-    $('transfer-progress-summary').textContent = `Descubriendo carpeta… ${ev.scanned.toLocaleString()} archivos`;
+    $('transfer-progress-summary').textContent = t('transfer.discoveringCount', { count: ev.scanned.toLocaleString() });
   } else if (ev.t === 'discovered') {
     // Discovery done — `total` is now stable. Subsequent `progress` frames
     // use this total for the bar %.
     state.total = ev.total;
-    $('transfer-progress-summary').textContent =
-      `Descubrimiento completo · ${ev.total.toLocaleString()} archivos`;
+    $('transfer-progress-summary').textContent = t('transfer.discovered', { count: ev.total.toLocaleString() });
   } else if (ev.t === 'progress') {
     // Special sentinel keys from the backend circuit breakers — surface as
     // visible errors but don't try to add a row for them by their fake key.
@@ -352,20 +352,20 @@ export async function runTransfer(req: TransferRequest): Promise<void> {
   const sourceConn = paneConn(req.sourcePaneId);
   const destConn = paneConn(req.destPaneId);
   if (!sourceConn || !destConn) {
-    toast('Falta conexión activa en uno de los paneles', 'error');
+    toast(t('transfer.missingConn'), 'error');
     return;
   }
   const sourcePane = getPane(req.sourcePaneId);
   const destPane = getPane(req.destPaneId);
   if (!sourcePane.activeBucket || !destPane.activeBucket) {
-    toast('Falta bucket activo en uno de los paneles', 'error');
+    toast(t('transfer.missingBucket'), 'error');
     return;
   }
 
   // Exactly one of keys / folder must be set.
   const isFolderMode = !!req.folder;
   if (isFolderMode === Boolean(req.keys?.length)) {
-    toast('Drop inválido — ni archivos ni carpeta', 'error');
+    toast(t('transfer.invalidDrop'), 'error');
     return;
   }
 
@@ -411,12 +411,14 @@ export async function runTransfer(req: TransferRequest): Promise<void> {
   if (!mode) return;
 
   const items = isFolderMode ? null : buildItems({ ...req, keys: req.keys ?? [] });
-  const verbTitle = mode === 'move' ? 'Moviendo' : 'Copiando';
+  const verbTitle = mode === 'move' ? t('transfer.titleMoving') : t('transfer.titleCopying');
   const state = openProgressModal({
     knownItems: items,
     mode,
     isFolderMode,
-    initialTitle: isFolderMode ? `${verbTitle} carpeta` : `${verbTitle} archivos`,
+    initialTitle: isFolderMode
+      ? t('transfer.titleFolder', { verb: verbTitle })
+      : t('transfer.titleFiles', { verb: verbTitle }),
   });
 
   // Body shape: items vs prefix (mutually exclusive per the server schema).
@@ -474,7 +476,7 @@ export async function runTransfer(req: TransferRequest): Promise<void> {
         try {
           const ev = JSON.parse(line.slice(5).trim()) as SseFrame;
           if (ev.t === 'fatal') {
-            toast(`Error del servidor: ${(ev as FatalFrame).message || 'desconocido'}`, 'error',
+            toast(t('api.serverError', { message: (ev as FatalFrame).message || t('common.unknown') }), 'error',
               (ev as FatalFrame).errorId ? { errorId: (ev as FatalFrame).errorId } : undefined);
             continue;
           }
@@ -487,18 +489,18 @@ export async function runTransfer(req: TransferRequest): Promise<void> {
 
     finishProgressModal(state, false);
     if (state.failed === 0) {
-      toast(`${state.ok} archivo(s) ${mode === 'move' ? 'movidos' : 'copiados'}`, 'success');
+      toast(t('transfer.completedOk', { count: state.ok, verb: mode === 'move' ? t('transfer.verbMoved') : t('transfer.verbCopied') }), 'success');
     } else {
-      toast(`Completado con ${state.failed} error(es)`, 'error');
+      toast(t('progress.completedWithErrors', { count: state.failed }), 'error');
     }
   } catch (e) {
     const err = e as Error;
     if (err.name === 'AbortError') {
       finishProgressModal(state, true);
-      toast('Transferencia cancelada', 'info');
+      toast(t('transfer.cancelled'), 'info');
     } else {
       finishProgressModal(state, false);
-      toast('Error: ' + err.message, 'error', errorIdOpts(e));
+      toast(t('grid.listError', { message: err.message }), 'error', errorIdOpts(e));
     }
   } finally {
     // Refresh the dest pane (always) and the source pane (for moves so the

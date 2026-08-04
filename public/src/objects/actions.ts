@@ -6,12 +6,13 @@ import { api, authHeaders } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
 import { $, openModal } from '../util/dom.js';
 import { confirmDialog, choiceDialog } from '../util/dialog.js';
+import { t } from '../i18n/index.js';
 
 export async function fetchAsBlob(url: string, filename: string): Promise<void> {
   try {
-    toast('Descargando...', 'info');
+    toast(t('action.downloading'), 'info');
     const res = await fetch(url, { headers: authHeaders() });
-    if (!res.ok) throw new Error('Falló la descarga');
+    if (!res.ok) throw new Error(t('action.downloadFailed'));
     const blob = await res.blob();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -29,7 +30,7 @@ export async function fetchAsBlob(url: string, filename: string): Promise<void> 
 // "open in new tab" and "copy link" — both want a single round-trip with a
 // fixed default duration, not the choice picker that shareObject() shows.
 async function presignShort(key: string, versionId?: string): Promise<string> {
-  if (!State.activeBucket) throw new Error('Bucket no activo');
+  if (!State.activeBucket) throw new Error(t('action.noBucket'));
   const params = new URLSearchParams({ key, expires: '300' });
   if (versionId) params.set('versionId', versionId);
   const { url } = await api<{ url: string; expires: number; capped: boolean }>(
@@ -55,7 +56,7 @@ export async function copyObjectLink(key: string, versionId?: string): Promise<v
     const url = await presignShort(key, versionId);
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(url);
-      toast('Enlace copiado (expira en 5 min)', 'success', 5000);
+      toast(t('action.linkCopied5m'), 'success', 5000);
       return;
     }
     // Fallback for older browsers / non-HTTPS contexts where the Clipboard
@@ -69,8 +70,8 @@ export async function copyObjectLink(key: string, versionId?: string): Promise<v
     ta.select();
     const ok = document.execCommand('copy');
     ta.remove();
-    if (ok) toast('Enlace copiado (expira en 5 min)', 'success', 5000);
-    else toast('No se pudo copiar — selecciónalo manualmente: ' + url, 'info', 10000);
+    if (ok) toast(t('action.linkCopied5m'), 'success', 5000);
+    else toast(t('action.copyManual', { url }), 'info', 10000);
   } catch (e) {
     toast((e as Error).message, 'error', errorIdOpts(e));
   }
@@ -89,12 +90,12 @@ export function downloadObject(key: string, versionId?: string): void {
 export async function shareObject(key: string, versionId?: string): Promise<void> {
   if (!State.activeBucket) return;
   const choice = await choiceDialog<'5m' | '1h' | '24h'>({
-    title: 'Enlace temporal',
-    message: 'Selecciona la validez del enlace. El archivo será accesible vía URL durante ese tiempo.',
+    title: t('share.title'),
+    message: t('share.message'),
     choices: [
-      { value: '5m', label: '5 minutos', hint: 'Ideal para compartir rápidamente.', recommended: true },
-      { value: '1h', label: '1 hora', hint: 'Para envíos por chat o correo.' },
-      { value: '24h', label: '24 horas', hint: 'Acceso temporal extendido.' },
+      { value: '5m', label: t('share.5m'), hint: t('share.5mHint'), recommended: true },
+      { value: '1h', label: t('share.1h'), hint: t('share.1hHint') },
+      { value: '24h', label: t('share.24h'), hint: t('share.24hHint') },
     ],
   });
   if (choice === null) return;
@@ -108,7 +109,7 @@ export async function shareObject(key: string, versionId?: string): Promise<void
     );
     await navigator.clipboard.writeText(url);
     const human = actual >= 3600 ? `${Math.round(actual / 3600)} h` : `${Math.round(actual / 60)} min`;
-    toast(`Enlace copiado (válido ${human})${capped ? ' — el servidor limitó la duración' : ''}`, 'success', 5000);
+    toast(t('share.copied', { duration: human, capped: capped ? t('share.cappedSuffix') : '' }), 'success', 5000);
   } catch (e) {
     toast((e as Error).message, 'error', errorIdOpts(e));
   }
@@ -121,9 +122,9 @@ export async function deleteObject(
   if (!State.activeBucket) return;
   const name = key.split('/').pop() || key;
   const ok = await confirmDialog({
-    title: 'Eliminar archivo',
-    message: `Se eliminará "${name}". ¿Continuar?`,
-    confirmLabel: 'Eliminar',
+    title: t('delete.title'),
+    message: t('delete.message', { name }),
+    confirmLabel: t('common.delete'),
     danger: true,
   });
   if (!ok) return;
@@ -132,7 +133,7 @@ export async function deleteObject(
       method: 'DELETE',
       body: { key },
     });
-    toast('Eliminado', 'success');
+    toast(t('delete.done'), 'success');
     await onAfter();
   } catch (e) {
     toast((e as Error).message, 'error', errorIdOpts(e));
@@ -149,7 +150,7 @@ export async function restoreDeleteMarker(
       method: 'POST',
       body: { key: o.Key, versionId: o.VersionId },
     });
-    toast('Archivo restaurado', 'success');
+    toast(t('restore.done'), 'success');
     await onAfter();
   } catch (e) {
     toast((e as Error).message, 'error', errorIdOpts(e));

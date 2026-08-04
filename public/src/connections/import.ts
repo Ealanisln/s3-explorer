@@ -2,6 +2,7 @@
 // the connection form. File picker + drag-and-drop on the import row.
 
 import { $ } from '../util/dom.js';
+import { t } from '../i18n/index.js';
 
 function parseEnvLike(text: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -30,7 +31,7 @@ function suggestNameFromFile(filename: string): string {
   if (lower.includes('wasabi')) return 'Wasabi';
   if (lower.includes('b2') || lower.includes('backblaze')) return 'Backblaze B2';
   if (lower.includes('spaces') || lower.includes('digitalocean')) return 'DigitalOcean Spaces';
-  return filename.replace(/^\./, '').replace(/\.[^.]+$/, '').replace(/[._-]+/g, ' ').trim() || 'Importado';
+  return filename.replace(/^\./, '').replace(/\.[^.]+$/, '').replace(/[._-]+/g, ' ').trim() || t('import.suggestedName');
 }
 
 function applyImportedToForm(parsed: Record<string, string>, suggestedName: string): boolean {
@@ -47,7 +48,7 @@ function applyImportedToForm(parsed: Record<string, string>, suggestedName: stri
   const sessionToken = parsed.AWS_SESSION_TOKEN || '';
 
   if (!access || !secret) {
-    result.textContent = '✗ El archivo no tiene access key y secret key.';
+    result.textContent = t('import.missingKeys');
     result.className = 'test-result err';
     return false;
   }
@@ -65,7 +66,7 @@ function applyImportedToForm(parsed: Record<string, string>, suggestedName: stri
     if (!existing.includes(bucket)) existing.push(bucket);
     get('buckets').value = existing.join('\n');
   }
-  result.textContent = `✓ Importado · ${Object.keys(parsed).length} campos leídos`;
+  result.textContent = t('import.done', { count: Object.keys(parsed).length });
   result.className = 'test-result ok';
   return true;
 }
@@ -81,7 +82,7 @@ export function initImport(): void {
     if (!file) return;
     const result = $('import-result');
     if (file.size > 64 * 1024) {
-      result.textContent = '✗ Archivo demasiado grande (máx 64 KB).';
+      result.textContent = t('import.tooLarge');
       result.className = 'test-result err';
       return;
     }

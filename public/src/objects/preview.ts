@@ -7,6 +7,7 @@ import { toast, errorIdOpts } from '../util/toast.js';
 import { $, openModal, escapeHtml } from '../util/dom.js';
 import { confirmDialog } from '../util/dialog.js';
 import { formatSize, formatDate } from '../util/format.js';
+import { t } from '../i18n/index.js';
 import { mountIcons } from '../util/icons.js';
 import { downloadObject, shareObject } from './actions.js';
 import type { S3Object } from '../types.js';
@@ -33,14 +34,14 @@ export function configurePreview(deps: { onObjectsChanged: () => void | Promise<
 
 export async function renderPreviewBody(obj: S3Object, versionInfo: VersionInfo | null): Promise<void> {
   const body = $('preview-body');
-  body.innerHTML = '<div style="padding:40px;color:var(--text-dim)">Cargando vista previa...</div>';
+  body.innerHTML = `<div style="padding:40px;color:var(--text-dim)">${t('preview.loading')}</div>`;
   const info = $('preview-info');
   const versionId = versionInfo ? versionInfo.VersionId : null;
   currentPreviewVersionId = versionId;
   const sizeForPreview = versionInfo ? (versionInfo.Size ?? 0) : obj.Size;
   const dateForPreview = versionInfo ? versionInfo.LastModified : obj.LastModified;
   const versionLabel = versionId
-    ? `<span style="color:var(--warn); margin-left:8px">· versión ${versionId.slice(0, 8)}…${versionInfo!.IsLatest ? ' (LATEST)' : ''}</span>`
+    ? `<span style="color:var(--warn); margin-left:8px">${t('preview.versionTag', { id: versionId.slice(0, 8) })}${versionInfo!.IsLatest ? ' (LATEST)' : ''}</span>`
     : '';
   info.innerHTML = `${formatSize(sizeForPreview)} · ${formatDate(dateForPreview)}${versionLabel}`;
 
@@ -68,8 +69,8 @@ export async function renderPreviewBody(obj: S3Object, versionInfo: VersionInfo 
     } else {
       body.innerHTML = `<div style="padding:40px;color:var(--text-dim);text-align:center">
         <p style="font-size:48px;margin-bottom:8px">📄</p>
-        <p>Vista previa no disponible para este tipo de archivo.</p>
-        <p style="font-size:12px;margin-top:8px">Tamaño: ${formatSize(sizeForPreview)}</p>
+        <p>${t('preview.unavailable')}</p>
+        <p style="font-size:12px;margin-top:8px">${t('preview.sizeLabel', { size: formatSize(sizeForPreview) })}</p>
       </div>`;
     }
   } catch (e) {
@@ -94,13 +95,13 @@ export function initPreview(): void {
     if (!currentPreview) return;
     const panel = $('versions-panel');
     panel.style.display = 'block';
-    panel.innerHTML = '<div style="color:var(--text-dim)">Cargando versiones...</div>';
+    panel.innerHTML = `<div style="color:var(--text-dim)">${t('versions.loading')}</div>`;
     try {
       const { versions } = await api<{ versions: VersionInfo[] }>(
         `/api/object/${encodeURIComponent(State.activeBucket || '')}/versions?key=${encodeURIComponent(currentPreview.Key)}`,
       );
       if (!versions.length) {
-        panel.innerHTML = '<div style="color:var(--text-dim)">Sin versiones (¿versionado deshabilitado?).</div>';
+        panel.innerHTML = `<div style="color:var(--text-dim)">${t('versions.none')}</div>`;
         return;
       }
       panel.innerHTML = '';
@@ -114,11 +115,11 @@ export function initPreview(): void {
           <div>${escapeHtml(formatDate(v.LastModified))}</div>
           <div>${isDel ? '<span class="delete-marker">DELETE</span>' : formatSize(v.Size ?? 0)} ${v.IsLatest ? '<span class="latest">LATEST</span>' : ''}</div>
           <div class="actions">
-            ${isDel ? '' : `<button class="btn xs" data-act="view" title="Vista previa de esta versión" aria-label="Ver"><i data-icon="eye" data-icon-size="12"></i></button>
-            <button class="btn xs" data-act="download" title="Descargar" aria-label="Descargar"><i data-icon="download" data-icon-size="12"></i></button>
-            <button class="btn xs" data-act="share" title="Enlace temporal" aria-label="Enlace"><i data-icon="link" data-icon-size="12"></i></button>
-            <button class="btn xs" data-act="restore" title="Restaurar como versión actual"><i data-icon="reindex" data-icon-size="12"></i> Restaurar</button>`}
-            <button class="btn xs btn-danger" data-act="delete" title="Eliminar permanente" aria-label="Eliminar"><i data-icon="trash" data-icon-size="12"></i></button>
+            ${isDel ? '' : `<button class="btn xs" data-act="view" title="${t('versions.viewTitle')}" aria-label="${t('versions.viewAria')}"><i data-icon="eye" data-icon-size="12"></i></button>
+            <button class="btn xs" data-act="download" title="${t('common.download')}" aria-label="${t('common.download')}"><i data-icon="download" data-icon-size="12"></i></button>
+            <button class="btn xs" data-act="share" title="${t('info.tempLink')}" aria-label="${t('common.link')}"><i data-icon="link" data-icon-size="12"></i></button>
+            <button class="btn xs" data-act="restore" title="${t('versions.restoreAsCurrent')}"><i data-icon="reindex" data-icon-size="12"></i> ${t('common.restore')}</button>`}
+            <button class="btn xs btn-danger" data-act="delete" title="${t('versions.permanentDelete')}" aria-label="${t('common.delete')}"><i data-icon="trash" data-icon-size="12"></i></button>
           </div>
         `;
         row.querySelectorAll<HTMLButtonElement>('button').forEach((b) => {
@@ -135,9 +136,9 @@ export function initPreview(): void {
               await shareObject(currentPreview.Key, v.VersionId);
             } else if (act === 'restore') {
               const ok = await confirmDialog({
-                title: 'Restaurar versión',
-                message: 'Esta versión se promoverá a versión actual del objeto. La versión actual quedará en el historial. ¿Continuar?',
-                confirmLabel: 'Restaurar',
+                title: t('versions.restoreTitle'),
+                message: t('versions.restoreMessage'),
+                confirmLabel: t('common.restore'),
               });
               if (!ok) return;
               try {
@@ -145,7 +146,7 @@ export function initPreview(): void {
                   method: 'POST',
                   body: { sourceKey: currentPreview.Key, destKey: currentPreview.Key, sourceVersionId: v.VersionId },
                 });
-                toast('Versión restaurada', 'success');
+                toast(t('versions.restored'), 'success');
                 await onObjectsChanged();
                 ($('btn-show-versions') as HTMLButtonElement).click();
               } catch (e) {
@@ -153,9 +154,9 @@ export function initPreview(): void {
               }
             } else if (act === 'delete') {
               const ok = await confirmDialog({
-                title: 'Eliminar versión',
-                message: `Se eliminará la versión ${v.VersionId.slice(0, 8)}… Esta acción no se puede deshacer.`,
-                confirmLabel: 'Eliminar versión',
+                title: t('versions.deleteTitle'),
+                message: t('versions.deleteMessage', { id: v.VersionId.slice(0, 8) }),
+                confirmLabel: t('versions.deleteConfirm'),
                 danger: true,
               });
               if (!ok) return;
@@ -164,7 +165,7 @@ export function initPreview(): void {
                   method: 'DELETE',
                   body: { key: currentPreview.Key, versionId: v.VersionId },
                 });
-                toast('Versión eliminada', 'success');
+                toast(t('versions.deleted'), 'success');
                 ($('btn-show-versions') as HTMLButtonElement).click();
               } catch (e) {
                 toast((e as Error).message, 'error', errorIdOpts(e));

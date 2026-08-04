@@ -23,6 +23,7 @@ import { State, getPane, setActivePane, subscribe } from '../state.js';
 import type { PaneId } from '../state.js';
 import { paneEl } from '../util/dom.js';
 import { toast } from '../util/toast.js';
+import { t } from '../i18n/index.js';
 
 const LS_KEY = 's3x-synced-nav';
 
@@ -56,8 +57,8 @@ function applyEnabledClass(): void {
     if (!btn) continue;
     btn.classList.toggle('active', visible);
     btn.title = visible
-      ? `Navegación sincronizada ON · anclajes: ${State.syncNav.leftAnchor || '/'} ↔ ${State.syncNav.rightAnchor || '/'}`
-      : 'Activar navegación sincronizada';
+      ? t('sync.tooltipOn', { left: State.syncNav.leftAnchor || '/', right: State.syncNav.rightAnchor || '/' })
+      : t('toolbar.syncNavTitle');
     // Show "SYNC ON" text inline with the icon when active. Removing it
     // when inactive returns the button to icon-only width. The icon
     // <svg> is the first child (mounted from <i data-icon="link">);
@@ -80,7 +81,7 @@ function applyEnabledClass(): void {
 export function setSyncNav(enabled: boolean): void {
   if (enabled === State.syncNav.enabled) return;
   if (enabled && !State.dualMode) {
-    toast('Activa el segundo panel antes de sincronizar', 'info', 3000);
+    toast(t('sync.enableDualFirst'), 'info', 3000);
     return;
   }
   if (enabled) {
@@ -92,9 +93,9 @@ export function setSyncNav(enabled: boolean): void {
   try { localStorage.setItem(LS_KEY, enabled ? '1' : '0'); } catch { /* quota */ }
   applyEnabledClass();
   if (enabled) {
-    toast(`Sync ON · anclajes: ${State.syncNav.leftAnchor || '/'} ↔ ${State.syncNav.rightAnchor || '/'}`, 'success', 4000);
+    toast(t('sync.on', { left: State.syncNav.leftAnchor || '/', right: State.syncNav.rightAnchor || '/' }), 'success', 4000);
   } else {
-    toast('Sync OFF', 'info', 2000);
+    toast(t('sync.off'), 'info', 2000);
   }
 }
 
@@ -105,7 +106,7 @@ export function cancelSyncNav(reason?: string): void {
   State.syncNav.enabled = false;
   try { localStorage.setItem(LS_KEY, '0'); } catch { /* ignore */ }
   applyEnabledClass();
-  if (reason) toast(`Sync OFF · ${reason}`, 'info', 3000);
+  if (reason) toast(t('sync.offReason', { reason }), 'info', 3000);
 }
 
 // Re-anchor at the current pane prefixes without disabling sync. Called when
@@ -117,7 +118,7 @@ export function reanchorSyncNav(silent = false): void {
   State.syncNav.rightAnchor = getPane('right').prefix;
   applyEnabledClass();
   if (!silent) {
-    toast(`Anclajes actualizados: ${State.syncNav.leftAnchor || '/'} ↔ ${State.syncNav.rightAnchor || '/'}`, 'info', 3500);
+    toast(t('sync.reanchored', { left: State.syncNav.leftAnchor || '/', right: State.syncNav.rightAnchor || '/' }), 'info', 3500);
   }
 }
 

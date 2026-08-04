@@ -14,6 +14,7 @@ import {
   getPendingMigration, setPendingMigration,
   VAULT_KEY,
 } from './persistence.js';
+import { t } from '../i18n/index.js';
 import type { Connection } from '../types.js';
 
 type Mode = 'create' | 'unlock';
@@ -23,13 +24,13 @@ export function openPassphraseModal(opts: { mode: Mode }): void {
   const pending = getPendingMigration();
   const hasMigration = isCreate && pending && pending.length > 0;
   $('passphrase-title').textContent = isCreate
-    ? (hasMigration ? 'Cifra tus conexiones existentes' : 'Crea una contraseña para la bóveda')
-    : 'Desbloquea tu bóveda';
+    ? (hasMigration ? t('vault.titleMigrate') : t('vault.titleCreate'))
+    : t('vault.titleUnlock');
   $('passphrase-hint').textContent = isCreate
     ? (hasMigration
-        ? `Detectamos ${pending!.length} conexión(es) guardada(s) en texto plano. Crea una contraseña para cifrarlas. Si la olvidas, deberás reingresarlas.`
-        : 'Tus conexiones S3 se cifrarán localmente con AES-256-GCM. Esta contraseña no se envía al servidor. Si la olvidas, deberás reingresar tus conexiones.')
-    : 'Ingresa la contraseña que usaste para cifrar tus conexiones S3.';
+        ? t('vault.hintMigrate', { count: pending!.length })
+        : t('vault.hintCreate'))
+    : t('vault.hintUnlock');
   $('passphrase-confirm-wrap').style.display = isCreate ? 'block' : 'none';
   $('passphrase-error').textContent = '';
   ($('form-passphrase') as HTMLFormElement).reset();
@@ -56,8 +57,8 @@ export function initPassphraseForm(deps: PassphraseDeps): void {
     const vault = getVault();
     try {
       if (!vault) {
-        if (pass.length < 8) { errEl.textContent = 'Mínimo 8 caracteres.'; return; }
-        if (pass !== confirmInput) { errEl.textContent = 'Las contraseñas no coinciden.'; return; }
+        if (pass.length < 8) { errEl.textContent = t('vault.minChars'); return; }
+        if (pass !== confirmInput) { errEl.textContent = t('vault.mismatch'); return; }
         const salt = randomSalt();
         const key = await deriveKey(pass, salt);
         const pending = getPendingMigration();
@@ -69,7 +70,7 @@ export function initPassphraseForm(deps: PassphraseDeps): void {
         if (pending && pending.length) {
           clearLegacy();
           setPendingMigration(null);
-          toast('Conexiones migradas a la bóveda cifrada.', 'success', 5000);
+          toast(t('vault.migrated'), 'success', 5000);
         }
       } else {
         const salt = b64dec(vault.salt);
@@ -77,7 +78,7 @@ export function initPassphraseForm(deps: PassphraseDeps): void {
         try {
           State.connections = await decryptVault<Connection[]>(vault, key);
         } catch {
-          errEl.textContent = 'Contraseña incorrecta.';
+          errEl.textContent = t('vault.wrongPassword');
           return;
         }
         setVaultKey(key);
@@ -85,15 +86,15 @@ export function initPassphraseForm(deps: PassphraseDeps): void {
       closeModal('modal-passphrase');
       await deps.onUnlocked();
     } catch (err) {
-      errEl.textContent = (err as Error).message || 'Error';
+      errEl.textContent = (err as Error).message || t('common.error');
     }
   };
 
   $('btn-passphrase-reset').onclick = async (): Promise<void> => {
     const ok = await confirmDialog({
-      title: 'Borrar bóveda',
-      message: 'Esto borrará permanentemente todas tus conexiones guardadas. Tendrás que reingresarlas. Esta acción no se puede deshacer.',
-      confirmLabel: 'Borrar bóveda',
+      title: t('vault.resetTitle'),
+      message: t('vault.resetMessage'),
+      confirmLabel: t('vault.resetConfirm'),
       danger: true,
     });
     if (!ok) return;

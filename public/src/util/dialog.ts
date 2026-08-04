@@ -13,6 +13,7 @@
 //   - Tab           → cycles inside the modal (lightweight trap)
 
 import { escapeHtml } from './dom.js';
+import { t } from '../i18n/index.js';
 
 export interface ConfirmOptions {
   title?: string;
@@ -93,8 +94,8 @@ export function confirmDialog(opts: ConfirmOptions): Promise<boolean> {
           <p class="dialog-msg">${messageHtml}</p>
         </div>
         <footer class="dialog-foot">
-          <button type="button" class="btn" data-act="cancel">${escapeHtml(opts.cancelLabel || 'Cancelar')}</button>
-          <button type="button" class="btn ${opts.danger ? 'btn-danger-solid' : 'btn-primary'}" data-act="confirm" data-autofocus>${escapeHtml(opts.confirmLabel || 'Aceptar')}</button>
+          <button type="button" class="btn" data-act="cancel">${escapeHtml(opts.cancelLabel || t('common.cancel'))}</button>
+          <button type="button" class="btn ${opts.danger ? 'btn-danger-solid' : 'btn-primary'}" data-act="confirm" data-autofocus>${escapeHtml(opts.confirmLabel || t('common.accept'))}</button>
         </footer>
       </div>
     `;
@@ -156,8 +157,8 @@ export function promptDialog(opts: PromptOptions): Promise<string | null> {
           <p class="dialog-error" data-error style="display:none"></p>
         </form>
         <footer class="dialog-foot">
-          <button type="button" class="btn" data-act="cancel">${escapeHtml(opts.cancelLabel || 'Cancelar')}</button>
-          <button type="button" class="btn btn-primary" data-act="confirm">${escapeHtml(opts.confirmLabel || 'Aceptar')}</button>
+          <button type="button" class="btn" data-act="cancel">${escapeHtml(opts.cancelLabel || t('common.cancel'))}</button>
+          <button type="button" class="btn btn-primary" data-act="confirm">${escapeHtml(opts.confirmLabel || t('common.accept'))}</button>
         </footer>
       </div>
     `;
@@ -226,14 +227,14 @@ export function choiceDialog<V extends string>(opts: ChoiceOptions<V>): Promise<
                 data-value="${escapeHtml(c.value)}"
                 ${i === 0 ? 'data-autofocus' : ''}
               >
-                <span class="dialog-choice-label">${escapeHtml(c.label)}${c.recommended ? '<span class="recommended-tag">recomendado</span>' : ''}</span>
+                <span class="dialog-choice-label">${escapeHtml(c.label)}${c.recommended ? `<span class="recommended-tag">${escapeHtml(t('common.recommended'))}</span>` : ''}</span>
                 ${c.hint ? `<span class="dialog-choice-hint">${escapeHtml(c.hint)}</span>` : ''}
               </button>
             `).join('')}
           </div>
         </div>
         <footer class="dialog-foot">
-          <button type="button" class="btn" data-act="cancel">${escapeHtml(opts.cancelLabel || 'Cancelar')}</button>
+          <button type="button" class="btn" data-act="cancel">${escapeHtml(opts.cancelLabel || t('common.cancel'))}</button>
         </footer>
       </div>
     `;

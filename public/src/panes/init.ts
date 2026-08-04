@@ -18,6 +18,7 @@ import { State, setActivePane, getPane, emit } from '../state.js';
 import type { PaneId } from '../state.js';
 import { $, paneRoot } from '../util/dom.js';
 import { mountIcons } from '../util/icons.js';
+import { t } from '../i18n/index.js';
 
 const MOBILE_MAX = 900;
 
@@ -104,5 +105,5 @@ export function paintRightPanePlaceholder(): void {
   const empty = document.querySelector<HTMLElement>('.pane[data-pane="right"] [data-el="empty"]');
   if (!empty) return;
   empty.style.display = 'block';
-  empty.innerHTML = '<h2>Panel derecho</h2><p>Selecciona una conexión y un bucket en la barra lateral. La selección se aplica al panel activo (haz clic en este panel primero).</p>';
+  empty.innerHTML = `<h2>${t('pane.rightTitle')}</h2><p>${t('pane.rightBody')}</p>`;
 }

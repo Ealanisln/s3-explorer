@@ -43,7 +43,8 @@ npx vitest run tests/integration/api/objects.test.ts   # single file
 - TypeScript `strict: true` across all three tsconfig projects (server, web, test). No transpiler besides `tsc`.
 - Frontend is dependency-free vanilla TS — do not introduce a framework or bundler.
 - Backend deps are deliberately minimal — no new dependencies without justification.
-- User-facing strings (UI and API error messages) are Spanish; code comments are mixed Spanish/English.
+- API error messages are Spanish (plus a machine-readable `code`); code comments are mixed Spanish/English.
+- The SPA UI is bilingual (Spanish/English) via `public/src/i18n/`. New UI strings MUST go through the i18n dictionaries (`es.ts` + `en.ts`, then `t('key')` or `data-i18n` attributes) — never hardcoded in TS or HTML. The `MsgKey` type makes a missing `en` entry a compile error.
 - Async route handlers go through `wrap()` from `src/http/errors.ts` so errors are sanitized and correlated with an `errorId`.
 - Auth-relevant or destructive actions emit `audit(event, fields)` JSON lines to stdout. Never log passwords, TOTP secrets, or `x-s3-*` header values.
 
