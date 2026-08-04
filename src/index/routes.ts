@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import type { S3Client } from '@aws-sdk/client-s3';
 import { wrap } from '../http/errors';
+import { requireScope } from '../auth/token-auth';
 import { q } from '../http/query';
 import { getConnectionId } from '../s3/connection-ref';
 import {
@@ -19,7 +20,7 @@ export function indexRouter(buildClient: ClientFactory): Router {
   // Triggered by the SPA's "Reindexar" button. The user's session creds
   // (already in x-s3-* headers) drive the ListObjectsV2 pagination; rows go
   // into bucket_index scoped by (username, connection_id, bucket).
-  r.post('/index/:bucket/rebuild', wrap(async (req: Request, res: Response) => {
+  r.post('/index/:bucket/rebuild', requireScope('write'), wrap(async (req: Request, res: Response) => {
     const connectionId = getConnectionId(req, res);
     if (!connectionId) return; // 400 already sent
     const s3 = buildClient(req);
@@ -69,7 +70,7 @@ export function indexRouter(buildClient: ClientFactory): Router {
 
   // DELETE /api/index/:bucket
   // Called when the SPA deletes a connection or bucket. Idempotent.
-  r.delete('/index/:bucket', wrap(async (req: Request, res: Response) => {
+  r.delete('/index/:bucket', requireScope('write'), wrap(async (req: Request, res: Response) => {
     const connectionId = getConnectionId(req, res);
     if (!connectionId) return;
     const result = deleteBucketIndex({

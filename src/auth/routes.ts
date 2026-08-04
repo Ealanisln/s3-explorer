@@ -31,8 +31,17 @@ import {
   changePasswordSchema,
   createUserSchema,
   resetPasswordSchema,
+  createTokenSchema,
   validateBody,
 } from './schemas';
+import {
+  createToken,
+  listTokens,
+  findTokenById,
+  revokeToken,
+  countActiveTokens,
+  MAX_ACTIVE_TOKENS,
+} from './tokens-store';
 import type { User } from '../types';
 
 export function register(app: Application): void {
@@ -264,6 +273,71 @@ export function register(app: Application): void {
     await updateUser(user.username, { recoveryCodesHashed: hashCodes(codes) });
     audit('recovery_codes_regenerated', { username: user.username });
     res.json({ recoveryCodes: codes });
+  });
+
+  // ----- Personal Access Tokens (session-auth ONLY — Bearer tokens are
+  // rejected here because /auth/* never goes through token auth; a PAT must
+  // not be able to mint or revoke other PATs) -----
+
+  app.get('/auth/tokens', requireAuth, requireTotpEnrolled, (req: Request, res: Response) => {
+    const user = req.user!;
+    const tokens = listTokens(user.username).map((t) => ({
+      id: t.id,
+      name: t.name,
+      scope: t.scope,
+      createdAt: t.createdAt,
+      expiresAt: t.expiresAt,
+      lastUsedAt: t.lastUsedAt,
+      revokedAt: t.revokedAt,
+    }));
+    res.json({ tokens });
+  });
+
+  app.post('/auth/tokens', requireAuth, requireTotpEnrolled, validateBody(createTokenSchema), (req: Request, res: Response) => {
+    const user = req.user!;
+    const { name, scope, expiresInDays } = req.body as {
+      name: string; scope: 'read' | 'write'; expiresInDays?: 30 | 90 | null;
+    };
+    if (countActiveTokens(user.username) >= MAX_ACTIVE_TOKENS) {
+      res.status(409).json({
+        message: `Límite de ${MAX_ACTIVE_TOKENS} tokens activos alcanzado. Revoca alguno antes de crear otro.`,
+        code: 'TOKEN_LIMIT',
+      });
+      return;
+    }
+    const expiresAt = expiresInDays
+      ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
+      : null;
+    const { token, plaintext } = createToken({ username: user.username, name, scope, expiresAt });
+    audit('token_created', {
+      username: user.username, tokenId: token.id, name: token.name, scope: token.scope, expiresAt,
+    });
+    // The plaintext leaves the server exactly once, here. Only its hash is stored.
+    res.json({
+      id: token.id,
+      name: token.name,
+      scope: token.scope,
+      createdAt: token.createdAt,
+      expiresAt: token.expiresAt,
+      token: plaintext,
+    });
+  });
+
+  app.delete('/auth/tokens/:id', requireAuth, requireTotpEnrolled, (req: Request, res: Response) => {
+    const user = req.user!;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ message: 'id inválido', code: 'BAD_REQUEST' });
+      return;
+    }
+    const token = findTokenById(id, user.username);
+    if (!token) { res.status(404).json({ message: 'No existe' }); return; }
+    // Idempotent: revoking an already-revoked token is a no-op success.
+    if (!token.revokedAt) {
+      revokeToken(id);
+      audit('token_revoked', { username: user.username, tokenId: id, name: token.name });
+    }
+    res.json({ ok: true });
   });
 
   // ----- Admin: list users -----

@@ -11,6 +11,7 @@ import {
 import { wrap } from '../../http/errors';
 import { validateBody } from '../../http/validate';
 import { audit } from '../../auth/audit';
+import { requireScope } from '../../auth/token-auth';
 import { createBucketSchema, versioningSchema, testSchema } from '../schemas';
 
 type ClientFactory = (req: Request) => S3Client;
@@ -38,14 +39,14 @@ export function bucketsRouter(buildClient: ClientFactory): Router {
     res.json({ buckets: out.Buckets || [], owner: out.Owner });
   }));
 
-  r.post('/buckets', validateBody(createBucketSchema), wrap(async (req: Request, res: Response) => {
+  r.post('/buckets', requireScope('write'), validateBody(createBucketSchema), wrap(async (req: Request, res: Response) => {
     const s3 = buildClient(req);
     const { name } = req.body as { name: string };
     await s3.send(new CreateBucketCommand({ Bucket: name }));
     res.json({ ok: true });
   }));
 
-  r.delete('/buckets/:bucket', wrap(async (req: Request, res: Response) => {
+  r.delete('/buckets/:bucket', requireScope('write'), wrap(async (req: Request, res: Response) => {
     const s3 = buildClient(req);
     await s3.send(new DeleteBucketCommand({ Bucket: req.params.bucket }));
     res.json({ ok: true });
@@ -59,7 +60,7 @@ export function bucketsRouter(buildClient: ClientFactory): Router {
 
   // PUT /api/buckets/:bucket/versioning — enable only. Suspending is rejected at
   // the schema level (versioningSchema requires enabled=true literal).
-  r.put('/buckets/:bucket/versioning', validateBody(versioningSchema), wrap(async (req: Request, res: Response) => {
+  r.put('/buckets/:bucket/versioning', requireScope('write'), validateBody(versioningSchema), wrap(async (req: Request, res: Response) => {
     const s3 = buildClient(req);
     await s3.send(new PutBucketVersioningCommand({
       Bucket: req.params.bucket,

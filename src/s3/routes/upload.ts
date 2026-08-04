@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { wrap } from '../../http/errors';
+import { requireScope } from '../../auth/token-auth';
 
 type ClientFactory = (req: Request) => S3Client;
 
@@ -34,7 +35,7 @@ const upload = multer({
 export function uploadRouter(buildClient: ClientFactory): Router {
   const r = Router();
 
-  r.post('/object/:bucket/upload', upload.array('files'), wrap(async (req: Request, res: Response) => {
+  r.post('/object/:bucket/upload', requireScope('write'), upload.array('files'), wrap(async (req: Request, res: Response) => {
     // multer has already written every part to a tmp file by the time this
     // handler runs, so the cleanup MUST cover all of req.files unconditionally
     // — including the case where buildClient(req) throws (blocked endpoint /

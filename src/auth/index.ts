@@ -8,4 +8,5 @@ export {
   requireTotpEnrolled,
   requirePasswordCurrent,
 } from './middleware';
+export { apiAuth, requireScope } from './token-auth';
 export { audit } from './audit';

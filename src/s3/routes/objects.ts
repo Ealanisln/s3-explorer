@@ -10,6 +10,7 @@ import {
   CopyObjectCommand,
 } from '@aws-sdk/client-s3';
 import { wrap } from '../../http/errors';
+import { requireScope } from '../../auth/token-auth';
 import { validateBody } from '../../http/validate';
 import {
   folderSchema,
@@ -213,7 +214,7 @@ export function objectsRouter(buildClient: ClientFactory): Router {
 
   // POST /api/object/:bucket/restore — for delete-marker rows. Deletes the
   // marker version, exposing the prior content version as the "latest" again.
-  r.post('/object/:bucket/restore', validateBody(restoreSchema), wrap(async (req: Request, res: Response) => {
+  r.post('/object/:bucket/restore', requireScope('write'), validateBody(restoreSchema), wrap(async (req: Request, res: Response) => {
     const s3 = buildClient(req);
     const { key, versionId } = req.body as { key: string; versionId?: string };
     await s3.send(new DeleteObjectCommand({ Bucket: req.params.bucket, Key: key, VersionId: versionId }));
@@ -266,7 +267,7 @@ export function objectsRouter(buildClient: ClientFactory): Router {
     res.json({ versions: all });
   }));
 
-  r.post('/object/:bucket/folder', validateBody(folderSchema), wrap(async (req: Request, res: Response) => {
+  r.post('/object/:bucket/folder', requireScope('write'), validateBody(folderSchema), wrap(async (req: Request, res: Response) => {
     const s3 = buildClient(req);
     const { prefix, name } = req.body as { prefix?: string; name: string };
     const safePrefix = typeof prefix === 'string' ? prefix : '';
@@ -319,7 +320,7 @@ export function objectsRouter(buildClient: ClientFactory): Router {
   // When body.purgeVersions === true, instead walks ListObjectVersions (both
   // versions and delete markers) and removes every record permanently. Useful
   // for actually freeing storage on a versioned bucket. Irreversible.
-  r.post('/object/:bucket/folder/delete', validateBody(folderDeleteSchema), async (req: Request, res: Response): Promise<void> => {
+  r.post('/object/:bucket/folder/delete', requireScope('write'), validateBody(folderDeleteSchema), async (req: Request, res: Response): Promise<void> => {
     const { prefix, purgeVersions } = req.body as { prefix: string; purgeVersions?: boolean };
     if (!prefix.endsWith('/')) {
       res.status(400).json({ error: 'InvalidPrefix', message: 'prefix debe terminar en /' });
@@ -473,7 +474,7 @@ export function objectsRouter(buildClient: ClientFactory): Router {
   // are left alone (nothing to restore).
   //
   // No-op on non-versioned buckets (no markers exist there).
-  r.post('/object/:bucket/folder/restore', validateBody(folderRestoreSchema), async (req: Request, res: Response): Promise<void> => {
+  r.post('/object/:bucket/folder/restore', requireScope('write'), validateBody(folderRestoreSchema), async (req: Request, res: Response): Promise<void> => {
     const { prefix } = req.body as { prefix: string };
     if (!prefix.endsWith('/')) {
       res.status(400).json({ error: 'InvalidPrefix', message: 'prefix debe terminar en /' });
@@ -625,14 +626,14 @@ export function objectsRouter(buildClient: ClientFactory): Router {
     res.end();
   });
 
-  r.delete('/object/:bucket', validateBody(deleteObjectSchema), wrap(async (req: Request, res: Response) => {
+  r.delete('/object/:bucket', requireScope('write'), validateBody(deleteObjectSchema), wrap(async (req: Request, res: Response) => {
     const s3 = buildClient(req);
     const { key, versionId } = req.body as { key: string; versionId?: string };
     await s3.send(new DeleteObjectCommand({ Bucket: req.params.bucket, Key: key, VersionId: versionId }));
     res.json({ ok: true });
   }));
 
-  r.post('/object/:bucket/delete-batch', validateBody(deleteBatchSchema), wrap(async (req: Request, res: Response) => {
+  r.post('/object/:bucket/delete-batch', requireScope('write'), validateBody(deleteBatchSchema), wrap(async (req: Request, res: Response) => {
     const s3 = buildClient(req);
     const { keys } = req.body as { keys: (string | { key: string; versionId?: string })[] };
     const out = await s3.send(new DeleteObjectsCommand({
@@ -644,7 +645,7 @@ export function objectsRouter(buildClient: ClientFactory): Router {
     res.json({ deleted: out.Deleted || [], errors: out.Errors || [] });
   }));
 
-  r.post('/object/:bucket/copy', validateBody(copySchema), wrap(async (req: Request, res: Response) => {
+  r.post('/object/:bucket/copy', requireScope('write'), validateBody(copySchema), wrap(async (req: Request, res: Response) => {
     const s3 = buildClient(req);
     const { sourceKey, destKey, sourceVersionId } = req.body as {
       sourceKey: string; destKey: string; sourceVersionId?: string;
@@ -657,7 +658,7 @@ export function objectsRouter(buildClient: ClientFactory): Router {
     res.json({ ok: true });
   }));
 
-  r.post('/object/:bucket/rename', validateBody(renameSchema), wrap(async (req: Request, res: Response) => {
+  r.post('/object/:bucket/rename', requireScope('write'), validateBody(renameSchema), wrap(async (req: Request, res: Response) => {
     const s3 = buildClient(req);
     const { sourceKey, destKey } = req.body as { sourceKey: string; destKey: string };
     await s3.send(new CopyObjectCommand({
