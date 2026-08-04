@@ -280,6 +280,7 @@ export const es = {
 
   // ── Row / folder context menus ───────────────────────────────────────────
   'rowmenu.preview': 'Vista previa',
+  'rowmenu.details': 'Detalles',
   'rowmenu.openNewTab': 'Abrir en pestaña nueva',
   'rowmenu.copyLink': 'Copiar enlace',
   'rowmenu.tempLink': 'Enlace temporal…',

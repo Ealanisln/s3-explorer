@@ -1000,6 +1000,7 @@ function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
     <button data-act="purge" class="danger">${t('rowmenu.purgeMarker')}</button>
   ` : `
     <button data-act="preview">${t('rowmenu.preview')}</button>
+    <button data-act="details">${t('rowmenu.details')}</button>
     <button data-act="open-new-tab">${t('rowmenu.openNewTab')}</button>
     <button data-act="download">${t('common.download')}</button>
     <button data-act="copy-url">${t('rowmenu.copyLink')}</button>
@@ -1034,6 +1035,7 @@ function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
       }
     }
     if (act === 'preview') void openPreview(o);
+    if (act === 'details') openInfoPanel(o, paneId);
     if (act === 'open-new-tab') void openObjectInNewTab(o.Key);
     if (act === 'download') downloadObject(o.Key);
     if (act === 'copy-url') void copyObjectLink(o.Key);
