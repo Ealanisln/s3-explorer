@@ -9,6 +9,7 @@ import { $, $maybe, openModal } from '../util/dom.js';
 import { confirmDialog } from '../util/dialog.js';
 import { toast } from '../util/toast.js';
 import { setVaultKey } from '../vault/persistence.js';
+import { clearAllFilters } from '../util/filter-persist.js';
 import { State } from '../state.js';
 import { t, localizeServerError } from '../i18n/index.js';
 import type { CurrentUser } from '../types.js';
@@ -254,6 +255,10 @@ export function initAuthForms(d?: AuthBootstrapDeps): void {
     try { await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' }); } catch { /* ignore */ }
     currentUser = null;
     setVaultKey(null);
+    // Persisted navigation filters are per-user state — drop them so they
+    // don't leak to the next account on a shared machine (sessionStorage
+    // survives location.reload()).
+    clearAllFilters();
     State.connections = [];
     State.activeConnId = null;
     location.reload();

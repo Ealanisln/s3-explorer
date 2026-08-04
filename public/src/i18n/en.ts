@@ -277,6 +277,7 @@ export const en: Record<MsgKey, string> = {
 
   // ── Row / folder context menus ───────────────────────────────────────────
   'rowmenu.preview': 'Preview',
+  'rowmenu.details': 'Details',
   'rowmenu.openNewTab': 'Open in new tab',
   'rowmenu.copyLink': 'Copy link',
   'rowmenu.tempLink': 'Temporary link…',

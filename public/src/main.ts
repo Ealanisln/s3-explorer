@@ -61,6 +61,7 @@ import {
   mountRightPane, initActivation, initDualToggle, paintRightPanePlaceholder,
 } from './panes/init.js';
 import { initSyncNavToggle, setSyncNavDeps } from './panes/synced-nav.js';
+import { clearAllFilters } from './util/filter-persist.js';
 import { t, getLang, applyStaticTranslations, initLangToggle } from './i18n/index.js';
 
 applyTheme(loadTheme());
@@ -100,6 +101,9 @@ configureLock({
     });
     if (!ok) return;
     setVaultKey(null);
+    // Locking the vault is a user-boundary event on shared machines — clear
+    // the persisted per-folder navigation filters along with the key.
+    clearAllFilters();
     State.connections = [];
     for (const p of PANES) {
       getPane(p).activeConnId = null;
