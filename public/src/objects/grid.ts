@@ -14,6 +14,7 @@ import { confirmDialog, choiceDialog } from '../util/dialog.js';
 import { formatSize, formatDate, fileIcon } from '../util/format.js';
 import { t } from '../i18n/index.js';
 import { mountIcons } from '../util/icons.js';
+import { openContextMenu } from '../util/context-menu.js';
 import { openPreview } from './preview.js';
 import { openInfoPanel, closeInfoPanel } from './info-panel.js';
 import {
@@ -507,15 +508,8 @@ export function updateBatchBar(paneId?: PaneId): void {
 // rename, but the user can either restore everything in one shot or
 // permanently purge the version history.
 function showFolderMenu(e: MouseEvent, folderPrefix: string, paneId: PaneId): void {
-  document.querySelectorAll('.dropdown.row-actions-menu').forEach((d) => d.remove());
-  const dd = document.createElement('div');
-  dd.className = 'dropdown row-actions-menu';
-  dd.style.position = 'fixed';
-  dd.style.left = e.clientX + 'px';
-  dd.style.top = e.clientY + 'px';
-  dd.style.visibility = 'hidden';
   const isDeleted = State.deletedPrefixes.has(folderPrefix);
-  dd.innerHTML = isDeleted ? `
+  const html = isDeleted ? `
     <button data-act="restore">${t('foldermenu.restore')}</button>
     <button data-act="open">${t('foldermenu.openDeleted')}</button>
     <button data-act="open-other">${t('foldermenu.openOther')}</button>
@@ -526,25 +520,8 @@ function showFolderMenu(e: MouseEvent, folderPrefix: string, paneId: PaneId): vo
     <button data-act="rename">${t('common.rename')}</button>
     <button data-act="delete" class="danger">${t('foldermenu.delete')}</button>
   `;
-  document.body.appendChild(dd);
-  const rect = dd.getBoundingClientRect();
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const margin = 8;
-  let left = e.clientX;
-  let top = e.clientY;
-  if (left + rect.width + margin > vw) left = Math.max(margin, vw - rect.width - margin);
-  if (top + rect.height + margin > vh) top = Math.max(margin, vh - rect.height - margin);
-  dd.style.left = left + 'px';
-  dd.style.top = top + 'px';
-  dd.style.visibility = '';
-
-  const close = (): void => { dd.remove(); document.removeEventListener('click', close); };
-  setTimeout(() => document.addEventListener('click', close), 10);
-  dd.onclick = async (ev: Event): Promise<void> => {
+  openContextMenu({ x: e.clientX, y: e.clientY, html, onAction: async (act): Promise<void> => {
     setActivePane(paneId);
-    const target = ev.target as HTMLElement;
-    const act = target.dataset.act;
     if (act === 'open') {
       const pane = getPane(paneId);
       pane.prefix = folderPrefix;
@@ -568,7 +545,7 @@ function showFolderMenu(e: MouseEvent, folderPrefix: string, paneId: PaneId): vo
       // distinction so the regular confirm + delete applies.
       void deleteFolder(folderPrefix, paneId);
     }
-  };
+  } });
 }
 
 // Open `folderPrefix` in the OTHER pane (whichever pane doesn't have focus).
@@ -1013,20 +990,11 @@ async function openRenameFolder(folderPrefix: string, paneId: PaneId): Promise<v
 }
 
 function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
-  document.querySelectorAll('.dropdown.row-actions-menu').forEach((d) => d.remove());
-  const dd = document.createElement('div');
-  dd.className = 'dropdown row-actions-menu';
-  dd.style.position = 'fixed';
-  // Position initially at the cursor — we'll clamp into the viewport once
-  // we know the dropdown's real size (after it's in the DOM).
-  dd.style.left = e.clientX + 'px';
-  dd.style.top = e.clientY + 'px';
-  dd.style.visibility = 'hidden';
   const dualEntries = !o.IsDeleteMarker && otherPaneReady(paneId) ? `
     <button data-act="copy-other">${t('rowmenu.copyOther')}</button>
     <button data-act="move-other">${t('rowmenu.moveOther')}</button>
   ` : '';
-  dd.innerHTML = o.IsDeleteMarker ? `
+  const html = o.IsDeleteMarker ? `
     <button data-act="restore">${t('common.restore')}</button>
     <button data-act="versions">${t('rowmenu.versions')}</button>
     <button data-act="purge" class="danger">${t('rowmenu.purgeMarker')}</button>
@@ -1041,28 +1009,8 @@ function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
     ${dualEntries}
     <button data-act="delete" class="danger">${t('common.delete')}</button>
   `;
-  document.body.appendChild(dd);
-  // Clamp into the viewport: if the dropdown would overflow the right edge,
-  // flip to the left side of the cursor; same logic for the bottom edge.
-  // We need the real size, which is only available after appendChild.
-  const rect = dd.getBoundingClientRect();
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const margin = 8;
-  let left = e.clientX;
-  let top = e.clientY;
-  if (left + rect.width + margin > vw) left = Math.max(margin, vw - rect.width - margin);
-  if (top + rect.height + margin > vh) top = Math.max(margin, vh - rect.height - margin);
-  dd.style.left = left + 'px';
-  dd.style.top = top + 'px';
-  dd.style.visibility = '';
-
-  const close = (): void => { dd.remove(); document.removeEventListener('click', close); };
-  setTimeout(() => document.addEventListener('click', close), 10);
-  dd.onclick = async (ev: Event): Promise<void> => {
+  openContextMenu({ x: e.clientX, y: e.clientY, html, onAction: async (act): Promise<void> => {
     setActivePane(paneId);
-    const target = ev.target as HTMLElement;
-    const act = target.dataset.act;
     const reload = (): Promise<void> => loadObjects(paneId);
     if (act === 'restore') await restoreDeleteMarker(o, reload);
     if (act === 'purge') {
@@ -1104,7 +1052,7 @@ function showRowMenu(e: MouseEvent, o: S3Object, paneId: PaneId): void {
       });
     }
     if (act === 'delete') await deleteObject(o.Key, reload);
-  };
+  } });
 }
 
 // Drag-and-drop payload carried in DataTransfer for cross-pane transfers.
