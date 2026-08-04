@@ -4,7 +4,9 @@
 
 Self-hosted, multi-user file explorer for object storage. Each user brings their own S3 endpoints and credentials — the server never stores S3 keys. Built with Node.js + TypeScript + Express, a dependency-light vanilla TypeScript SPA, and SQLite. Ships as a two-container Docker Compose stack (app + Caddy with automatic TLS).
 
-<!-- Badges: add CI / license / release badges once the repo is public -->
+[![CI](https://github.com/Ealanisln/s3-explorer/actions/workflows/ci.yml/badge.svg)](https://github.com/Ealanisln/s3-explorer/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/Ealanisln/s3-explorer)](https://github.com/Ealanisln/s3-explorer/releases)
 
 ## Features
 
