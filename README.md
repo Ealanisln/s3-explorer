@@ -173,6 +173,12 @@ CI runs typecheck, the vitest suite, and secret scanning (gitleaks) on every pus
 
 This repo also ships [`llms.txt`](llms.txt) and [`AGENTS.md`](AGENTS.md) so AI coding agents can orient themselves quickly.
 
+## Authors
+
+- [Emmanuel Alanis](https://github.com/Ealanisln) — creator and maintainer
+- [Aziel Pichardo](https://github.com/AzielPD)
+- [José Luis Bravo](https://github.com/jlvobra)
+
 ## License
 
 [MIT](LICENSE) © 2026 Emmanuel Alanis
