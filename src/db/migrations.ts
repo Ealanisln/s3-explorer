@@ -2,6 +2,7 @@ import { db } from './connection';
 import * as migration001 from './migrations/001_init';
 import * as migration002 from './migrations/002_index';
 import * as migration003 from './migrations/003_totp_step';
+import * as migration004 from './migrations/004_api_tokens';
 
 interface Migration {
   version: number;
@@ -14,6 +15,7 @@ const MIGRATIONS: Migration[] = [
   migration001,
   migration002,
   migration003,
+  migration004,
 ];
 
 export function applyMigrations(): void {
