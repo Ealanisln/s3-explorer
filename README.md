@@ -53,7 +53,19 @@ Any S3-compatible endpoint, including:
 
 ## Screenshots
 
-<!-- TODO: add screenshots (login + TOTP enrollment, dual-pane explorer, version browser, search) -->
+**Dual-pane explorer** — two connections side by side (here: Vultr Object Storage and AWS S3), with per-pane navigation, versioning status, and transfers between providers:
+
+![Dual-pane explorer with two S3 connections](docs/screenshots/dual-pane-explorer.png)
+
+**Recursive search** — filter the current folder, or escalate to a full-bucket streaming search backed by the per-user FTS5 index:
+
+![Recursive search with full-bucket escape hatch](docs/screenshots/recursive-search.png)
+
+**User management** — admin panel with per-user TOTP status, recovery codes, and disable/reset controls:
+
+![User management modal](docs/screenshots/user-management.png)
+
+_UI shown in Spanish — an English UI is available via the ES/EN toggle in the topbar._
 
 ## Quick start
 
