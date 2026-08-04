@@ -36,6 +36,10 @@ Self-hosted, multi-user file explorer for object storage. Each user brings their
 
 > **Note:** the UI is currently in Spanish. Internationalization contributions are welcome.
 
+## MCP server
+
+S3 Explorer includes a [Model Context Protocol](https://modelcontextprotocol.io) server (`s3-explorer-mcp`) so AI agents like Claude Code and Claude Desktop can operate your buckets through the same authenticated API: list, browse, search, presigned links, uploads, and deletes — gated by a scoped Personal Access Token, with S3 credentials kept local and sent only as transient per-request headers. See [docs/mcp.md](docs/mcp.md) for setup and the tool reference.
+
 ## Works with
 
 Any S3-compatible endpoint, including:
@@ -168,10 +172,11 @@ CI runs typecheck, the vitest suite, and secret scanning (gitleaks) on every pus
 ## Documentation
 
 - [docs/api.md](docs/api.md) — HTTP API reference (auth flow, every `/auth/*` and `/api/*` endpoint, error shape).
+- [docs/mcp.md](docs/mcp.md) — MCP server: setup for Claude Code / Claude Desktop, environment variables, and tool reference.
 - [AGENTS.md](AGENTS.md) — contributor guide: dev setup, commands, architecture map, conventions, and security invariants.
 - [SECURITY.md](SECURITY.md) — security policy, hardening checklist, and vulnerability reporting.
 
-This repo also ships [`llms.txt`](llms.txt) and [`AGENTS.md`](AGENTS.md) so AI coding agents can orient themselves quickly.
+This repo also ships [`llms.txt`](llms.txt) and [`AGENTS.md`](AGENTS.md) so AI coding agents can orient themselves quickly — and an [MCP server](docs/mcp.md) so agents can operate your storage, not just the codebase.
 
 ## Authors
 
