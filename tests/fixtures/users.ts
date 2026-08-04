@@ -65,11 +65,23 @@ export async function loginAs(app: Express, user: TestUser): Promise<string> {
   const pendingCookie = extractCookie(step1.headers['set-cookie'], 's3x_pending');
   if (!pendingCookie) throw new Error('login step1: no s3x_pending cookie');
 
-  const code = authenticator.generate(user.totpSecret);
-  const step2 = await request(app)
+  // Under CI contention the 30s TOTP window can roll over between generate()
+  // and the server-side verify, yielding a spurious 401. Avoid generating
+  // right at the window edge, and retry once with a fresh code if it still
+  // rolls over.
+  if (authenticator.timeRemaining() < 3) {
+    await new Promise((r) => setTimeout(r, (authenticator.timeRemaining() + 1) * 1000));
+  }
+  let step2 = await request(app)
     .post('/auth/totp')
     .set('Cookie', pendingCookie)
-    .send({ code });
+    .send({ code: authenticator.generate(user.totpSecret) });
+  if (step2.status === 401) {
+    step2 = await request(app)
+      .post('/auth/totp')
+      .set('Cookie', pendingCookie)
+      .send({ code: authenticator.generate(user.totpSecret) });
+  }
   if (step2.status !== 200) {
     throw new Error(`login step2 failed (${step2.status}): ${step2.text}`);
   }
