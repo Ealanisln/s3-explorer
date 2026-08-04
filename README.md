@@ -107,8 +107,8 @@ All configuration is environment-driven (see `.env.example` for generation comma
 | `ADMIN_PASS` | — | Initial admin password (change it from the UI after first login) |
 | `SESSION_SECRET` | ephemeral random | HMAC-SHA256 key for signing session cookies. **Must be set in production** (the app refuses to start without it when `NODE_ENV=production`). Generate: `openssl rand -hex 32` |
 | `TOTP_ENCRYPTION_KEY` | ephemeral random | AES-256-GCM key (64 hex chars) encrypting TOTP secrets at rest. **Must be set in production**; never rotate after enrollment. Generate: `openssl rand -hex 32` |
-| `SESSION_TTL_SECONDS` | `14400` (4 h) | Absolute session lifetime from login |
-| `MAX_UPLOAD_BYTES` | `524288000` (500 MB) | Per-file upload limit |
+| `SESSION_TTL_SECONDS` | `43200` (12 h) | Absolute session lifetime from login. `.env.example` pins the recommended `14400` (4 h) |
+| `MAX_UPLOAD_BYTES` | `2147483648` (2 GB) | Per-file upload limit. `.env.example` pins the recommended `524288000` (500 MB) |
 | `CHECK_HIBP` | `1` | Check new passwords against Have I Been Pwned (k-anonymity; fails open if unreachable) |
 | `ALLOWED_HOSTS` | `localhost:4569,...` | Accepted `Host` headers (DNS-rebinding defense). The Compose stack sets it from `${DOMAIN}` |
 | `ALLOWED_ORIGINS` | `https://${DOMAIN}` (compose) | Accepted `Origin` values (CSRF defense) |
@@ -163,6 +163,14 @@ npm run watch          # incremental rebuild
 Layout: server code in `src/` (Express, better-sqlite3 with versioned migrations, AWS SDK v3), frontend in `public/src/` (framework-less TypeScript SPA, no bundler), tests in `tests/`. See `CLAUDE.md` for an architecture walkthrough and `SECURITY.md` for the security model, deployment hardening checklist, and vulnerability reporting.
 
 CI runs typecheck, the vitest suite, and secret scanning (gitleaks) on every push and pull request.
+
+## Documentation
+
+- [docs/api.md](docs/api.md) — HTTP API reference (auth flow, every `/auth/*` and `/api/*` endpoint, error shape).
+- [AGENTS.md](AGENTS.md) — contributor guide: dev setup, commands, architecture map, conventions, and security invariants.
+- [SECURITY.md](SECURITY.md) — security policy, hardening checklist, and vulnerability reporting.
+
+This repo also ships [`llms.txt`](llms.txt) and [`AGENTS.md`](AGENTS.md) so AI coding agents can orient themselves quickly.
 
 ## License
 

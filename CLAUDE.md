@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> Also read **[AGENTS.md](AGENTS.md)** — the canonical contributor guide (setup, commands, conventions, security invariants) — and **[docs/api.md](docs/api.md)** for the full HTTP API surface. This file adds architecture context on top of those; it does not duplicate them.
+
 ## Project Purpose
 
 MinIO-like web console for any S3-compatible backend (AWS S3, MinIO, Vultr, Wasabi, B2, R2, Spaces). Each user supplies their own S3 endpoints/credentials; the server itself stores no S3 keys — only user accounts.
