@@ -5,11 +5,47 @@ Base URL: `http://127.0.0.1:4569` in dev (behind Caddy on `https://<DOMAIN>` in 
 ## Auth model
 
 - **Session**: HMAC-signed httpOnly cookie `s3x_session` issued after login + TOTP. Two-step flow: `POST /auth/login` (password) → short-lived `s3x_pending` cookie (120 s) → `POST /auth/totp` (6-digit code or a recovery code) → session cookie.
-- **All `/api/*` routes require an authenticated session** and additionally reject users who have not enrolled TOTP (`403 TOTP_REQUIRED`) or still have an admin-issued initial password (`403 PASSWORD_CHANGE_REQUIRED`). Enforced in `src/server.ts` via `requireAuth`, `requireTotpEnrolled`, `requirePasswordCurrent`.
+- **All `/api/*` routes require an authenticated session** and additionally reject users who have not enrolled TOTP (`403 TOTP_REQUIRED`) or still have an admin-issued initial password (`403 PASSWORD_CHANGE_REQUIRED`). Enforced in `src/server.ts` via `apiAuth` (session chain: `requireAuth` → `requireTotpEnrolled` → `requirePasswordCurrent`).
+- **Personal Access Tokens (Bearer)**: `/api/*` alternatively accepts `Authorization: Bearer s3x_...` for machine/agent access — see below.
 - **S3 credentials are per-request headers**, never stored server-side. Every `/api/*` call that touches S3 must include: `x-s3-endpoint`, `x-s3-region`, `x-s3-access-key`, `x-s3-secret-key`, optional `x-s3-session-token`, `x-s3-path-style` (default `true`). Endpoints are validated against an SSRF guard (cloud metadata hosts blocked). The `/api/index/*` routes require an `x-s3-conn-id` header (UUID minted by the client per connection).
 - Requests must pass Host and Origin allowlists (`ALLOWED_HOSTS` / `ALLOWED_ORIGINS`).
 
 `GET /healthz` is the only unauthenticated health probe (`{"ok":true}`).
+
+### Authentication with Personal Access Tokens (Bearer)
+
+For machine/agent access (scripts, CI, MCP servers), `/api/*` accepts a Personal Access Token instead of a session cookie:
+
+```
+Authorization: Bearer s3x_<43 base64url chars>
+```
+
+- **Format**: `s3x_` + 43 base64url chars (32 random bytes). The plaintext is shown **exactly once** at creation; only its SHA-256 hash is stored server-side.
+- **Token auth replaces the session chain** — no cookie, TOTP, or password-rotation gate applies to a valid token. Tokens are rejected if revoked, expired, or if their owner no longer exists or is disabled (`401 TOKEN_INVALID`).
+- **Scopes**:
+  - `read` — browsing/inspection only: bucket list, object list/metadata, download, previews, presign, exists-check, search (stream + one-shot + FTS5 index read), versions list, connection probe (`POST /api/test`).
+  - `write` — implies read, plus mutations: upload, delete/restore (object + folder), folder create, copy/rename, transfer, index rebuild/drop, bucket create/delete, versioning changes.
+  - A `read` token hitting a write endpoint gets `403 TOKEN_SCOPE` (distinct from `401`). Session users are unaffected by scopes (full access).
+- **Rate limiting**: failed token presentations are limited to 10 / 15 min per IP → `429`.
+- **Tokens are NOT accepted on `/auth/*`** — token management and user management remain session-only.
+- **S3 credentials still travel per-request** via `x-s3-*` headers on every call. A token only authenticates *who* is calling; it never grants access to stored S3 credentials, because none are stored server-side.
+
+```bash
+# List objects with a PAT (no cookies involved)
+curl 'http://127.0.0.1:4569/api/objects/my-bucket?prefix=reports/' \
+  -H 'Authorization: Bearer s3x_...' \
+  -H 'x-s3-endpoint: https://s3.us-east-1.amazonaws.com' \
+  -H 'x-s3-region: us-east-1' \
+  -H 'x-s3-access-key: AKIA...' -H 'x-s3-secret-key: ...'
+```
+
+#### Token management (session-auth only, `/auth/tokens`)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/auth/tokens` | List own tokens: `{id, name, scope, createdAt, expiresAt, lastUsedAt, revokedAt}`. Never returns hashes or plaintext. |
+| POST | `/auth/tokens` | Body `{name, scope: "read"\|"write", expiresInDays?: 30\|90\|null}`. Returns the plaintext `token` **once**. Cap: 10 active tokens per user → `409 TOKEN_LIMIT`. |
+| DELETE | `/auth/tokens/:id` | Revoke own token (soft, immediate). Idempotent; `404` if the id belongs to another user. |
 
 ## Auth endpoints (`/auth/*`)
 
@@ -127,5 +163,5 @@ S3-facing endpoints return a consistent sanitized shape (`src/http/errors.ts`, `
 ```
 
 - `error` is a known AWS error name (e.g. `NoSuchBucket`, `InvalidAccessKeyId`, `EndpointBlocked`) or `InternalError` for unknown 5xx. Raw SDK messages never reach the client; full detail is logged server-side under the same `errorId`.
-- Auth endpoints return `{message, code?}` with codes such as `NO_SESSION`, `TOTP_REQUIRED`, `PASSWORD_CHANGE_REQUIRED`, `ALREADY_ENROLLED`, `BREACHED`.
+- Auth endpoints return `{message, code?}` with codes such as `NO_SESSION`, `TOTP_REQUIRED`, `PASSWORD_CHANGE_REQUIRED`, `ALREADY_ENROLLED`, `BREACHED`, `TOKEN_INVALID`, `TOKEN_SCOPE`, `TOKEN_LIMIT`.
 - Streaming endpoints (SSE/NDJSON) report failures as in-stream frames (`{"t":"fatal",...}` / `{"t":"error",...}`) once headers are sent; client/credential errors detected before streaming return normal JSON status codes.

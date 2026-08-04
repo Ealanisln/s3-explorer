@@ -31,6 +31,7 @@ Self-hosted, multi-user file explorer for object storage. Each user brings their
 - **Login rate limiting** — 5 attempts / 15 min per username + IP on both password and TOTP steps.
 - **SSRF / cloud-metadata protection** — user-supplied S3 endpoints are validated; IMDS and other cloud metadata endpoints (`169.254.0.0/16` in any IP encoding, GCP/Azure metadata hosts) are blocked by default, with optional endpoint deny/allow lists.
 - **Hardened by default** — strict CSP with no inline scripts, host/origin allowlists (CSRF + DNS-rebinding defense), HMAC-signed httpOnly cookies, read-only container with `cap_drop: ALL`, and TOTP secrets encrypted at rest (AES-256-GCM).
+- **Personal Access Tokens (API)** — scoped Bearer tokens (`read` / `write`) for agents and scripts, with optional expiry, per-user cap, one-time display (only the SHA-256 hash is stored), instant revocation, and per-IP rate limiting on failed attempts. Tokens never grant access to stored S3 credentials — none are stored server-side.
 - **Admin user management UI** and a JSON-line audit log on stdout.
 
 > **Note:** the UI is currently in Spanish. Internationalization contributions are welcome.
