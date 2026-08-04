@@ -10,6 +10,7 @@
 import { activeConn } from '../state.js';
 import { toast } from '../util/toast.js';
 import { openModal } from '../util/dom.js';
+import { t, localizeServerError } from '../i18n/index.js';
 
 export function authHeaders(): Record<string, string> {
   const c = activeConn();
@@ -73,10 +74,10 @@ export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Pro
   if (res.status === 401) {
     const err = await res.json().catch(() => ({} as ErrorPayload));
     if (err.code === 'NO_SESSION' || err.code === 'USER_INVALID') {
-      toast('Sesión expirada — reiniciando.', 'error', 4000);
+      toast(t('api.sessionExpired'), 'error', 4000);
       setTimeout(() => location.reload(), 1500);
     }
-    throw new ApiError(err.message || 'No autenticado', { errorId: err.errorId, code: err.code });
+    throw new ApiError(localizeServerError(err, t('api.notAuthenticated')), { errorId: err.errorId, code: err.code });
   }
   if (res.status === 403) {
     const err = await res.json().catch(() => ({} as ErrorPayload));
@@ -84,13 +85,15 @@ export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Pro
       // Server is enforcing the password rotation the SPA nags about on init.
       // Reopen the modal so the user can't just dismiss it once and keep going.
       openModal('modal-account');
-      toast('Debes cambiar tu contraseña inicial antes de continuar.', 'info', 6000);
+      toast(t('auth.mustChangePassword'), 'info', 6000);
     }
-    throw new ApiError(err.message || 'Operación rechazada', { errorId: err.errorId, code: err.code });
+    throw new ApiError(localizeServerError(err, t('api.rejected')), { errorId: err.errorId, code: err.code });
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText } as ErrorPayload));
-    throw new ApiError(err.message || 'Error', { errorId: err.errorId, code: err.code });
+    // Known machine codes get a localized message; unknown ones keep the
+    // server-provided text (Spanish) as-is.
+    throw new ApiError(localizeServerError(err, t('common.error')), { errorId: err.errorId, code: err.code });
   }
   return res.json() as Promise<T>;
 }

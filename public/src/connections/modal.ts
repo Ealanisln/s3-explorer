@@ -4,6 +4,7 @@ import { State } from '../state.js';
 import { saveConnections } from '../vault/persistence.js';
 import { $, openModal, closeModal } from '../util/dom.js';
 import { renderConnections, selectConnection } from './list.js';
+import { t } from '../i18n/index.js';
 import type { Connection } from '../types.js';
 
 function readConnForm(): Connection {
@@ -46,7 +47,7 @@ export function openConnModal(c: Connection | null): void {
   $('test-result').textContent = '';
   const importResult = document.getElementById('import-result');
   if (importResult) { importResult.textContent = ''; importResult.className = 'test-result'; }
-  $('conn-modal-title').textContent = c ? 'Editar conexión' : 'Nueva conexión S3';
+  $('conn-modal-title').textContent = c ? t('conn.modalTitleEdit') : t('conn.modalTitleNew');
   if (c) {
     get('id').value = c.id;
     get('name').value = c.name;
@@ -71,7 +72,7 @@ export function initConnModal(): void {
   $('btn-test-conn').onclick = async (): Promise<void> => {
     const conn = readConnForm();
     const tr = $('test-result');
-    tr.textContent = 'Probando...';
+    tr.textContent = t('conn.testing');
     tr.className = 'test-result';
     try {
       const headers: Record<string, string> = {
@@ -88,9 +89,9 @@ export function initConnModal(): void {
         method: 'POST', headers, credentials: 'same-origin', body: JSON.stringify(body),
       });
       const data = await res.json() as { mode?: string; bucket?: string; bucketCount?: number; message?: string };
-      if (!res.ok) throw new Error(data.message || 'Error');
-      if (data.mode === 'head-bucket') tr.textContent = `✓ OK · acceso a "${data.bucket}"`;
-      else tr.textContent = `✓ OK · ${data.bucketCount} buckets`;
+      if (!res.ok) throw new Error(data.message || t('common.error'));
+      if (data.mode === 'head-bucket') tr.textContent = t('conn.testOkBucket', { bucket: data.bucket ?? '' });
+      else tr.textContent = t('conn.testOkCount', { count: data.bucketCount ?? 0 });
       tr.className = 'test-result ok';
     } catch (e) {
       tr.textContent = '✗ ' + (e as Error).message;

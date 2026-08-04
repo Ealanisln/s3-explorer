@@ -10,6 +10,7 @@ import type { PaneId, BucketRow } from '../state.js';
 import { api } from '../api/client.js';
 import { saveConnections } from '../vault/persistence.js';
 import { toast, errorIdOpts } from '../util/toast.js';
+import { t } from '../i18n/index.js';
 import { mountIcons } from '../util/icons.js';
 import { $, paneEl, escapeHtml, openModal } from '../util/dom.js';
 import { confirmDialog } from '../util/dialog.js';
@@ -40,9 +41,9 @@ function showConnMenu(e: MouseEvent, c: Connection): void {
   dd.style.left = e.clientX + 'px';
   dd.style.top = e.clientY + 'px';
   dd.innerHTML = `
-    <button data-act="edit">Editar</button>
-    <button data-act="duplicate">Duplicar</button>
-    <button data-act="delete" class="danger">Eliminar</button>
+    <button data-act="edit">${t('conn.edit')}</button>
+    <button data-act="duplicate">${t('conn.duplicate')}</button>
+    <button data-act="delete" class="danger">${t('common.delete')}</button>
   `;
   document.body.appendChild(dd);
   const close = (): void => { dd.remove(); document.removeEventListener('click', close); };
@@ -52,16 +53,16 @@ function showConnMenu(e: MouseEvent, c: Connection): void {
     const act = target.dataset.act;
     if (act === 'edit') openEditModal(c);
     if (act === 'duplicate') {
-      const copy: Connection = { ...c, id: crypto.randomUUID(), name: c.name + ' (copia)' };
+      const copy: Connection = { ...c, id: crypto.randomUUID(), name: c.name + t('conn.copySuffix') };
       State.connections.push(copy);
       void saveConnections();
       renderConnections();
     }
     if (act === 'delete') {
       const ok = await confirmDialog({
-        title: 'Eliminar conexión',
-        message: `Se eliminará la conexión "${c.name}" de tu bóveda local. Los datos en S3 no se tocan.`,
-        confirmLabel: 'Eliminar',
+        title: t('conn.deleteTitle'),
+        message: t('conn.deleteMessage', { name: c.name }),
+        confirmLabel: t('common.delete'),
         danger: true,
       });
       if (ok) {
@@ -93,7 +94,7 @@ function showBucketMenu(e: MouseEvent, conn: Connection, b: BucketRow): void {
   dd.style.position = 'fixed';
   dd.style.left = e.clientX + 'px';
   dd.style.top = e.clientY + 'px';
-  dd.innerHTML = '<button data-act="delete" class="danger">Eliminar bucket</button>';
+  dd.innerHTML = `<button data-act="delete" class="danger">${t('conn.deleteBucket')}</button>`;
   document.body.appendChild(dd);
   const close = (): void => { dd.remove(); document.removeEventListener('click', close); };
   setTimeout(() => document.addEventListener('click', close), 10);
@@ -101,9 +102,9 @@ function showBucketMenu(e: MouseEvent, conn: Connection, b: BucketRow): void {
     const target = ev.target as HTMLElement;
     if (target.dataset.act === 'delete') {
       const ok = await confirmDialog({
-        title: 'Eliminar bucket',
-        message: `Se eliminará el bucket "${b.Name}". Debe estar vacío para que S3 lo acepte.`,
-        confirmLabel: 'Eliminar',
+        title: t('conn.deleteBucket'),
+        message: t('conn.deleteBucketMessage', { name: b.Name }),
+        confirmLabel: t('common.delete'),
         danger: true,
       });
       if (!ok) return;
@@ -112,7 +113,7 @@ function showBucketMenu(e: MouseEvent, conn: Connection, b: BucketRow): void {
           method: 'DELETE',
           headers: connHeaders(conn),
         });
-        toast('Bucket eliminado', 'success');
+        toast(t('conn.bucketDeleted'), 'success');
         // Refresh this conn's bucket cache and tree.
         await refreshConnBuckets(conn);
         renderConnections();
@@ -140,15 +141,15 @@ export function renderConnections(): void {
     li.dataset.connId = c.id;
     li.innerHTML = `
       <div class="conn-row">
-        <span class="chevron${isOpen ? ' open' : ''}" aria-label="Expandir">
+        <span class="chevron${isOpen ? ' open' : ''}" aria-label="${t('conn.expand')}">
           <i data-icon="chevron_right" data-icon-size="12"></i>
         </span>
         <span class="ft-badge def" style="width:22px;height:22px;font-size:9px">S3</span>
         <span class="name" title="${escapeHtml(c.endpoint || 'AWS')}">${escapeHtml(c.name)}</span>
-        <span class="act-btn add-bucket" title="Crear bucket" aria-label="Crear bucket">
+        <span class="act-btn add-bucket" title="${t('conn.createBucket')}" aria-label="${t('conn.createBucket')}">
           <i data-icon="plus" data-icon-size="13"></i>
         </span>
-        <span class="act-btn menu" aria-label="Menú">
+        <span class="act-btn menu" aria-label="${t('common.menu')}">
           <i data-icon="dots_h" data-icon-size="14"></i>
         </span>
       </div>
@@ -160,13 +161,13 @@ export function renderConnections(): void {
                   <li class="bucket-node${(isActive && b.Name === activeBucket) ? ' active' : ''}" data-bucket="${escapeHtml(b.Name)}">
                     <span class="ft-badge folder" style="width:18px;height:18px"><i data-icon="bucket" data-icon-size="10"></i></span>
                     <span class="name">${escapeHtml(b.Name)}</span>
-                    <span class="act-btn menu" aria-label="Menú">
+                    <span class="act-btn menu" aria-label="${t('common.menu')}">
                       <i data-icon="dots_h" data-icon-size="13"></i>
                     </span>
                   </li>`).join('')
-              : '<li class="bucket-empty">Sin buckets</li>')
+              : `<li class="bucket-empty">${t('conn.noBuckets')}</li>`)
             : (isLoading
-              ? '<li class="bucket-empty">Cargando…</li>'
+              ? `<li class="bucket-empty">${t('conn.loadingBuckets')}</li>`
               : '<li class="bucket-empty">—</li>')}
         </ul>
       ` : ''}
@@ -246,7 +247,7 @@ async function fetchConnBuckets(conn: Connection): Promise<BucketRow[] | null> {
     } catch (e) {
       const err = e as Error;
       if (!/ListAllMyBuckets|not authorized|AccessDenied/i.test(err.message)) {
-        toast('Error al cargar buckets: ' + err.message, 'error', errorIdOpts(err));
+        toast(t('conn.bucketsLoadError', { message: err.message }), 'error', errorIdOpts(err));
       }
       return null;
     } finally {
@@ -294,7 +295,7 @@ export async function selectConnection(id: string, paneId?: PaneId, opts: Select
   if (p === State.activePane) navigateTo({ connId: id });
   const statusEl = $('conn-status');
   statusEl.classList.remove('online');
-  statusEl.textContent = 'Conectando...';
+  statusEl.textContent = t('conn.connecting');
   const conn = State.connections.find((c) => c.id === pane.activeConnId);
   if (!conn) return;
   try {
@@ -303,26 +304,26 @@ export async function selectConnection(id: string, paneId?: PaneId, opts: Select
     pane.buckets = buckets;
     renderConnections();
     statusEl.classList.add('online');
-    const manualTag = (conn.buckets && conn.buckets.length) ? ' (manuales)' : '';
-    statusEl.textContent = `Conectado · ${buckets.length} buckets${manualTag}`;
+    const manualTag = (conn.buckets && conn.buckets.length) ? t('conn.manualTag') : '';
+    statusEl.textContent = t('conn.connected', { count: buckets.length, manual: manualTag });
     if (!opts.skipPaint) {
       toggleEmpty(true, p);
-      paneEl('empty', p).innerHTML = '<h2>Selecciona un bucket</h2><p>Elige un bucket en la barra lateral para navegar tus archivos.</p>';
+      paneEl('empty', p).innerHTML = `<h2>${t('conn.selectBucketTitle')}</h2><p>${t('conn.selectBucketBody')}</p>`;
     }
   } catch (e) {
     const err = e as Error;
-    statusEl.textContent = 'Error de conexión';
+    statusEl.textContent = t('conn.connectionError');
     if (/ListAllMyBuckets|not authorized|AccessDenied/i.test(err.message)) {
       toggleEmpty(true, p);
       paneEl('empty', p).innerHTML = `
-        <h2>Tu IAM no permite listar buckets</h2>
-        <p>Tu credencial no tiene <code>s3:ListAllMyBuckets</code>. Edita la conexión y agrega manualmente los nombres de los buckets que sí tienes permiso para usar.</p>
-        <button class="btn btn-primary" data-edit-this-conn>Editar conexión</button>
+        <h2>${t('conn.iamTitle')}</h2>
+        <p>${t('conn.iamBodyHtml')}</p>
+        <button class="btn btn-primary" data-edit-this-conn>${t('conn.editConnection')}</button>
       `;
       const btn = paneEl('empty', p).querySelector<HTMLButtonElement>('[data-edit-this-conn]');
       if (btn) btn.onclick = (): void => openEditModal(conn);
     } else {
-      toast('Error al conectar: ' + err.message, 'error', errorIdOpts(err));
+      toast(t('conn.connectError', { message: err.message }), 'error', errorIdOpts(err));
     }
   }
 }
@@ -364,7 +365,7 @@ export function clearMain(): void {
     if (crumbs) crumbs.innerHTML = '';
   }
   const s = $('conn-status');
-  s.textContent = 'Sin conexión';
+  s.textContent = t('sidebar.noConnection');
   s.classList.remove('online');
 }
 

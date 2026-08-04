@@ -11,6 +11,7 @@ import type { PaneId } from '../state.js';
 import { api } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
 import { paneEl, paneElMaybe } from '../util/dom.js';
+import { t } from '../i18n/index.js';
 
 interface IndexStatus {
   last_indexed_at: string | null;
@@ -23,12 +24,13 @@ function badgeText(status: IndexStatus): string {
   if (!status.last_indexed_at) return '';
   const age = Date.now() - new Date(status.last_indexed_at).getTime();
   const min = Math.floor(age / 60000);
-  if (min < 1) return `⚡ índice ${status.object_count.toLocaleString()} obj (hace segundos)`;
-  if (min < 60) return `⚡ índice ${status.object_count.toLocaleString()} obj (hace ${min} min)`;
+  const count = status.object_count.toLocaleString();
+  if (min < 1) return t('index.badgeSeconds', { count });
+  if (min < 60) return t('index.badgeMin', { count, min });
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `⚡ índice ${status.object_count.toLocaleString()} obj (hace ${hr} h)`;
+  if (hr < 24) return t('index.badgeHours', { count, hours: hr });
   const days = Math.floor(hr / 24);
-  return `⚠ índice ${status.object_count.toLocaleString()} obj (hace ${days} d, stale)`;
+  return t('index.badgeStale', { count, days });
 }
 
 async function refreshBadge(paneId: PaneId): Promise<void> {
@@ -52,16 +54,16 @@ async function reindexBucket(paneId: PaneId): Promise<void> {
   const btn = paneEl('btn-reindex', paneId) as HTMLButtonElement;
   const original = btn.textContent || '';
   btn.disabled = true;
-  btn.textContent = '⏳ Indexando...';
+  btn.textContent = t('index.indexing');
   try {
     const { count, durationMs } = await api<{ count: number; durationMs: number }>(
       `/api/index/${encodeURIComponent(pane.activeBucket)}/rebuild`,
       { method: 'POST' },
     );
-    toast(`Índice listo: ${count.toLocaleString()} objetos en ${Math.round(durationMs / 1000)}s`, 'success', 5000);
+    toast(t('index.ready', { count: count.toLocaleString(), seconds: Math.round(durationMs / 1000) }), 'success', 5000);
     await refreshBadge(paneId);
   } catch (e) {
-    toast('Error al reindexar: ' + (e as Error).message, 'error', errorIdOpts(e));
+    toast(t('index.error', { message: (e as Error).message }), 'error', errorIdOpts(e));
   } finally {
     btn.disabled = false;
     btn.textContent = original;

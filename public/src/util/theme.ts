@@ -11,6 +11,8 @@
 // this module owns the same logic but at the runtime level (toggle, live
 // system-pref listener, button state).
 
+import { t, onLangChange } from '../i18n/index.js';
+
 export type ThemePref = 'system' | 'light' | 'dark';
 type Effective = 'light' | 'dark';
 
@@ -51,23 +53,25 @@ const NEXT: Record<ThemePref, ThemePref> = {
   dark: 'system',
 };
 
-const ICONS: Record<ThemePref, { glyph: string; title: string }> = {
-  system: { glyph: '🌓', title: 'Tema: automático (sigue al sistema)' },
-  light: { glyph: '☀️', title: 'Tema: claro' },
-  dark: { glyph: '🌙', title: 'Tema: oscuro' },
+const GLYPHS: Record<ThemePref, string> = {
+  system: '🌓',
+  light: '☀️',
+  dark: '🌙',
 };
 
 function updateToggleIcon(pref: ThemePref): void {
   const btn = document.getElementById('btn-theme');
   if (!btn) return;
-  const cfg = ICONS[pref];
-  btn.textContent = cfg.glyph;
-  btn.title = cfg.title;
+  btn.textContent = GLYPHS[pref];
+  btn.title = t(`theme.${pref}`);
 }
 
 export function initThemeToggle(): void {
   const btn = document.getElementById('btn-theme');
   if (!btn) return;
+  // The theme button's tooltip is set dynamically (not via data-i18n) so it
+  // needs an explicit refresh when the language switches.
+  onLangChange(() => updateToggleIcon(loadTheme()));
   btn.onclick = (): void => {
     const current = loadTheme();
     const next = NEXT[current];

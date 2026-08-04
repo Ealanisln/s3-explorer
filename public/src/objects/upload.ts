@@ -19,6 +19,7 @@ import { $, paneEl, openModal, closeModal, escapeHtml } from '../util/dom.js';
 import { formatSize } from '../util/format.js';
 import { mountIcons } from '../util/icons.js';
 import { nextFreeName } from './rename.js';
+import { t } from '../i18n/index.js';
 
 interface UploadItem { file: File; key: string }
 interface ExistingMeta { size: number | null; lastModified: string | null }
@@ -87,9 +88,9 @@ async function doUpload(items: UploadItem[], paneId: PaneId): Promise<void> {
   fd.append('prefix', pane.prefix);
   for (const it of items) fd.append('files', it.file);
   try {
-    toast(`Subiendo ${items.length} archivo(s)...`, 'info');
+    toast(t('upload.uploading', { count: items.length }), 'info');
     await api(`/api/object/${encodeURIComponent(pane.activeBucket)}/upload`, { method: 'POST', body: fd });
-    toast('Subida completa', 'success');
+    toast(t('upload.complete'), 'success');
     await onUploadComplete(paneId);
   } catch (e) {
     toast((e as Error).message, 'error', errorIdOpts(e));
@@ -170,27 +171,16 @@ function promptOverwrite(allItems: UploadItem[], conflicts: ConflictItem[], pane
   const destPath = escapeHtml((pane.activeBucket || '') + '/' + (prefix || ''));
   warnBlock.innerHTML = versioningOn
     ? `<i data-icon="info" data-icon-size="18" style="color:var(--accent); flex-shrink:0; margin-top:1px"></i>
-       <div style="flex:1">
-         <strong>${conflicts.length}</strong> archivo(s) ya existen en
-         <code>${destPath}</code>.
-         El versionado de este bucket está <strong>activado</strong>: reemplazar crea una
-         <strong>nueva versión</strong> (la anterior queda recuperable).
-       </div>`
+       <div style="flex:1">${t('overwrite.versionedHtml', { count: conflicts.length, dest: destPath })}</div>`
     : `<i data-icon="warn" data-icon-size="18" style="color:var(--warn); flex-shrink:0; margin-top:1px"></i>
-       <div style="flex:1">
-         <strong>${conflicts.length}</strong> archivo(s) ya existen en
-         <code>${destPath}</code>.
-         El versionado de este bucket está
-         <strong style="color:var(--danger)">desactivado</strong>:
-         reemplazar es <strong>irreversible</strong>.
-       </div>`;
+       <div style="flex:1">${t('overwrite.unversionedHtml', { count: conflicts.length, dest: destPath })}</div>`;
   mountIcons(warnBlock);
   // Soften the "Reemplazar todos" button when versioning makes it safe.
   const btnAll = $('btn-overwrite-all') as HTMLButtonElement;
   if (btnAll) {
     btnAll.classList.toggle('btn-danger-solid', !versioningOn);
     btnAll.classList.toggle('btn', true);
-    btnAll.textContent = versioningOn ? 'Reemplazar (nueva versión)' : 'Reemplazar todos';
+    btnAll.textContent = versioningOn ? t('overwrite.replaceNewVersion') : t('overwrite.replaceAll');
   }
 
   const list = $('overwrite-list');
@@ -206,9 +196,9 @@ function promptOverwrite(allItems: UploadItem[], conflicts: ConflictItem[], pane
         <span class="overwrite-icon">📄</span>
         <div class="overwrite-name" title="${escapeHtml(c.file.name)}">${escapeHtml(c.file.name)}</div>
         <div class="overwrite-meta">
-          <span>Entrante: ${formatSize(c.file.size)}</span>
+          <span>${t('overwrite.incoming', { size: formatSize(c.file.size) })}</span>
           <span class="sep">·</span>
-          <span>Existente: ${existingSize}${existingDate ? ` (${existingDate})` : ''}</span>
+          <span>${t('overwrite.existing', { size: existingSize + (existingDate ? ` (${existingDate})` : '') })}</span>
         </div>
         ${previewLine}
       </div>
@@ -217,12 +207,12 @@ function promptOverwrite(allItems: UploadItem[], conflicts: ConflictItem[], pane
 
   const newInfo = $('overwrite-new-info');
   newInfo.textContent = newOnes.length > 0
-    ? `${newOnes.length} archivo(s) sin conflicto se subirá(n) tal cual en todos los casos.`
-    : 'Todos los archivos seleccionados tienen conflicto.';
+    ? t('overwrite.newOnes', { count: newOnes.length })
+    : t('overwrite.allConflict');
 
   const btnSkip = $('btn-overwrite-skip') as HTMLButtonElement;
   btnSkip.disabled = newOnes.length === 0;
-  btnSkip.title = newOnes.length === 0 ? 'No hay archivos sin conflicto que subir' : '';
+  btnSkip.title = newOnes.length === 0 ? t('overwrite.noSkippable') : '';
 
   openModal('modal-overwrite');
   // Default focus on "Renombrar" — the non-destructive recommended action.
@@ -241,7 +231,7 @@ function promptOverwrite(allItems: UploadItem[], conflicts: ConflictItem[], pane
     resetDragState(paneId);
   };
   $('btn-overwrite-cancel').onclick = (): void => {
-    toast('Subida cancelada', 'info');
+    toast(t('overwrite.cancelled'), 'info');
     cleanup();
   };
   $('btn-overwrite-skip').onclick = (): void => {
@@ -304,7 +294,7 @@ export function initUpload(paneId: PaneId): void {
     setActivePane(paneId);
     const pane = getPane(paneId);
     if (!pane.activeBucket) {
-      toast('Selecciona un bucket antes de subir archivos', 'info', 4000);
+      toast(t('upload.selectBucketFirst'), 'info', 4000);
       return;
     }
     const files = ev.dataTransfer?.files;
@@ -312,7 +302,7 @@ export function initUpload(paneId: PaneId): void {
       // Some browsers fire drop with empty file list when the drag was
       // cancelled mid-air or when something intercepted the event. Without
       // this hint the user sees literal nothing.
-      toast('No se detectaron archivos en el drop. Intenta de nuevo.', 'info', 4000);
+      toast(t('upload.noFilesDetected'), 'info', 4000);
       return;
     }
     void uploadFiles(files, paneId);

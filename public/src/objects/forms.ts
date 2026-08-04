@@ -9,6 +9,7 @@ import { State, getPane, setActivePane, adoptPaneState } from '../state.js';
 import type { PaneId } from '../state.js';
 import { api } from '../api/client.js';
 import { toast, errorIdOpts } from '../util/toast.js';
+import { t } from '../i18n/index.js';
 import { $, paneEl, openModal, closeModal } from '../util/dom.js';
 import { loadObjects } from './grid.js';
 import { selectConnection, refreshActiveConnBuckets, renderConnections } from '../connections/list.js';
@@ -52,7 +53,7 @@ export function initGlobalForms(): void {
     const name = (f.elements.namedItem('name') as HTMLInputElement).value.trim();
     try {
       await api('/api/buckets', { method: 'POST', body: { name } });
-      toast('Bucket creado', 'success');
+      toast(t('bucket.created'), 'success');
       closeModal('modal-bucket');
       await refreshActiveConnBuckets();
       State.buckets = getPane().buckets;
@@ -74,7 +75,7 @@ export function initGlobalForms(): void {
         method: 'POST',
         body: { sourceKey: src, destKey: dest },
       });
-      toast('Renombrado', 'success');
+      toast(t('rename.done'), 'success');
       closeModal('modal-rename');
       await loadObjects();
     } catch (e2) {
@@ -93,7 +94,7 @@ export function initGlobalForms(): void {
         method: 'POST',
         body: { prefix: pane.prefix, name },
       });
-      toast('Carpeta creada', 'success');
+      toast(t('folder.created'), 'success');
       closeModal('modal-folder');
       await loadObjects();
     } catch (e2) {

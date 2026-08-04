@@ -18,6 +18,7 @@ import type { PaneId } from '../state.js';
 import { api, authHeaders } from '../api/client.js';
 import { paneEl, paneRoot, escapeHtml } from '../util/dom.js';
 import { saveFilter, loadFilter } from '../util/filter-persist.js';
+import { t } from '../i18n/index.js';
 import type { S3Object, SearchFolderInfo } from '../types.js';
 
 let onRenderGrid: (paneId: PaneId) => void = () => undefined;
@@ -88,7 +89,7 @@ export function updateSearchPlaceholder(paneId: PaneId): void {
   const pane = getPane(paneId);
   const input = paneEl('search-input', paneId) as HTMLInputElement;
   if (!pane.activeBucket) {
-    input.placeholder = 'Buscar...';
+    input.placeholder = t('search.placeholder');
     return;
   }
   let scopeName: string;
@@ -98,7 +99,7 @@ export function updateSearchPlaceholder(paneId: PaneId): void {
   } else {
     scopeName = pane.activeBucket;
   }
-  input.placeholder = `Buscar en ${scopeName}/... (Enter)`;
+  input.placeholder = t('search.scopePlaceholder', { scope: scopeName });
 }
 
 interface IndexStatus {
@@ -321,15 +322,15 @@ export function updateSearchBanner(paneId?: PaneId): void {
 
     let statusLabel = '';
     if (status === 'scanning') {
-      statusLabel = '<span style="color:var(--accent)">escaneando…</span>';
+      statusLabel = `<span style="color:var(--accent)">${t('search.scanning')}</span>`;
     } else if (status === 'done') {
-      if (reason === 'limit') statusLabel = '<span class="truncated">tope de resultados (refina la búsqueda)</span>';
-      else if (reason === 'fts') statusLabel = '<span style="color:var(--success)">índice FTS5</span>';
-      else statusLabel = '<span style="color:var(--success)">completo</span>';
+      if (reason === 'limit') statusLabel = `<span class="truncated">${t('search.limit')}</span>`;
+      else if (reason === 'fts') statusLabel = `<span style="color:var(--success)">${t('search.fts')}</span>`;
+      else statusLabel = `<span style="color:var(--success)">${t('search.complete')}</span>`;
     } else if (status === 'cancelled') {
-      statusLabel = '<span class="truncated">cancelado</span>';
+      statusLabel = `<span class="truncated">${t('search.cancelledLabel')}</span>`;
     } else if (status === 'error') {
-      statusLabel = `<span style="color:var(--danger)">error: ${escapeHtml(error || '')}</span>`;
+      statusLabel = `<span style="color:var(--danger)">${t('search.errorLabel', { message: escapeHtml(error || '') })}</span>`;
     }
 
     // Surface the scope (bucket-root vs subfolder) in the banner so the user
@@ -346,15 +347,18 @@ export function updateSearchBanner(paneId?: PaneId): void {
     banner.style.display = 'flex';
     banner.innerHTML = `
       <span>
-        <strong>${folderCount}</strong> carpeta(s) · <strong>${fileCount}</strong> archivo(s)
-        para "<strong>${escapeHtml(query)}</strong>"
-        en <code>${escapeHtml(scopeLabel)}</code>
-        · escaneados ${scanned.toLocaleString()}
-        · ${statusLabel}
+        ${t('search.bannerSummaryHtml', {
+          folders: folderCount,
+          files: fileCount,
+          query: escapeHtml(query),
+          scope: escapeHtml(scopeLabel),
+          scanned: scanned.toLocaleString(),
+          status: statusLabel,
+        })}
       </span>
       <span style="display:flex; gap:6px">
-        ${status === 'scanning' ? '<button class="btn" data-search-cancel>Cancelar</button>' : ''}
-        <button class="btn" data-search-exit>Salir</button>
+        ${status === 'scanning' ? `<button class="btn" data-search-cancel>${t('common.cancel')}</button>` : ''}
+        <button class="btn" data-search-exit>${t('search.exit')}</button>
       </span>
     `;
     (banner.querySelector('[data-search-exit]') as HTMLButtonElement).onclick = (): void => clearSearch(p);

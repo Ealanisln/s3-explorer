@@ -61,6 +61,7 @@ import {
   mountRightPane, initActivation, initDualToggle, paintRightPanePlaceholder,
 } from './panes/init.js';
 import { initSyncNavToggle, setSyncNavDeps } from './panes/synced-nav.js';
+import { t, getLang, applyStaticTranslations, initLangToggle } from './i18n/index.js';
 
 applyTheme(loadTheme());
 
@@ -71,6 +72,11 @@ mountIcons(document);
 
 // ─── Right pane cloned BEFORE init*() runs so listener wiring covers both ──
 mountRightPane();
+
+// Apply the detected language over the static HTML (Spanish markup is the
+// pre-boot fallback). Runs AFTER mountRightPane so the clone is covered too.
+document.documentElement.lang = getLang();
+applyStaticTranslations(document);
 
 const PANES: PaneId[] = ['left', 'right'];
 
@@ -88,9 +94,9 @@ setSyncNavDeps({ loadObjects: (paneId) => loadObjects(paneId) });
 configureLock({
   onLock: async () => {
     const ok = await confirmDialog({
-      title: 'Bloquear bóveda',
-      message: 'Tus conexiones quedarán cifradas hasta que vuelvas a ingresar tu contraseña. ¿Continuar?',
-      confirmLabel: 'Bloquear',
+      title: t('vault.lockTitle'),
+      message: t('vault.lockMessage'),
+      confirmLabel: t('vault.lockConfirm'),
     });
     if (!ok) return;
     setVaultKey(null);
@@ -103,7 +109,7 @@ configureLock({
     renderConnections();
     toggleEmpty(true, 'left');
     toggleEmpty(true, 'right');
-    paneEl('empty', 'left').innerHTML = '<h2>Bóveda bloqueada</h2><p>Desbloquea para acceder a tus conexiones.</p><button class="btn btn-primary" id="btn-unlock-now">Desbloquear</button>';
+    paneEl('empty', 'left').innerHTML = `<h2>${t('vault.lockedTitle')}</h2><p>${t('vault.lockedBody')}</p><button class="btn btn-primary" id="btn-unlock-now">${t('vault.unlockBtn')}</button>`;
     const btn = document.getElementById('btn-unlock-now');
     if (btn) btn.onclick = (): void => openPassphraseModal({ mode: 'unlock' });
   },
@@ -122,6 +128,7 @@ initGlobalForms();
 initModalDismiss();
 initLockButton();
 initThemeToggle();
+initLangToggle();
 initDrawer();
 initResizers();
 initActivation();
@@ -168,10 +175,10 @@ async function onVaultUnlocked(): Promise<void> {
   renderConnections();
   if (State.connections.length) {
     toggleEmpty(true, 'left');
-    paneEl('empty', 'left').innerHTML = '<h2>Bóveda desbloqueada</h2><p>Selecciona una conexión en la barra lateral.</p>';
+    paneEl('empty', 'left').innerHTML = `<h2>${t('vault.unlockedTitle')}</h2><p>${t('vault.unlockedBody')}</p>`;
   } else {
     toggleEmpty(true, 'left');
-    paneEl('empty', 'left').innerHTML = '<h2>Bienvenido a S3 Explorer</h2><p>Crea una conexión para empezar a navegar tus archivos en cualquier almacenamiento compatible con S3 (AWS S3, MinIO, Wasabi, Backblaze B2, Cloudflare R2, etc.).</p><button class="btn btn-primary" id="btn-first-conn-empty">Agregar conexión</button>';
+    paneEl('empty', 'left').innerHTML = `<h2>${t('app.welcomeTitle')}</h2><p>${t('app.welcomeBody')}</p><button class="btn btn-primary" id="btn-first-conn-empty">${t('app.addConnection')}</button>`;
     const btn = document.getElementById('btn-first-conn-empty');
     if (btn) btn.onclick = (): void => openConnModal(null);
   }
@@ -190,7 +197,7 @@ async function applyRoute(r: Route): Promise<void> {
   if (!r.connId) return;
   const conn = State.connections.find((c) => c.id === r.connId);
   if (!conn) {
-    toast(`Conexión "${r.connId.slice(0, 8)}…" no encontrada en tu bóveda local.`, 'info', 6000);
+    toast(t('app.connNotFound', { id: r.connId.slice(0, 8) }), 'info', 6000);
     navigateTo({}, { replace: true });
     return;
   }
@@ -251,6 +258,6 @@ subscribe('activePane', () => {
   if (ok) await loadConnectionsFlow();
 })().catch((e: unknown) => {
   console.error('[main] boot failed:', e);
-  toast('Error al iniciar la aplicación', 'error', 8000);
+  toast(t('app.bootError'), 'error', 8000);
 });
 

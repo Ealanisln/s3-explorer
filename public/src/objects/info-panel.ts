@@ -9,6 +9,7 @@ import { toast, errorIdOpts } from '../util/toast.js';
 import { paneEl, paneRoot, escapeHtml } from '../util/dom.js';
 import { confirmDialog } from '../util/dialog.js';
 import { formatSize, formatDate, fileIcon } from '../util/format.js';
+import { t } from '../i18n/index.js';
 import { openPreview } from './preview.js';
 import { downloadObject, shareObject, openRename } from './actions.js';
 import type { S3Object } from '../types.js';
@@ -35,14 +36,14 @@ export function openInfoPanel(o: S3Object, paneId?: PaneId): void {
   iconEl.className = 'ft-badge ' + ico.cls;
   iconEl.textContent = ico.label;
   paneEl('info-name', p).textContent = name;
-  paneEl('info-path', p).textContent = folder || '(raíz)';
+  paneEl('info-path', p).textContent = folder || t('info.root');
 
   const meta = paneEl('info-meta', p);
   setMetaCell(meta, 'size', formatSize(o.Size));
   setMetaCell(meta, 'modified', formatDate(o.LastModified));
   setMetaCell(meta, 'etag', (o.ETag || '—').replace(/"/g, ''));
   setMetaCell(meta, 'storage-class', o.StorageClass || 'STANDARD');
-  setMetaCell(meta, 'content-type', 'Cargando...');
+  setMetaCell(meta, 'content-type', t('common.loading'));
   setMetaCell(meta, 'version-id', o.VersionId || '—');
   paneEl('info-user-meta-wrap', p).style.display = 'none';
 
@@ -79,7 +80,7 @@ async function loadHead(o: S3Object, paneId: PaneId): Promise<void> {
       paneEl('info-user-meta-wrap', paneId).style.display = 'block';
     }
   } catch (e) {
-    setMetaCell(meta, 'content-type', `(error: ${(e as Error).message})`);
+    setMetaCell(meta, 'content-type', t('info.contentTypeError', { message: (e as Error).message }));
   }
 }
 
@@ -121,9 +122,9 @@ export function initInfoPanel(paneId: PaneId): void {
     const key = obj.Key;
     const name = key.split('/').pop() || key;
     const ok = await confirmDialog({
-      title: 'Eliminar archivo',
-      message: `Se eliminará "${name}". ¿Continuar?`,
-      confirmLabel: 'Eliminar',
+      title: t('delete.title'),
+      message: t('delete.message', { name }),
+      confirmLabel: t('common.delete'),
       danger: true,
     });
     if (!ok) return;
@@ -132,7 +133,7 @@ export function initInfoPanel(paneId: PaneId): void {
         method: 'DELETE',
         body: { key },
       });
-      toast('Eliminado', 'success');
+      toast(t('delete.done'), 'success');
       closeInfoPanel(paneId);
       await onObjectsChanged(paneId);
     } catch (e) {
