@@ -57,7 +57,7 @@ curl 'http://127.0.0.1:4569/api/objects/my-bucket?prefix=reports/' \
 | POST | `/auth/logout` | Revokes the session (jti persisted in SQLite) and clears the cookie. |
 | POST | `/auth/totp/setup` | Auth required. Starts (or resumes) enrollment; returns `{otpauth, qrSvg, secret}`. `409 ALREADY_ENROLLED` if confirmed; `?regenerate=1` forces a new secret. |
 | POST | `/auth/totp/confirm` | Auth required. Body `{code}`. Confirms enrollment; returns `{ok, recoveryCodes}` (8 codes, shown once). |
-| POST | `/auth/me/password` | Auth required. Body `{currentPassword, newPassword}`. New passwords are checked against HIBP (`400 BREACHED`). |
+| POST | `/auth/me/password` | Auth required. Body `{currentPassword, newPassword}`. New passwords are checked against HIBP (`400 BREACHED`). Wrong `currentPassword` attempts are rate limited: 5 / 15 min per username+IP → `429`. |
 | POST | `/auth/me/recovery` | Auth + TOTP required. Regenerates and returns 8 recovery codes (invalidates old ones). |
 
 ### Admin (`role: "admin"` required)

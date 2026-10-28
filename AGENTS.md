@@ -4,26 +4,26 @@ Guidance for AI coding agents and human contributors working on S3 Explorer.
 
 ## Project overview
 
-S3 Explorer is a self-hosted, multi-user web console for any S3-compatible storage (AWS S3, MinIO, R2, B2, Wasabi, etc.). Node 20 + TypeScript + Express backend, framework-less vanilla TypeScript SPA in `public/`, SQLite (better-sqlite3) for user accounts and the per-user search index. The server never stores S3 credentials — each request carries them in transient `x-s3-*` headers, encrypted client-side at rest.
+S3 Explorer is a self-hosted, multi-user web console for any S3-compatible storage (AWS S3, MinIO, R2, B2, Wasabi, etc.). Node 24 + TypeScript + Express backend, framework-less vanilla TypeScript SPA in `public/`, SQLite (better-sqlite3) for user accounts and the per-user search index. The server never stores S3 credentials — each request carries them in transient `x-s3-*` headers, encrypted client-side at rest.
 
 ## Dev environment
 
 ```bash
-# Node.js 20+
-npm ci
+# Node.js 22.5+ (24 in CI/Docker) + pnpm 11 via `corepack enable`
+pnpm install
 cp .env.example .env      # fill SESSION_SECRET / TOTP_ENCRYPTION_KEY (openssl rand -hex 32)
-npm run dev               # build (tsc -b) + start on http://127.0.0.1:4569
+pnpm run dev               # build (tsc -b) + start on http://127.0.0.1:4569
 ```
 
 ## Build and test commands
 
 ```bash
-npm run build             # tsc -b → dist/ (server) + public/dist/ (SPA)
-npm run typecheck         # tsc -b --noEmit
-npm test                  # vitest run (unit + integration, S3 mocked via aws-sdk-client-mock)
-npm run test:unit         # tests/unit only
-npm run test:integration  # tests/integration only
-npx vitest run tests/integration/api/objects.test.ts   # single file
+pnpm run build             # tsc -b → dist/ (server) + public/dist/ (SPA)
+pnpm run typecheck         # tsc -b --noEmit
+pnpm test                  # vitest run (unit + integration, S3 mocked via aws-sdk-client-mock)
+pnpm run test:unit         # tests/unit only
+pnpm run test:integration  # tests/integration only
+pnpm exec vitest run tests/integration/api/objects.test.ts   # single file
 ```
 
 ## Architecture map
@@ -52,7 +52,7 @@ npx vitest run tests/integration/api/objects.test.ts   # single file
 
 - **SSRF / IMDS blocking** (`src/s3/client.ts`): user-supplied endpoints are validated; cloud metadata hosts and `169.254.0.0/16` are blocked across all IP encodings (decimal/octal/hex/IPv4-mapped-IPv6). `S3_ALLOW_HOSTS` / `S3_DENY_HOSTS` refine this. Keep the guard on every code path that builds a client (including `dual-client.ts`).
 - **Credentials are transient** — `buildClient(req)` reads S3 creds from headers only. Never persist, log, or cookie them.
-- **Rate limiting** (`src/auth/rate-limit.ts`): 5 attempts / 15 min per username+IP on both the password and TOTP steps; 10 failed Bearer-token presentations / 15 min per IP (`src/auth/token-auth.ts`).
+- **Rate limiting** (`src/auth/rate-limit.ts`): 5 attempts / 15 min per username+IP on the password and TOTP steps and on `currentPassword` in `POST /auth/me/password`; 10 failed Bearer-token presentations / 15 min per IP (`src/auth/token-auth.ts`).
 - **PAT plaintext is never stored** (`src/auth/tokens-store.ts`): only the SHA-256 hash of a personal access token is persisted; the plaintext is returned once at creation. Tokens are never accepted on `/auth/*` routes.
 - **argon2id hashing** (`src/auth/passwords.ts`) with silent upgrade of legacy bcrypt hashes on login; constant-time behavior via a sentinel hash for unknown users.
 - **TOTP replay prevention** (`src/auth/totp.ts`, `src/auth/routes.ts`): a verified code's timestep is burned (`lastTotpStep`); any step `<=` the stored one is rejected — including the enrollment confirmation code.
@@ -61,10 +61,12 @@ npx vitest run tests/integration/api/objects.test.ts   # single file
 - **Inline preview XSS defense** (`src/s3/routes/presign.ts`): HTML/SVG/XML/JS content types are rewritten to `text/plain` when served with `?inline=1`.
 - **Versioning suspend is rejected** at the schema level (`PUT /api/buckets/:bucket/versioning` accepts `enabled: true` only).
 - `hostAllowlist` must run before `originAllowlist`; both must stay mounted before routes.
+- **No ReDoS-prone regexes on user input**: trim/split paths with the linear helpers in `src/util/strings.ts`, not `/\/+$/`-style patterns (CodeQL `js/polynomial-redos`).
+- **Supply-chain policy** (`pnpm-workspace.yaml`): `minimumReleaseAge: 1440`, `blockExoticSubdeps`, `trustPolicy: no-downgrade`, and lifecycle scripts only for packages listed in `allowBuilds`. A new dependency with a build script needs an explicit `allowBuilds` entry; never relax the policy to make an install pass — investigate the flagged package first.
 
 ## Testing expectations
 
-Before opening a PR, run `npm run typecheck` and `npm test` locally — CI (GitHub Actions) runs exactly typecheck + the vitest suite, plus a gitleaks secret scan over full history. New endpoints or auth behavior need integration tests under `tests/integration/`; the existing suites there are the executable spec of the API surface.
+Before opening a PR, run `pnpm run typecheck` and `pnpm test` locally — CI (GitHub Actions) runs `pnpm audit --audit-level high`, typecheck and the vitest suite, plus a gitleaks secret scan over full history and CodeQL. New endpoints or auth behavior need integration tests under `tests/integration/`; the existing suites there are the executable spec of the API surface.
 
 ## PR guidelines
 

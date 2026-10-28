@@ -12,7 +12,7 @@ Deployed as a two-container compose stack (Node app + Caddy reverse proxy).
 
 ## Stack
 
-- **Backend:** Node.js 20, Express 4, **TypeScript** compiled with `tsc -b` to `dist/`. Source lives under `src/` (see Layout). Entry point `src/server.ts`.
+- **Backend:** Node.js 24 (pnpm 11), Express 4, **TypeScript** compiled with `tsc -b` to `dist/`. Source lives under `src/` (see Layout). Entry point `src/server.ts`.
 - **Frontend:** Plain **TypeScript** SPA (no framework, no bundler) under `public/src/`, compiled to `public/dist/`. Loaded by `public/index.html` via `<script type="module" src="/dist/main.js">`.
 - **Storage:** **SQLite** (`better-sqlite3`) at `${DATA_DIR}/app.db` (`/data` in Docker). Schema is migration-driven (`src/db/migrations/`). There is **no** `users.json` — a one-time importer (`src/startup/migrate-users-json.ts`) absorbs a legacy file if present and renames it to `users.json.bak`.
 - **Tests:** **vitest** (`tests/unit`, `tests/integration`) with mocked S3 (`aws-sdk-client-mock`).
@@ -24,17 +24,17 @@ Deployed as a two-container compose stack (Node app + Caddy reverse proxy).
 
 ```bash
 # Local dev (no Docker)
-npm install
-npm run build          # tsc -b → dist/ + public/dist/
-npm start              # node dist/server.js  (listens on 127.0.0.1:4569 by default)
-npm run dev            # build + start
+pnpm install
+pnpm run build          # tsc -b → dist/ + public/dist/
+pnpm start              # node dist/server.js  (listens on 127.0.0.1:4569 by default)
+pnpm run dev            # build + start
 
 # Quality gates (reproduce CI locally)
-npm run typecheck      # tsc -b --noEmit
-npm test               # vitest run (unit + integration)
-npm run test:unit
-npm run test:integration
-npm run test:coverage
+pnpm run typecheck      # tsc -b --noEmit
+pnpm test               # vitest run (unit + integration)
+pnpm run test:unit
+pnpm run test:integration
+pnpm run test:coverage
 
 # Full stack
 docker compose up -d --build
@@ -49,13 +49,13 @@ openssl rand -hex 32                 # TOTP_ENCRYPTION_KEY (NEVER rotate after f
 # Other CI checks
 caddy validate --config Caddyfile     # needs DOMAIN env set
 hadolint Dockerfile
-npm audit --audit-level=high
+pnpm audit --audit-level high
 gitleaks detect --source . --config .gitleaks.toml
 ```
 
-CI (GitHub Actions, `.github/workflows/ci.yml`) runs typecheck + the vitest suite plus a gitleaks secret scan on every push to `main` and every PR. The commands above reproduce the same gates locally.
+CI (GitHub Actions, `.github/workflows/ci.yml`) runs `pnpm audit --audit-level high`, typecheck and the vitest suite plus a gitleaks secret scan on every push to `main` and every PR; `.github/workflows/codeql.yml` adds CodeQL (not a required check yet). The commands above reproduce the same gates locally.
 
-> **Deploy/verify loop:** there is no dev-server preview; this app needs real auth + vault + S3. Verify changes by `docker compose up -d --build` and confirming the container reports `Healthy`, plus `npm test`.
+> **Deploy/verify loop:** there is no dev-server preview; this app needs real auth + vault + S3. Verify changes by `docker compose up -d --build` and confirming the container reports `Healthy`, plus `pnpm test`.
 
 ## Layout
 

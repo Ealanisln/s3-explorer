@@ -30,7 +30,7 @@ Self-hosted, multi-user file explorer for object storage. Each user brings their
 - **TOTP two-factor authentication** — mandatory enrollment on first login (works with Google Authenticator, Authy, 1Password, etc.), with replay prevention: a used TOTP code cannot be reused within its validity window.
 - **argon2id password hashing** (legacy bcrypt hashes are verified and transparently upgraded on login) and optional Have-I-Been-Pwned breach checks (k-anonymity) for new passwords.
 - **128-bit single-use recovery codes**, bcrypt-hashed at rest.
-- **Login rate limiting** — 5 attempts / 15 min per username + IP on both password and TOTP steps.
+- **Login rate limiting** — 5 attempts / 15 min per username + IP on the password and TOTP steps, and on the current-password check when changing a password.
 - **SSRF / cloud-metadata protection** — user-supplied S3 endpoints are validated; IMDS and other cloud metadata endpoints (`169.254.0.0/16` in any IP encoding, GCP/Azure metadata hosts) are blocked by default, with optional endpoint deny/allow lists.
 - **Hardened by default** — strict CSP with no inline scripts, host/origin allowlists (CSRF + DNS-rebinding defense), HMAC-signed httpOnly cookies, read-only container with `cap_drop: ALL`, and TOTP secrets encrypted at rest (AES-256-GCM).
 - **Personal Access Tokens (API)** — scoped Bearer tokens (`read` / `write`) for agents and scripts, with optional expiry, per-user cap, one-time display (only the SHA-256 hash is stored), instant revocation, and per-IP rate limiting on failed attempts. Tokens never grant access to stored S3 credentials — none are stored server-side.
@@ -99,18 +99,32 @@ TLS modes (see `Caddyfile`):
 
 > **Do not rotate `TOTP_ENCRYPTION_KEY` after the first enrollment.** Rotating it makes every enrolled TOTP secret undecryptable; the admin would have to reset TOTP for all users. Keep it in your password manager.
 
-### Plain Node (no Docker)
+### Backups
 
-Requires Node.js 20+.
+All server state lives in one SQLite file, `${DATA_DIR}/app.db` (`/data/app.db` in the `users_data` volume). It runs in WAL mode, so copying the file from a live container can miss the latest transactions; use SQLite's backup API instead:
 
 ```bash
-npm install
-npm run build              # tsc -b → dist/ + public/dist/
+docker compose exec s3-explorer node -e "require('better-sqlite3')(process.env.DATA_DIR + '/app.db').backup(process.env.DATA_DIR + '/app-backup.db')"
+docker compose cp s3-explorer:/data/app-backup.db ./app-backup-$(date +%F).db
+docker compose exec s3-explorer rm /data/app-backup.db
+```
+
+If a short downtime is fine, `docker compose stop s3-explorer` followed by `docker compose cp s3-explorer:/data/app.db ./app-backup-$(date +%F).db` is equivalent.
+
+**Treat the backup as a secret**: it holds password hashes (argon2id), recovery-code hashes (bcrypt) and the TOTP seeds, encrypted with AES-256-GCM. Encrypt it at rest, and store `TOTP_ENCRYPTION_KEY` separately — without that key the TOTP seeds in the backup cannot be decrypted.
+
+### Plain Node (no Docker)
+
+Requires Node.js 22.5+ (24 recommended) and pnpm 11 (`corepack enable` picks the pinned version).
+
+```bash
+pnpm install
+pnpm run build              # tsc -b → dist/ + public/dist/
 SESSION_SECRET=$(openssl rand -hex 32) \
 TOTP_ENCRYPTION_KEY=$(openssl rand -hex 32) \
 ADMIN_USER=admin ADMIN_PASS=change-me \
 DATA_DIR=./data \
-npm start                  # listens on http://127.0.0.1:4569
+pnpm start                  # listens on http://127.0.0.1:4569
 ```
 
 Without a reverse proxy in front you should set `SECURE_COOKIE=0` for plain-HTTP local testing only — always run behind HTTPS in production.
@@ -169,19 +183,19 @@ Users without `s3:ListAllMyBuckets` can list their buckets explicitly in the con
 ## Development
 
 ```bash
-npm install
-npm run build          # tsc -b → dist/ (server) + public/dist/ (SPA)
-npm run typecheck      # tsc -b --noEmit
-npm test               # vitest run (unit + integration, mocked S3)
-npm run test:unit
-npm run test:integration
-npm run test:coverage
-npm run watch          # incremental rebuild
+pnpm install
+pnpm run build          # tsc -b → dist/ (server) + public/dist/ (SPA)
+pnpm run typecheck      # tsc -b --noEmit
+pnpm test               # vitest run (unit + integration, mocked S3)
+pnpm run test:unit
+pnpm run test:integration
+pnpm run test:coverage
+pnpm run watch          # incremental rebuild
 ```
 
 Layout: server code in `src/` (Express, better-sqlite3 with versioned migrations, AWS SDK v3), frontend in `public/src/` (framework-less TypeScript SPA, no bundler), tests in `tests/`. See `CLAUDE.md` for an architecture walkthrough and `SECURITY.md` for the security model, deployment hardening checklist, and vulnerability reporting.
 
-CI runs typecheck, the vitest suite, and secret scanning (gitleaks) on every push and pull request.
+CI runs `pnpm audit`, typecheck, the vitest suite, secret scanning (gitleaks) and CodeQL on every push and pull request. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR.
 
 ## Documentation
 

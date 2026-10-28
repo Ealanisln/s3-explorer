@@ -5,19 +5,24 @@ title = "S3 Explorer — gitleaks config"
 useDefault = true
 
 # Global allowlist — what to IGNORE in findings.
+#
+# Reviewed 2026-10-28. The previous revision excluded `README.md`,
+# `CHANGELOG.md`, `tests/` and `.env.example` wholesale. A probe run with those
+# paths re-enabled found exactly one finding across the whole history
+# (4 commits): a `generic-api-key` hit on the object-key literal below. The
+# directory-wide exclusions were hiding nothing else, and leaving them in place
+# meant any real key pasted into docs, changelog or a test fixture would go
+# unreported. They are gone; only exclusions that cannot contain secrets (local
+# files, vendored code, generated content) remain.
 [allowlist]
 description = "Ignored paths and known-safe matches"
 
 paths = [
-  '''\.env$''',                       # .env is in .gitignore; if it somehow appears, it's local-only and ignored by gitleaks
-  '''\.env\.example$''',              # placeholder values in example file
-  '''node_modules/''',
-  '''package-lock\.json$''',
-  '''public/.*\.css$''',
-  '''dev-data/''',
-  '''README\.md$''',
-  '''CHANGELOG\.md$''',
-  '''tests/''',                        # fixture passwords + AWS SDK Key: field literals trip generic-api-key
+  '''\.env$''',                       # never committed (see .gitignore); local-only if it appears
+  '''node_modules/''',                # vendored dependencies
+  '''pnpm-lock\.yaml$''',             # integrity hashes trip the generic rules
+  '''public/.*\.css$''',              # base64-embedded fonts
+  '''dev-data/''',                    # local scratch data, gitignored
 ]
 
 regexes = [
@@ -26,6 +31,7 @@ regexes = [
   '''CHANGE-ME''',                    # placeholder
   '''openssl rand''',                 # command example, not a secret
   '''<your-.*>''',                    # template angle-bracketed placeholders
+  '''^parent/child/$''',              # object-key literal in tests/integration/api/objects.test.ts (generic-api-key false positive)
 ]
 
 stopwords = [

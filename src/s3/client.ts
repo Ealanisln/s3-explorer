@@ -1,6 +1,7 @@
 import { S3Client } from '@aws-sdk/client-s3';
 import { BlockList, isIP } from 'node:net';
 import type { Request } from 'express';
+import { stripTrailingSlashes } from '../util/strings';
 
 // SSRF defense for the user-supplied S3 endpoint header.
 // The app must support arbitrary custom endpoints (MinIO, Vultr, R2, etc.) —
@@ -45,8 +46,8 @@ export function normalizeEndpoint(ep: string | undefined): string | undefined {
   if (!ep) return undefined;
   const trimmed = ep.trim();
   if (!trimmed) return undefined;
-  if (/^https?:\/\//i.test(trimmed)) return trimmed.replace(/\/+$/, '');
-  return 'https://' + trimmed.replace(/\/+$/, '');
+  if (/^https?:\/\//i.test(trimmed)) return stripTrailingSlashes(trimmed);
+  return 'https://' + stripTrailingSlashes(trimmed);
 }
 
 // Parse an IPv4 in dotted / decimal / octal / hex form (inet_aton semantics)

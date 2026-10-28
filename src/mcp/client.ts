@@ -4,6 +4,7 @@
 // request carries `Authorization: Bearer s3x_...` plus the transient x-s3-*
 // credential headers the server's buildClient() reads (src/s3/client.ts).
 import type { McpConfig } from './config';
+import { stripTrailingSlashes } from '../util/strings';
 
 // Error body shapes the server produces:
 //   S3-facing routes  → { error, message, errorId }        (src/s3/errors.ts)
@@ -67,7 +68,7 @@ export class S3xClient {
   private readonly headers: Record<string, string>;
 
   constructor(cfg: Pick<McpConfig, 'baseUrl' | 'apiToken' | 's3'>) {
-    this.baseUrl = cfg.baseUrl.replace(/\/+$/, '');
+    this.baseUrl = stripTrailingSlashes(cfg.baseUrl);
     this.headers = {
       authorization: `Bearer ${cfg.apiToken}`,
       'x-s3-access-key': cfg.s3.accessKey,
