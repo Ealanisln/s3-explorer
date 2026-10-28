@@ -99,6 +99,20 @@ TLS modes (see `Caddyfile`):
 
 > **Do not rotate `TOTP_ENCRYPTION_KEY` after the first enrollment.** Rotating it makes every enrolled TOTP secret undecryptable; the admin would have to reset TOTP for all users. Keep it in your password manager.
 
+### Backups
+
+All server state lives in one SQLite file, `${DATA_DIR}/app.db` (`/data/app.db` in the `users_data` volume). It runs in WAL mode, so copying the file from a live container can miss the latest transactions; use SQLite's backup API instead:
+
+```bash
+docker compose exec s3-explorer node -e "require('better-sqlite3')(process.env.DATA_DIR + '/app.db').backup(process.env.DATA_DIR + '/app-backup.db')"
+docker compose cp s3-explorer:/data/app-backup.db ./app-backup-$(date +%F).db
+docker compose exec s3-explorer rm /data/app-backup.db
+```
+
+If a short downtime is fine, `docker compose stop s3-explorer` followed by `docker compose cp s3-explorer:/data/app.db ./app-backup-$(date +%F).db` is equivalent.
+
+**Treat the backup as a secret**: it holds password hashes (argon2id), recovery-code hashes (bcrypt) and the TOTP seeds, encrypted with AES-256-GCM. Encrypt it at rest, and store `TOTP_ENCRYPTION_KEY` separately — without that key the TOTP seeds in the backup cannot be decrypted.
+
 ### Plain Node (no Docker)
 
 Requires Node.js 22.5+ (24 recommended) and pnpm 11 (`corepack enable` picks the pinned version).
@@ -181,7 +195,7 @@ pnpm run watch          # incremental rebuild
 
 Layout: server code in `src/` (Express, better-sqlite3 with versioned migrations, AWS SDK v3), frontend in `public/src/` (framework-less TypeScript SPA, no bundler), tests in `tests/`. See `CLAUDE.md` for an architecture walkthrough and `SECURITY.md` for the security model, deployment hardening checklist, and vulnerability reporting.
 
-CI runs typecheck, the vitest suite, and secret scanning (gitleaks) on every push and pull request.
+CI runs `pnpm audit`, typecheck, the vitest suite, secret scanning (gitleaks) and CodeQL on every push and pull request. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR.
 
 ## Documentation
 

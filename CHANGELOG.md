@@ -6,6 +6,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1) and a
+  README section on WAL-safe SQLite backups of `app.db`.
+
 ### Security
 
 - Dependencies refreshed: `pnpm audit` goes from 16 advisories (1 critical,
