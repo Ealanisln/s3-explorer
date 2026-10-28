@@ -101,16 +101,16 @@ TLS modes (see `Caddyfile`):
 
 ### Plain Node (no Docker)
 
-Requires Node.js 20+.
+Requires Node.js 22.5+ (24 recommended) and pnpm 11 (`corepack enable` picks the pinned version).
 
 ```bash
-npm install
-npm run build              # tsc -b → dist/ + public/dist/
+pnpm install
+pnpm run build              # tsc -b → dist/ + public/dist/
 SESSION_SECRET=$(openssl rand -hex 32) \
 TOTP_ENCRYPTION_KEY=$(openssl rand -hex 32) \
 ADMIN_USER=admin ADMIN_PASS=change-me \
 DATA_DIR=./data \
-npm start                  # listens on http://127.0.0.1:4569
+pnpm start                  # listens on http://127.0.0.1:4569
 ```
 
 Without a reverse proxy in front you should set `SECURE_COOKIE=0` for plain-HTTP local testing only — always run behind HTTPS in production.
@@ -169,14 +169,14 @@ Users without `s3:ListAllMyBuckets` can list their buckets explicitly in the con
 ## Development
 
 ```bash
-npm install
-npm run build          # tsc -b → dist/ (server) + public/dist/ (SPA)
-npm run typecheck      # tsc -b --noEmit
-npm test               # vitest run (unit + integration, mocked S3)
-npm run test:unit
-npm run test:integration
-npm run test:coverage
-npm run watch          # incremental rebuild
+pnpm install
+pnpm run build          # tsc -b → dist/ (server) + public/dist/ (SPA)
+pnpm run typecheck      # tsc -b --noEmit
+pnpm test               # vitest run (unit + integration, mocked S3)
+pnpm run test:unit
+pnpm run test:integration
+pnpm run test:coverage
+pnpm run watch          # incremental rebuild
 ```
 
 Layout: server code in `src/` (Express, better-sqlite3 with versioned migrations, AWS SDK v3), frontend in `public/src/` (framework-less TypeScript SPA, no bundler), tests in `tests/`. See `CLAUDE.md` for an architecture walkthrough and `SECURITY.md` for the security model, deployment hardening checklist, and vulnerability reporting.

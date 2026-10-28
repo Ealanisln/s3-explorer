@@ -2,7 +2,7 @@
 
 > Self-hosted, multi-user web console for any S3-compatible object storage (AWS S3, MinIO, R2, B2, Wasabi, ...), with client-side encrypted credentials, TOTP two-factor auth, dual-pane browsing, versioning, search, and cross-provider transfers.
 
-S3 Explorer is a Node 20 + TypeScript + Express application with a framework-less vanilla TypeScript SPA and SQLite for accounts and search indexing. The server never stores S3 keys: users keep credentials in a browser-side encrypted vault and each API request carries them as transient headers. It ships as a two-container Docker Compose stack (app + Caddy with automatic TLS).
+S3 Explorer is a Node 24 + TypeScript + Express application with a framework-less vanilla TypeScript SPA and SQLite for accounts and search indexing. The server never stores S3 keys: users keep credentials in a browser-side encrypted vault and each API request carries them as transient headers. It ships as a two-container Docker Compose stack (app + Caddy with automatic TLS).
 
 ## Docs
 

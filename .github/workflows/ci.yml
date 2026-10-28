@@ -15,21 +15,28 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Version comes from `packageManager` in package.json.
+      - uses: pnpm/action-setup@v6
+
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
-          cache: npm
+          node-version: 24
+          cache: pnpm
 
-      # Full install (with scripts): the test suite boots the real SQLite
-      # layer, so better-sqlite3's native binding must be built.
+      # Full install (scripts allowed per pnpm-workspace.yaml): the test suite
+      # boots the real SQLite layer, so better-sqlite3's native binding must be
+      # built. --frozen-lockfile also re-checks the supply-chain policy.
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit (high and above)
+        run: pnpm audit --audit-level high
 
       - name: Typecheck
-        run: npm run typecheck
+        run: pnpm run typecheck
 
       - name: Tests
-        run: npm test
+        run: pnpm test
         env:
           NODE_ENV: test
 

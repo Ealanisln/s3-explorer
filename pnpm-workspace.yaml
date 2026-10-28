@@ -1,0 +1,21 @@
+# Supply-chain hardening. The first two are pnpm 11 defaults, pinned here so a
+# config change or a pnpm downgrade cannot silently relax them.
+
+# Don't resolve a version until it has been public for 24 h; most malicious
+# publishes are caught and yanked inside that window.
+minimumReleaseAge: 1440
+
+# Transitive deps may only come from the registry (no git/tarball URLs).
+blockExoticSubdeps: true
+
+# Refuse a version whose publish trust (trusted publisher / provenance) is
+# weaker than earlier releases of the same package — the usual sign of a
+# hijacked maintainer account.
+trustPolicy: no-downgrade
+
+# Lifecycle scripts are blocked unless listed. better-sqlite3 needs its
+# native binding; esbuild (via tsx) ships per-platform binaries and its
+# postinstall is only a sanity check.
+allowBuilds:
+  better-sqlite3: true
+  esbuild: false

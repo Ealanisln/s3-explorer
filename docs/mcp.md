@@ -25,7 +25,7 @@ Any S3-compatible storage (AWS S3, MinIO, R2, B2, Wasabi, ...)
 
 ## Setup
 
-The server is part of the `s3-explorer` package (binary `s3-explorer-mcp`, built to `dist/mcp/cli.js`). From a checkout: `npm ci && npm run build`.
+The server is part of the `s3-explorer` package (binary `s3-explorer-mcp`, built to `dist/mcp/cli.js`). From a checkout: `pnpm install && pnpm run build`.
 
 ### Claude Code
 
