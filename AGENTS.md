@@ -52,7 +52,7 @@ npx vitest run tests/integration/api/objects.test.ts   # single file
 
 - **SSRF / IMDS blocking** (`src/s3/client.ts`): user-supplied endpoints are validated; cloud metadata hosts and `169.254.0.0/16` are blocked across all IP encodings (decimal/octal/hex/IPv4-mapped-IPv6). `S3_ALLOW_HOSTS` / `S3_DENY_HOSTS` refine this. Keep the guard on every code path that builds a client (including `dual-client.ts`).
 - **Credentials are transient** — `buildClient(req)` reads S3 creds from headers only. Never persist, log, or cookie them.
-- **Rate limiting** (`src/auth/rate-limit.ts`): 5 attempts / 15 min per username+IP on both the password and TOTP steps; 10 failed Bearer-token presentations / 15 min per IP (`src/auth/token-auth.ts`).
+- **Rate limiting** (`src/auth/rate-limit.ts`): 5 attempts / 15 min per username+IP on the password and TOTP steps and on `currentPassword` in `POST /auth/me/password`; 10 failed Bearer-token presentations / 15 min per IP (`src/auth/token-auth.ts`).
 - **PAT plaintext is never stored** (`src/auth/tokens-store.ts`): only the SHA-256 hash of a personal access token is persisted; the plaintext is returned once at creation. Tokens are never accepted on `/auth/*` routes.
 - **argon2id hashing** (`src/auth/passwords.ts`) with silent upgrade of legacy bcrypt hashes on login; constant-time behavior via a sentinel hash for unknown users.
 - **TOTP replay prevention** (`src/auth/totp.ts`, `src/auth/routes.ts`): a verified code's timestep is burned (`lastTotpStep`); any step `<=` the stored one is rejected — including the enrollment confirmation code.

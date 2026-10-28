@@ -5,6 +5,7 @@ import { Upload } from '@aws-sdk/lib-storage';
 import type { Readable } from 'stream';
 import type { TransferItem } from './schemas';
 import { listAllKeys } from './listing';
+import { lastPathSegment } from '../util/strings';
 
 // Progress events emitted as SSE frames.
 //
@@ -240,8 +241,7 @@ export async function transferRecursive(
   // When `flatten` is true (folder rename flow), the caller has already
   // encoded the new name into `destPrefix` and we skip prepending the source
   // folder name to avoid a doubled path like `parent/newName/oldName/...`.
-  const folderNameMatch = sourcePrefix.match(/([^/]+\/)$/);
-  const folderName = flatten ? '' : (folderNameMatch ? folderNameMatch[1] : '');
+  const folderName = flatten ? '' : lastPathSegment(sourcePrefix);
 
   // ── Producer: list pages and push to queue ───────────────────────────────
   const producer = (async (): Promise<void> => {

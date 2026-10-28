@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import { buildTestApp } from '../../fixtures/app';
-import { createTestUser, withTotp } from '../../fixtures/users';
+import { createTestUser, loginAs, withTotp } from '../../fixtures/users';
 
 const app = buildTestApp();
 
@@ -108,6 +108,90 @@ describe('rate-limit at /auth/login', () => {
       const r = await request(app)
         .post('/auth/login')
         .send({ username: 'rl-clear-enroll', password: 'wrong-' + i });
+      expect(r.status).toBe(401);
+    }
+  });
+});
+
+describe('rate-limit at /auth/me/password', () => {
+  // The endpoint used to have no limiter at all: an attacker holding a stolen
+  // session could brute-force `currentPassword` (and, at ~85ms per argon2id
+  // verify, also burn CPU) without any backoff.
+  it('returns 429 after 5 wrong current-password attempts', async () => {
+    const user = createTestUser({
+      username: 'rl-pwchange',
+      password: 'good-password-1!',
+      totpEnrolled: true,
+    });
+    const cookie = await loginAs(app, user);
+
+    for (let i = 0; i < 5; i++) {
+      const r = await request(app)
+        .post('/auth/me/password')
+        .set('Cookie', cookie)
+        .send({ currentPassword: 'wrong-' + i, newPassword: 'another-good-pass-1!' });
+      expect(r.status).toBe(401);
+    }
+
+    const blocked = await request(app)
+      .post('/auth/me/password')
+      .set('Cookie', cookie)
+      .send({ currentPassword: 'wrong-final', newPassword: 'another-good-pass-1!' });
+    expect(blocked.status).toBe(429);
+    expect(blocked.body.message).toMatch(/15 minutos/);
+  });
+
+  it('the correct current password is also blocked once the limit is reached', async () => {
+    const user = createTestUser({
+      username: 'rl-pwchange-ok-blocked',
+      password: 'good-password-1!',
+      totpEnrolled: true,
+    });
+    const cookie = await loginAs(app, user);
+
+    for (let i = 0; i < 6; i++) {
+      await request(app)
+        .post('/auth/me/password')
+        .set('Cookie', cookie)
+        .send({ currentPassword: 'nope', newPassword: 'another-good-pass-1!' });
+    }
+
+    const res = await request(app)
+      .post('/auth/me/password')
+      .set('Cookie', cookie)
+      .send({ currentPassword: 'good-password-1!', newPassword: 'brand-new-pass-1!' });
+    expect(res.status).toBe(429);
+  });
+
+  it('a successful change clears the failure counter', async () => {
+    const user = createTestUser({
+      username: 'rl-pwchange-clear',
+      password: 'good-password-1!',
+      totpEnrolled: true,
+    });
+    const cookie = await loginAs(app, user);
+
+    for (let i = 0; i < 4; i++) {
+      const r = await request(app)
+        .post('/auth/me/password')
+        .set('Cookie', cookie)
+        .send({ currentPassword: 'wrong-' + i, newPassword: 'another-good-pass-1!' });
+      expect(r.status).toBe(401);
+    }
+
+    const ok = await request(app)
+      .post('/auth/me/password')
+      .set('Cookie', cookie)
+      .send({ currentPassword: 'good-password-1!', newPassword: 'another-good-pass-1!' });
+    expect(ok.status).toBe(200);
+    expect(ok.body.ok).toBe(true);
+
+    // Counter reset: five fresh failures must return 401, not 429.
+    for (let i = 0; i < 5; i++) {
+      const r = await request(app)
+        .post('/auth/me/password')
+        .set('Cookie', cookie)
+        .send({ currentPassword: 'wrong-again-' + i, newPassword: 'another-good-pass-1!' });
       expect(r.status).toBe(401);
     }
   });

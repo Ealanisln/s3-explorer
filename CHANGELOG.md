@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- Removed four polynomial-ReDoS regexes (CodeQL `js/polynomial-redos`) on
+  user-controlled input: the `x-s3-endpoint` trailing-slash trim, the
+  transfer source-folder name (a 5 MB JSON body could stall the event loop),
+  and the MCP base-URL trims. Replaced by linear helpers in
+  `src/util/strings.ts`, pinned to the old regex semantics by tests.
+- `POST /auth/me/password` is now rate limited on wrong `currentPassword`
+  (5 / 15 min per username+IP, audit event `password_change_rate_limited`),
+  closing the last credential endpoint without backoff.
+
 ## [1.4.0] - 2026-08-04
 
 ### Added

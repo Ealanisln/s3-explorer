@@ -245,11 +245,23 @@ export function register(app: Application): void {
   app.post('/auth/me/password', requireAuth, validateBody(changePasswordSchema), async (req: Request, res: Response) => {
     const user = req.user!;
     const { currentPassword, newPassword } = req.body as { currentPassword: string; newPassword: string };
+    const ip = req.ip || '';
+    const rlKey = `password_change:${ip}:${user.username}`;
+    if (!rateLimit(rlKey)) {
+      audit('password_change_rate_limited', { username: user.username, ip });
+      res.status(429).json({ message: 'Demasiados intentos. Espera 15 minutos.' });
+      return;
+    }
     if (!await verifyPassword(currentPassword, user.passwordHash)) {
+      recordFailure(rlKey);
       audit('password_change_fail', { username: user.username });
       res.status(401).json({ message: 'Contraseña actual incorrecta' });
       return;
     }
+    // The key only guards `currentPassword` guessing, so it is cleared as soon
+    // as the current password verifies — a rejected *new* password (HIBP) is
+    // not a failed authentication attempt.
+    clearAttempts(rlKey);
     if (await isPasswordBreached(newPassword)) {
       audit('password_breached_rejected', { username: user.username });
       res.status(400).json({

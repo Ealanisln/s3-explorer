@@ -5,6 +5,8 @@
 // forwards S3 credentials on every request via the same transient x-s3-*
 // headers the web UI uses. Nothing is persisted; secrets never get logged.
 
+import { stripTrailingSlashes } from '../util/strings';
+
 export interface McpConfig {
   /** Base URL of the running S3 Explorer instance, e.g. https://s3x.example.com */
   baseUrl: string;
@@ -70,7 +72,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): McpConf
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       throw new Error('not http(s)');
     }
-    baseUrl = baseUrlRaw.replace(/\/+$/, '');
+    baseUrl = stripTrailingSlashes(baseUrlRaw);
   } catch {
     throw new ConfigError(`S3X_BASE_URL is not a valid http(s) URL: ${baseUrlRaw}`);
   }

@@ -40,6 +40,35 @@ describe('normalizeEndpoint', () => {
     expect(normalizeEndpoint('https://minio.local///')).toBe('https://minio.local');
     expect(normalizeEndpoint('minio.local/')).toBe('https://minio.local');
   });
+
+  it('leaves an endpoint without trailing slashes unchanged', () => {
+    expect(normalizeEndpoint('https://minio.local:9000')).toBe('https://minio.local:9000');
+    expect(normalizeEndpoint('minio.local:9000')).toBe('https://minio.local:9000');
+    expect(normalizeEndpoint('http://10.0.0.5:9000')).toBe('http://10.0.0.5:9000');
+  });
+
+  it('trims surrounding whitespace before normalizing', () => {
+    expect(normalizeEndpoint('  minio.local///  ')).toBe('https://minio.local');
+    expect(normalizeEndpoint('\thttps://s3.example.com/\n')).toBe('https://s3.example.com');
+  });
+
+  // Nothing survives the trim except the scheme prefix. `https://///` losing
+  // the two slashes of the scheme itself is pre-existing behavior (the old
+  // regex did the same); such input then fails URL parsing downstream.
+  it('reduces an input made only of slashes to the bare scheme', () => {
+    expect(normalizeEndpoint('///')).toBe('https://');
+    expect(normalizeEndpoint('https://///')).toBe('https:');
+  });
+
+  // js/polynomial-redos (CodeQL alerts 77/78): the old `/\/+$/` backtracked
+  // quadratically on slash runs followed by a non-slash. The linear walk must
+  // stay effectively instant on this shape — reintroducing a regex here makes
+  // these assertions take tens of seconds and blow the per-test timeout.
+  it('handles very long slash runs without pathological backtracking', () => {
+    const slashes = '/'.repeat(100_000);
+    expect(normalizeEndpoint('https://minio.local' + slashes)).toBe('https://minio.local');
+    expect(normalizeEndpoint('minio.local' + slashes + 'x')).toBe('https://minio.local' + slashes + 'x');
+  });
 });
 
 describe('endpointBlockReason', () => {
