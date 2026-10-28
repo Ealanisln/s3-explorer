@@ -1,0 +1,55 @@
+# CodeQL static analysis (free for public repos). Complements the gitleaks and
+# pnpm audit gates in ci.yml with taint tracking over src/ (server) and
+# public/src/ (SPA). Not a required status check yet: triage alerts under
+# Security -> Code scanning for a while before gating merges on it.
+#
+# Adapted from jlvobra/s3-explorer@e5342b7.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * 1" # weekly, so new queries run even without pushes
+
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # --ignore-scripts skips better-sqlite3's native build: CodeQL only
+      # parses sources, it never loads the binding.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run build
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:javascript-typescript"

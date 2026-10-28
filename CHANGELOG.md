@@ -8,6 +8,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Security
 
+- Dependencies refreshed: `pnpm audit` goes from 16 advisories (1 critical,
+  9 high) to 0 — notably `proxy-addr` 2.0.8 (IP spoofing via IPv4-mapped
+  IPv6), `body-parser`, `multer`, `zod`, `qs` and `@modelcontextprotocol/sdk`.
+- Supply-chain policy in `pnpm-workspace.yaml`: 24 h minimum release age,
+  no exotic transitive sources, `trustPolicy: no-downgrade`, and lifecycle
+  scripts allowed only for `better-sqlite3`.
+- CodeQL workflow and a narrower gitleaks allowlist (docs, changelog, tests
+  and `.env.example` are scanned again; full history verified clean).
 - Removed four polynomial-ReDoS regexes (CodeQL `js/polynomial-redos`) on
   user-controlled input: the `x-s3-endpoint` trailing-slash trim, the
   transfer source-folder name (a 5 MB JSON body could stall the event loop),
@@ -16,6 +24,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `POST /auth/me/password` is now rate limited on wrong `currentPassword`
   (5 / 15 min per username+IP, audit event `password_change_rate_limited`),
   closing the last credential endpoint without backoff.
+
+### Changed
+
+- Package manager is now pnpm 11 (pinned via `packageManager`, use
+  `corepack enable`). `package-lock.json` is replaced by `pnpm-lock.yaml`.
+- Node.js 24 in the Docker image and CI (Node 20 reached end of life);
+  local development needs Node 22.5+.
+- CI runs `pnpm audit --audit-level high` before typecheck and tests.
 
 ## [1.4.0] - 2026-08-04
 
